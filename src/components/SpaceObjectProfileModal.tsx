@@ -213,6 +213,9 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
   // Contact form note inside the profile
   const [contactNote, setContactNote] = useState('');
   const [contactSentBanner, setContactSentBanner] = useState<string | null>(null);
+  const [cardCorner, setCardCorner] = useState<
+    'TOP_RIGHT' | 'TOP_LEFT' | 'BOTTOM_RIGHT' | 'BOTTOM_LEFT'
+  >('TOP_RIGHT');
 
   useEffect(() => {
     if (!profile) return;
@@ -305,29 +308,27 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
 
   const isMemberOfPlanetGroup = pTag ? joinedPlanetGroups.includes(pTag) : false;
 
-  // Compute floating card position right next to the object inside the 3D viewport
+  // Размещаем информационную карточку объекта аккуратно в углу 3D-экрана, чтобы она не закрывала обзор в центре
   const contW = profile.viewportWidth || 760;
   const contH = profile.viewportHeight || 480;
-  const anchorX = profile.anchorLeftPx ?? contW * 0.45;
-  const anchorY = profile.anchorTopPx ?? contH * 0.4;
-  const objRadius = Math.max(12, Math.min(85, profile.screenRadiusPx ?? 16));
-  const cardW = Math.min(390, Math.max(300, contW - 20));
-  const maxCardH = Math.min(430, Math.max(260, contH - 20));
-  const sideGap = objRadius + 16;
+  const cardW = Math.min(360, Math.max(280, contW - 20));
+  const maxCardH = Math.min(390, Math.max(240, Math.floor(contH * 0.68)));
 
-  // Place to the right of the object if there is room; otherwise to the left
-  const placeOnRight = anchorX + sideGap + cardW <= contW - 8 || anchorX < contW * 0.5;
-  const rawLeft = placeOnRight ? anchorX + sideGap : anchorX - sideGap - cardW;
-  const cardLeftPx = Math.max(8, Math.min(contW - cardW - 8, rawLeft));
-  const cardTopPx = Math.max(8, Math.min(contH - maxCardH - 8, anchorY - 75));
+  const cornerPosStyle: React.CSSProperties =
+    cardCorner === 'TOP_RIGHT'
+      ? {top: '10px', right: '10px'}
+      : cardCorner === 'TOP_LEFT'
+      ? {top: '46px', left: '10px'}
+      : cardCorner === 'BOTTOM_RIGHT'
+      ? {bottom: '10px', right: '10px'}
+      : {bottom: '10px', left: '10px'};
 
   return (
     <div
       onMouseEnter={onMouseEnterCard}
       onMouseLeave={onMouseLeaveCard}
       style={{
-        left: `${cardLeftPx}px`,
-        top: `${cardTopPx}px`,
+        ...cornerPosStyle,
         width: `${cardW}px`,
         maxHeight: `${maxCardH}px`,
       }}
@@ -335,9 +336,9 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* Верхняя шапка карточки объекта рядом с ним (по аналогии с профилем пользователя GoBell) */}
+      {/* Верхняя шапка карточки объекта в углу 3D-экрана */}
       <div
-        className="px-3.5 py-2.5 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between gap-2"
+        className="px-3 py-2 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between gap-2"
         style={{borderTopColor: profile.color}}
       >
         <div className="flex items-center gap-2.5 min-w-0">
@@ -414,6 +415,31 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
             >
               -{totalKarmaMinus}
             </button>
+          </div>
+
+          <div className="flex items-center gap-0.5 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+            {(
+              [
+                {id: 'TOP_LEFT', label: '↖', title: 'В левый верхний угол'},
+                {id: 'TOP_RIGHT', label: '↗', title: 'В правый верхний угол'},
+                {id: 'BOTTOM_LEFT', label: '↙', title: 'В левый нижний угол'},
+                {id: 'BOTTOM_RIGHT', label: '↘', title: 'В правый нижний угол'},
+              ] as const
+            ).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setCardCorner(c.id)}
+                className={`px-1 py-0.5 rounded text-[9px] font-bold transition-colors ${
+                  cardCorner === c.id
+                    ? 'bg-cyan-500 text-slate-950'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title={c.title}
+              >
+                {c.label}
+              </button>
+            ))}
           </div>
 
           <button
@@ -756,7 +782,9 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
                 )}
                 {profile.kind === 'ASTEROID' && (
                   <div className="text-amber-300 font-bold">
-                    {profile.asteroidRevealed && profile.elementSymbol
+                    {profile.asteroidRevealed &&
+                    profile.elementSymbol &&
+                    ASTEROID_PERIODIC_ELEMENTS[profile.elementSymbol]
                       ? `Элемент: ${ASTEROID_PERIODIC_ELEMENTS[profile.elementSymbol].nameRu} (${ASTEROID_PERIODIC_ELEMENTS[profile.elementSymbol].displaySymbol}) · ${ASTEROID_PERIODIC_ELEMENTS[profile.elementSymbol].sellPriceCr} CR/т`
                       : 'Порода не разведана (выстрелите лазером ЛКМ для анализа)'}
                   </div>

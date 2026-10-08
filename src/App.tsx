@@ -659,7 +659,7 @@ function HybridMapContent() {
 
   // Hybrid Search System Mode switched by left "Google" and right "GoBell" buttons on the single search bar
   const [searchSystemMode, setSearchSystemMode] = useState<'TAG_SYSTEM' | 'GOOGLE_SYSTEM'>('TAG_SYSTEM');
-  const [isEliteGameOpen, setIsEliteGameOpen] = useState(true);
+  const [isEliteGameOpen, setIsEliteGameOpen] = useState(false);
 
   // Search Center & Radius (500 m to 5000 m) & Map Zoom for Google-like marker scaling
   const [searchCenter, setSearchCenter] = useState<google.maps.LatLngLiteral>(() => {
@@ -820,56 +820,14 @@ function HybridMapContent() {
   } | null>(null);
   const [contactFormNote, setContactFormNote] = useState<string>('');
 
-  // Selected Marker on Map (opens ONLY when cursor is in object's action zone + KeyI is pressed) & Hovered Marker on Map (mouse pointer)
+  // Selected Marker on Map (opens on click or tap on the object's icon on the Google Map) & Hovered Marker on Map
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const hoveredMarkerIdRef = useRef<string | null>(null);
-  const isMapKeyIDownRef = useRef<boolean>(false);
 
   useEffect(() => {
     hoveredMarkerIdRef.current = hoveredMarkerId;
   }, [hoveredMarkerId]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (
-        e.code === 'KeyI' ||
-        e.key === 'i' ||
-        e.key === 'I' ||
-        e.key === 'ш' ||
-        e.key === 'Ш'
-      ) {
-        isMapKeyIDownRef.current = true;
-        if (hoveredMarkerIdRef.current) {
-          setActiveMarkerId(hoveredMarkerIdRef.current);
-        }
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (
-        e.code === 'KeyI' ||
-        e.key === 'i' ||
-        e.key === 'I' ||
-        e.key === 'ш' ||
-        e.key === 'Ш'
-      ) {
-        isMapKeyIDownRef.current = false;
-      }
-    };
-    const onBlur = () => {
-      isMapKeyIDownRef.current = false;
-    };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
 
   // DEMO VERSION CONTROL PANEL STATE (Сохраняется одновременно в localStorage И в файл проекта src/data/savedDemoData.json, чтобы при сохранении проекта и переходе в режим Просмотра все созданные пользователи были видны!)
   const [demoProfiles, setDemoProfiles] = useState<DemoUserProfile[]>(() => {
@@ -2013,16 +1971,17 @@ function HybridMapContent() {
       const dpText = dpParts.join(' ');
       if (!dpText) continue;
 
-      const dpIdentityParts: string[] = [];
-      if (dp.showName && dp.name.trim()) dpIdentityParts.push(censorProfanityText(dp.name.trim()));
-      else if (dp.showNickname && dp.nickname.trim())
-        dpIdentityParts.push(censorProfanityText(dp.nickname.trim()));
-      const dpVisibleIdentity = dpIdentityParts.join(' ');
+      const dpVisibleName = dp.showName && dp.name.trim() ? censorProfanityText(dp.name.trim()) : '';
+      const dpVisibleNickname =
+        dp.showNickname && dp.nickname.trim() ? censorProfanityText(dp.nickname.trim()) : '';
+      const dpVisibleIdentity = dpVisibleName || dpVisibleNickname;
       const dpVisibleDesc = dp.showDescription ? censorProfanityText(dp.description.trim()) : '';
 
       community.unshift({
         id: dp.id,
         authorName: dpVisibleIdentity || censorProfanityText(dp.name),
+        visibleName: dpVisibleName,
+        visibleNickname: dpVisibleNickname,
         visibleIdentityLabel: dpVisibleIdentity,
         visibleDescription: dpVisibleDesc,
         karmaPlus: dp.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS,
@@ -2135,12 +2094,13 @@ function HybridMapContent() {
               .join(' ')
           : '';
 
-      const myVisibleIdentity =
-        showProfileName && profileName.trim()
-          ? censorProfanityText(profileName.trim())
-          : showProfileNickname && profileNickname.trim()
+      const myVisibleName =
+        showProfileName && profileName.trim() ? censorProfanityText(profileName.trim()) : '';
+      const myVisibleNickname =
+        showProfileNickname && profileNickname.trim()
           ? censorProfanityText(profileNickname.trim())
           : '';
+      const myVisibleIdentity = myVisibleName || myVisibleNickname;
       const myVisibleDesc = showProfileDescription
         ? censorProfanityText(
             limitWords(profileDescription.trim(), maxDescriptionWordsForCurrentTier)
@@ -2150,6 +2110,8 @@ function HybridMapContent() {
       community.unshift({
         id: 'my-own-profile',
         authorName: combinedMyDisplayName,
+        visibleName: myVisibleName,
+        visibleNickname: myVisibleNickname,
         visibleIdentityLabel: myVisibleIdentity,
         visibleDescription: myVisibleDesc,
         karmaPlus: myKarmaPlus,
@@ -3452,10 +3414,16 @@ function HybridMapContent() {
                   const isAnyHoveredOrTapped =
                     isProfileCardOpen || Boolean(activeOverheadAdvert);
 
-                  // Какой объект сейчас показан во всплывающей карточке над маркером (открывается ТОЛЬКО когда объект в зоне действия курсора мыши и нажата клавиша I)
+                  // Какой объект сейчас показан во всплывающей карточке над маркером (открывается при клике или тапе на иконке объекта на карте)
                   const displayedPopupProfile = activeOverheadAdvert || profile;
                   const isPopupShowingAdvert =
                     Boolean(activeOverheadAdvert) || isPublishedAdvert;
+                  const markerLabelName =
+                    profile.visibleName ||
+                    profile.visibleIdentityLabel ||
+                    profile.authorName;
+                  const markerKarmaPlus = profile.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS;
+                  const markerKarmaMinus = profile.karmaMinus ?? 0;
 
                   return (
                     <AdvancedMarker
@@ -3465,14 +3433,7 @@ function HybridMapContent() {
                       zIndex={isAnyHoveredOrTapped ? 100 : isPublishedAdvert ? 40 : 20}
                       onClick={() => {
                         closeFilterDropdown();
-                        if (!isMapKeyIDownRef.current) return;
-                        const targetId =
-                          hoveredMarkerId &&
-                          (hoveredMarkerId === profile.id ||
-                            attachedNativeAdverts.some((ad) => ad.id === hoveredMarkerId))
-                            ? hoveredMarkerId
-                            : profile.id;
-                        setActiveMarkerId((prev) => (prev === targetId ? null : targetId));
+                        setActiveMarkerId((prev) => (prev === profile.id ? null : profile.id));
                       }}
                     >
                       <div
@@ -3480,12 +3441,6 @@ function HybridMapContent() {
                         onMouseLeave={() => {
                           hoveredMarkerIdRef.current = null;
                           setHoveredMarkerId(null);
-                          setActiveMarkerId((prev) =>
-                            prev === profile.id ||
-                            attachedNativeAdverts.some((ad) => ad.id === prev)
-                              ? null
-                              : prev
-                          );
                         }}
                       >
                         {/* Контейнер масштабирования по зуму карты */}
@@ -3495,7 +3450,7 @@ function HybridMapContent() {
                             transform: `scale(${markerZoomScale})`,
                           }}
                         >
-                          {/* Информационная карточка объекта СТРОГО НАД МОНЕТКОЙ / ИКОНКОЙ — появляется ТОЛЬКО когда объект в зоне действия курсора мыши и нажата клавиша I */}
+                          {/* Карточка профиля возле объекта на карте — появляется при клике или тапе на иконке объекта (Имя, Ник, Карма и Описание) */}
                           {isAnyHoveredOrTapped && (
                             <div
                               onClick={(e) => e.stopPropagation()}
@@ -3505,12 +3460,25 @@ function HybridMapContent() {
                               }}
                               className="absolute bottom-full left-1/2 pb-3.5 z-30 pointer-events-auto"
                             >
-                              <div className="px-3.5 py-3 rounded-2xl bg-slate-950/95 border border-slate-700 text-xs text-slate-100 shadow-2xl min-w-[235px] max-w-[295px] text-left leading-snug animate-in fade-in duration-100 space-y-2.5">
+                              <div className="px-3.5 py-3 rounded-2xl bg-slate-950/95 border border-slate-700 text-xs text-slate-100 shadow-2xl min-w-[245px] max-w-[305px] text-left leading-snug animate-in fade-in duration-100 space-y-2.5">
                                 {isPopupShowingAdvert ? (
                                   <>
-                                    {/* Крупный и наглядный текст самого объявления на первом месте */}
-                                    <div className="text-sm sm:text-[15px] font-extrabold text-white leading-snug break-words">
-                                      {displayedPopupProfile.profileText}
+                                    <div className="flex items-start justify-between gap-2">
+                                      {/* Крупный и наглядный текст самого объявления на первом месте */}
+                                      <div className="text-sm sm:text-[15px] font-extrabold text-white leading-snug break-words flex-1">
+                                        {displayedPopupProfile.profileText}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveMarkerId(null);
+                                        }}
+                                        className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0"
+                                        title="Закрыть карточку"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
                                     </div>
 
                                     {/* Аккуратная строка автора, кармы и статуса объявления */}
@@ -3562,25 +3530,50 @@ function HybridMapContent() {
                                   </>
                                 ) : (
                                   <>
-                                    {profile.visibleIdentityLabel &&
-                                      profile.visibleIdentityLabel.trim().length > 0 && (
-                                        <div className="text-xs font-extrabold text-amber-300 text-center">
-                                          {profile.visibleIdentityLabel}
-                                        </div>
-                                      )}
-                                    <div className="flex items-center justify-center gap-2 pb-1 border-b border-slate-800">
-                                      <span className="text-[11px] font-bold text-slate-300">Карма:</span>
-                                      <span className="px-2 py-0.5 rounded-md font-mono text-xs font-extrabold bg-emerald-500/20 border border-emerald-400/60 text-emerald-300">
-                                        +{profile.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS}
-                                      </span>
-                                      <span className="px-2 py-0.5 rounded-md font-mono text-xs font-extrabold bg-rose-500/20 border border-rose-400/60 text-rose-300">
-                                        -{profile.karmaMinus ?? 0}
-                                      </span>
+                                    {/* Верхняя строка карточки профиля: Имя, Ник и кнопка закрытия */}
+                                    <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-slate-800">
+                                      <div className="min-w-0 flex-1 space-y-0.5">
+                                        {(profile.visibleName || profile.visibleIdentityLabel) && (
+                                          <div className="text-xs font-extrabold text-white truncate">
+                                            {profile.visibleName || profile.visibleIdentityLabel}
+                                          </div>
+                                        )}
+                                        {(profile.visibleNickname || profile.contact) && (
+                                          <div className="text-[11px] font-mono font-bold text-amber-300 truncate">
+                                            {profile.visibleNickname || profile.contact}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveMarkerId(null);
+                                        }}
+                                        className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0"
+                                        title="Закрыть карточку"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
                                     </div>
 
+                                    {/* Строка Кармы */}
+                                    <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-800">
+                                      <span className="text-[11px] font-bold text-slate-400">Карма:</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="px-2 py-0.5 rounded-md font-mono text-xs font-extrabold bg-emerald-500/20 border border-emerald-400/60 text-emerald-300">
+                                          +{markerKarmaPlus}
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-md font-mono text-xs font-extrabold bg-rose-500/20 border border-rose-400/60 text-rose-300">
+                                          -{markerKarmaMinus}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Описание профиля */}
                                     {profile.visibleDescription &&
                                       profile.visibleDescription.trim().length > 0 && (
-                                        <div className="text-sm font-semibold text-white text-center">
+                                        <div className="text-sm font-semibold text-white leading-snug">
                                           {profile.visibleDescription}
                                         </div>
                                       )}
@@ -3617,7 +3610,7 @@ function HybridMapContent() {
                             </div>
                           )}
 
-                          {/* ОТДЕЛЬНАЯ ЗОНА 1: АКТИВНЫЕ МЕСТНЫЕ ОБЪЯВЛЕНИЯ (1–4 ШТ.): ПРЯМО НАД ГОЛОВОЙ КРУТЯТСЯ 1–4 ЗЕЛЁНЫЕ МОНЕТКИ ($) БЕЗ ТЕКСТОВЫХ ПОДПИСЕЙ */}
+                          {/* ОТДЕЛЬНАЯ ЗОНА 1: АКТИВНЫЕ МЕСТНЫЕ ОБЪЯВЛЕНИЯ (1–4 ШТ.): ПРЯМО НАД ГОЛОВОЙ КРУТЯТСЯ 1–4 ЗЕЛЁНЫЕ МОНЕТКИ ($) */}
                           {attachedNativeAdverts.length > 0 && (
                             <div className="mb-2.5 flex items-center justify-center gap-3 z-20">
                               {attachedNativeAdverts.map((ad) => {
@@ -3628,9 +3621,11 @@ function HybridMapContent() {
                                     onMouseEnter={() => {
                                       hoveredMarkerIdRef.current = ad.id;
                                       setHoveredMarkerId(ad.id);
-                                      if (isMapKeyIDownRef.current) {
-                                        setActiveMarkerId(ad.id);
-                                      }
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      closeFilterDropdown();
+                                      setActiveMarkerId((prev) => (prev === ad.id ? null : ad.id));
                                     }}
                                     className={`relative flex items-center justify-center transition-transform duration-150 cursor-pointer ${
                                       isThisAdSelected ? 'scale-125' : 'hover:scale-125'
@@ -3650,14 +3645,18 @@ function HybridMapContent() {
                             </div>
                           )}
 
-                          {/* ОТДЕЛЬНАЯ ЗОНА 2: САМ АВАТАР ПОЛЬЗОВАТЕЛЯ ИЛИ ГОСТЕВАЯ МОНЕТКА (НИКАКИХ ТЕКСТОВЫХ ПОДПИСЕЙ НА ЭКРАНЕ, КАРТОЧКА ТОЛЬКО ПО КУРСОРУ + КЛАВИШЕ I) */}
+                          {/* ОТДЕЛЬНАЯ ЗОНА 2: ИКОНКА ОБЪЕКТА НА КАРТЕ, А ПОД НЕЙ — ИМЯ И КАРМА */}
                           <div
                             onMouseEnter={() => {
                               hoveredMarkerIdRef.current = profile.id;
                               setHoveredMarkerId(profile.id);
-                              if (isMapKeyIDownRef.current) {
-                                setActiveMarkerId(profile.id);
-                              }
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              closeFilterDropdown();
+                              setActiveMarkerId((prev) =>
+                                prev === profile.id ? null : profile.id
+                              );
                             }}
                             className={`relative flex flex-col items-center cursor-pointer transition-transform duration-150 ${
                               isProfileCardOpen ? 'scale-115' : 'hover:scale-110'
@@ -3719,6 +3718,20 @@ function HybridMapContent() {
                                 />
                               </div>
                             )}
+
+                            {/* ПОД ИКОНКОЙ ОБЪЕКТА НА КАРТЕ: ИМЯ И КАРМА */}
+                            <div className="mt-1 px-2 py-0.5 rounded-lg bg-slate-950/90 border border-slate-700/90 shadow-md flex flex-col items-center leading-tight max-w-[140px]">
+                              {markerLabelName && (
+                                <span className="text-[10px] font-extrabold text-white truncate max-w-[130px]">
+                                  {markerLabelName}
+                                </span>
+                              )}
+                              <div className="flex items-center gap-1 font-mono text-[9px] font-extrabold">
+                                <span className="text-emerald-400">+{markerKarmaPlus}</span>
+                                <span className="text-slate-600">/</span>
+                                <span className="text-rose-400">-{markerKarmaMinus}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>

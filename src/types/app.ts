@@ -19,6 +19,8 @@ export type ProPictogramType =
 export interface ActiveProfileItem {
   id: string;
   authorName: string;
+  visibleName?: string;
+  visibleNickname?: string;
   visibleIdentityLabel?: string;
   visibleDescription?: string;
   karmaPlus?: number;

@@ -2214,6 +2214,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const [isTonnageXpModalOpen, setIsTonnageXpModalOpen] = useState<boolean>(false);
   const [isFullConfigDocOpen, setIsFullConfigDocOpen] = useState<boolean>(false);
   const [isLabHangarModalOpen, setIsLabHangarModalOpen] = useState<boolean>(false);
+  const [autopilotCardCorner, setAutopilotCardCorner] = useState<
+    'TOP_RIGHT' | 'TOP_LEFT' | 'BOTTOM_RIGHT' | 'BOTTOM_LEFT'
+  >('TOP_RIGHT');
 
   // =========================================================================
   // ЛАБОРАТОРИЯ (+5 Т) И АНГАР (+5 Т): 2 СПОСОБА ПОЛУЧИТЬ ЧТО-ЛИБО И ПРОДАЖА 50% / 80%
@@ -2489,12 +2492,42 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     hitRadius: number;
     priority: number;
     profile: SpaceObjectProfileData;
+    camPos: Vec3;
+    standoffDist: number;
+    targetMassTons: number;
+    targetMassLabel: string;
+  }
+
+  interface AutopilotLockState {
+    id: string;
+    kind: SpaceObjectProfileData['kind'];
+    name: string;
+    nickname: string;
+    color: string;
+    camPos: Vec3;
+    standoffDist: number;
+    distanceUnits: number;
+    targetMassTons: number;
+    targetMassLabel: string;
+    canvasX: number;
+    canvasY: number;
+    anchorLeftPx: number;
+    anchorTopPx: number;
+    screenRadiusPx: number;
+    viewportWidth: number;
+    viewportHeight: number;
+    planetId?: string;
+    planetOrder?: number;
+    entityId?: string;
+    asteroidId?: string;
   }
 
   const projectedScreenTargetsRef = useRef<ProjectedScreenTargetHit[]>([]);
   const hoveredScreenTargetRef = useRef<ProjectedScreenTargetHit | null>(null);
   const isKeyIDownRef = useRef<boolean>(false);
   const isHoveringObjectCardRef = useRef<boolean>(false);
+  const autopilotTargetRef = useRef<AutopilotLockState | null>(null);
+  const [autopilotTargetUi, setAutopilotTargetUi] = useState<AutopilotLockState | null>(null);
 
   const handleUpdateCustomObjectOverride = useCallback(
     (objectId: string, patch: Partial<CustomObjectProfileOverride>) => {
@@ -2507,6 +2540,286 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       }));
     },
     []
+  );
+
+  // Обработчики Лаборатории (+5 т к массе корабля) и Ангара (+5 т к массе корабля),
+  // а также 2 способов получения предметов (1: Купить за 100% цены; 2: Разработать за 10% + Построить за 10%)
+  // и продажи (Правительству планеты за 50% цены ИЛИ Частному бизнесу за 80% цены)
+  const applyCraftedItemShipEffect = useCallback(
+    (itemId: string, newOwnedCount: number) => {
+      if (itemId === 'MILITARY_LASER') {
+        setHasMilitaryLaser(newOwnedCount > 0);
+      } else if (itemId === 'CARGO_EXPANDER_35T') {
+        setMaxCargoCapacity(newOwnedCount > 0 ? 35 : 20);
+      } else if (itemId === 'ARMOR_PLATE_10T') {
+        setPurchasedArmorWeightTons(newOwnedCount * 10);
+      } else if (itemId === 'WEAPON_HEAVY_150KG' && newOwnedCount > 0) {
+        setUnlockedWeaponCombos((prev) =>
+          prev.includes('HEAVY_150KG') ? prev : [...prev, 'HEAVY_150KG']
+        );
+        setWeaponComboMode('HEAVY_150KG');
+      } else if (itemId === 'WEAPON_TWIN_200KG' && newOwnedCount > 0) {
+        setUnlockedWeaponCombos((prev) =>
+          prev.includes('TWIN_100_PLUS_100') ? prev : [...prev, 'TWIN_100_PLUS_100']
+        );
+        setWeaponComboMode('TWIN_100_PLUS_100');
+      }
+    },
+    []
+  );
+
+  const handleBuyLaboratory = useCallback(() => {
+    if (hasLaboratory) return;
+    if (credits < LAB_MODULE_PRICE_CR) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        `⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ ПОКУПКИ ЛАБОРАТОРИИ (НУЖНО ${LAB_MODULE_PRICE_CR} CR)!`
+      );
+      return;
+    }
+    playZxBeep('MISSION');
+    setCredits((c) => Number((c - LAB_MODULE_PRICE_CR).toFixed(1)));
+    setHasLaboratory(true);
+    setFlightMessage(
+      `🔬 КУПЛЕНА ЛАБОРАТОРИЯ ДЛЯ РАЗРАБОТКИ (-${LAB_MODULE_PRICE_CR} CR): МАССА +${LAB_MODULE_MASS_TONS} Т ПРИСОЕДИНЕНА К ОБЩЕЙ МАССЕ КОРАБЛЯ (${
+        totalShipMassTons + LAB_MODULE_MASS_TONS
+      } Т). ОТКРЫТА РАЗРАБОТКА ЗА 10% ЦЕНЫ!`
+    );
+  }, [credits, hasLaboratory, playZxBeep, totalShipMassTons]);
+
+  const handleSellLaboratory = useCallback(
+    (buyer: 'GOVERNMENT_50' | 'BUSINESS_80') => {
+      if (!hasLaboratory) return;
+      const pct = buyer === 'BUSINESS_80' ? 80 : 50;
+      const payout = Math.round(LAB_MODULE_PRICE_CR * (pct / 100));
+      playZxBeep('DOCK');
+      setHasLaboratory(false);
+      setCredits((c) => Number((c + payout).toFixed(1)));
+      setFlightMessage(
+        `💰 ЛАБОРАТОРИЯ ПРОДАНА ${
+          buyer === 'BUSINESS_80' ? 'ЧАСТНОМУ БИЗНЕСУ (80%)' : 'ПРАВИТЕЛЬСТВУ ПЛАНЕТЫ (50%)'
+        } ЗА +${payout} CR · МАССА КОРАБЛЯ СНИЖЕНА НА -${LAB_MODULE_MASS_TONS} Т!`
+      );
+    },
+    [hasLaboratory, playZxBeep]
+  );
+
+  const handleBuyHangar = useCallback(() => {
+    if (hasHangar) return;
+    if (credits < HANGAR_MODULE_PRICE_CR) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        `⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ ПОКУПКИ АНГАРА (НУЖНО ${HANGAR_MODULE_PRICE_CR} CR)!`
+      );
+      return;
+    }
+    playZxBeep('MISSION');
+    setCredits((c) => Number((c - HANGAR_MODULE_PRICE_CR).toFixed(1)));
+    setHasHangar(true);
+    setFlightMessage(
+      `🏗️ КУПЛЕН АНГАР ДЛЯ СТРОИТЕЛЬСТВА (-${HANGAR_MODULE_PRICE_CR} CR): МАССА +${HANGAR_MODULE_MASS_TONS} Т ПРИСОЕДИНЕНА К ОБЩЕЙ МАССЕ КОРАБЛЯ (${
+        totalShipMassTons + HANGAR_MODULE_MASS_TONS
+      } Т). ОТКРЫТО СТРОИТЕЛЬСТВО ЗА 10% ЦЕНЫ!`
+    );
+  }, [credits, hasHangar, playZxBeep, totalShipMassTons]);
+
+  const handleSellHangar = useCallback(
+    (buyer: 'GOVERNMENT_50' | 'BUSINESS_80') => {
+      if (!hasHangar) return;
+      const pct = buyer === 'BUSINESS_80' ? 80 : 50;
+      const payout = Math.round(HANGAR_MODULE_PRICE_CR * (pct / 100));
+      playZxBeep('DOCK');
+      setHasHangar(false);
+      setCredits((c) => Number((c + payout).toFixed(1)));
+      setFlightMessage(
+        `💰 АНГАР ПРОДАН ${
+          buyer === 'BUSINESS_80' ? 'ЧАСТНОМУ БИЗНЕСУ (80%)' : 'ПРАВИТЕЛЬСТВУ ПЛАНЕТЫ (50%)'
+        } ЗА +${payout} CR · МАССА КОРАБЛЯ СНИЖЕНА НА -${HANGAR_MODULE_MASS_TONS} Т!`
+      );
+    },
+    [hasHangar, playZxBeep]
+  );
+
+  const handleBuyItemFullPrice = useCallback(
+    (itemId: string) => {
+      const def = CRAFTABLE_SPACE_ITEMS.find((i) => i.id === itemId);
+      if (!def) return;
+      const cost100 = def.fullPriceCr;
+      if (credits < cost100) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ ПОКУПКИ «${def.name.toUpperCase()}» ЗА 100% ЦЕНЫ (НУЖНО ${cost100} CR)!`
+        );
+        return;
+      }
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c - cost100).toFixed(1)));
+      setCraftableItemsState((prev) => {
+        const cur = prev[itemId] || {developed: false, ownedCount: 0};
+        const nextCount = cur.ownedCount + 1;
+        applyCraftedItemShipEffect(itemId, nextCount);
+        return {
+          ...prev,
+          [itemId]: {...cur, ownedCount: nextCount},
+        };
+      });
+      setFlightMessage(
+        `🛒 СПОСОБ 1 (КУПИТЬ ЗА 100% ЦЕНЫ): ПОЛУЧЕНО «${def.name.toUpperCase()}» ЗА -${cost100} CR!`
+      );
+    },
+    [applyCraftedItemShipEffect, credits, playZxBeep]
+  );
+
+  const handleDevelopItem10Pct = useCallback(
+    (itemId: string) => {
+      const def = CRAFTABLE_SPACE_ITEMS.find((i) => i.id === itemId);
+      if (!def) return;
+      if (!hasLaboratory) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ДЛЯ РАЗРАБОТКИ ЗА 10% ЦЕНЫ НУЖНО КУПИТЬ ЛАБОРАТОРИЮ (+${LAB_MODULE_MASS_TONS} Т К МАССЕ КОРАБЛЯ)!`
+        );
+        return;
+      }
+      const cur = craftableItemsState[itemId] || {developed: false, ownedCount: 0};
+      if (cur.developed) {
+        setFlightMessage(
+          `🔬 ЧЕРТЁЖ «${def.name.toUpperCase()}» УЖЕ РАЗРАБОТАН В ЛАБОРАТОРИИ! ТЕПЕРЬ ПОСТРОЙТЕ ЕГО В АНГАРЕ ЗА 10% ЦЕНЫ.`
+        );
+        return;
+      }
+      const devCost10 = Math.round(def.fullPriceCr * 0.1);
+      if (credits < devCost10) {
+        playZxBeep('HIT');
+        setFlightMessage(`⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ РАЗРАБОТКИ (НУЖНО ${devCost10} CR)!`);
+        return;
+      }
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c - devCost10).toFixed(1)));
+      setCraftableItemsState((prev) => ({
+        ...prev,
+        [itemId]: {...(prev[itemId] || {developed: false, ownedCount: 0}), developed: true},
+      }));
+      setFlightMessage(
+        `🔬 РАЗРАБОТАНО В ЛАБОРАТОРИИ ЗА 10% ЦЕНЫ (-${devCost10} CR): «${def.name.toUpperCase()}»! ТЕПЕРЬ ДОСТУПНА ПОСТРОЙКА В АНГАРЕ ЗА 10% ЦЕНЫ.`
+      );
+    },
+    [craftableItemsState, credits, hasLaboratory, playZxBeep]
+  );
+
+  const handleBuildItem10Pct = useCallback(
+    (itemId: string) => {
+      const def = CRAFTABLE_SPACE_ITEMS.find((i) => i.id === itemId);
+      if (!def) return;
+      if (!hasHangar) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ДЛЯ СТРОИТЕЛЬСТВА ЗА 10% ЦЕНЫ НУЖНО КУПИТЬ АНГАР (+${HANGAR_MODULE_MASS_TONS} Т К МАССЕ КОРАБЛЯ)!`
+        );
+        return;
+      }
+      const cur = craftableItemsState[itemId] || {developed: false, ownedCount: 0};
+      if (!cur.developed) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ СНАЧАЛА РАЗРАБОТАЙТЕ «${def.name.toUpperCase()}» В ЛАБОРАТОРИИ ЗА 10% ЦЕНЫ (${Math.round(
+            def.fullPriceCr * 0.1
+          )} CR)!`
+        );
+        return;
+      }
+      const buildCost10 = Math.round(def.fullPriceCr * 0.1);
+      if (credits < buildCost10) {
+        playZxBeep('HIT');
+        setFlightMessage(`⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ СТРОИТЕЛЬСТВА В АНГАРЕ (НУЖНО ${buildCost10} CR)!`);
+        return;
+      }
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c - buildCost10).toFixed(1)));
+      setCraftableItemsState((prev) => {
+        const prevItem = prev[itemId] || {developed: true, ownedCount: 0};
+        const nextCount = prevItem.ownedCount + 1;
+        applyCraftedItemShipEffect(itemId, nextCount);
+        return {
+          ...prev,
+          [itemId]: {...prevItem, ownedCount: nextCount},
+        };
+      });
+      setFlightMessage(
+        `🏗️ ПОСТРОЕНО В АНГАРЕ ЗА 10% ЦЕНЫ (-${buildCost10} CR): «${def.name.toUpperCase()}»! МОЖНО ИСПОЛЬЗОВАТЬ ИЛИ ПРОДАТЬ ПРАВИТЕЛЬСТВУ (50%) / БИЗНЕСУ (80%)!`
+      );
+    },
+    [applyCraftedItemShipEffect, craftableItemsState, credits, hasHangar, playZxBeep]
+  );
+
+  const handleDevelopAndBuildCombo20Pct = useCallback(
+    (itemId: string) => {
+      const def = CRAFTABLE_SPACE_ITEMS.find((i) => i.id === itemId);
+      if (!def) return;
+      if (!hasLaboratory || !hasHangar) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ДЛЯ РАЗРАБОТКИ (10%) И ПОСТРОЙКИ (10%) НУЖНЫ ЛАБОРАТОРИЯ (+5 Т) И АНГАР (+5 Т)!`
+        );
+        return;
+      }
+      const cur = craftableItemsState[itemId] || {developed: false, ownedCount: 0};
+      const devCost10 = cur.developed ? 0 : Math.round(def.fullPriceCr * 0.1);
+      const buildCost10 = Math.round(def.fullPriceCr * 0.1);
+      const total20 = devCost10 + buildCost10;
+      if (credits < total20) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ НЕДОСТАТОЧНО КРЕДИТОВ ДЛЯ РАЗРАБОТКИ И ПОСТРОЙКИ (НУЖНО ${total20} CR)!`
+        );
+        return;
+      }
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c - total20).toFixed(1)));
+      setCraftableItemsState((prev) => {
+        const prevItem = prev[itemId] || {developed: false, ownedCount: 0};
+        const nextCount = prevItem.ownedCount + 1;
+        applyCraftedItemShipEffect(itemId, nextCount);
+        return {
+          ...prev,
+          [itemId]: {developed: true, ownedCount: nextCount},
+        };
+      });
+      setFlightMessage(
+        `🔬+🏗️ СПОСОБ 2 ВЫПОЛНЕН: «${def.name.toUpperCase()}» РАЗРАБОТАНО (10%) И ПОСТРОЕНО В АНГАРЕ (10%) ВСЕГО ЗА -${total20} CR (20% ЦЕНЫ)!`
+      );
+    },
+    [applyCraftedItemShipEffect, craftableItemsState, credits, hasHangar, hasLaboratory, playZxBeep]
+  );
+
+  const handleSellCraftedItem = useCallback(
+    (itemId: string, buyer: 'GOVERNMENT_50' | 'BUSINESS_80') => {
+      const def = CRAFTABLE_SPACE_ITEMS.find((i) => i.id === itemId);
+      if (!def) return;
+      const cur = craftableItemsState[itemId] || {developed: false, ownedCount: 0};
+      if (cur.ownedCount <= 0) return;
+      const ratePct = buyer === 'BUSINESS_80' ? 80 : 50;
+      const sellRevenueCr = Math.round(def.fullPriceCr * (ratePct / 100));
+      playZxBeep('DOCK');
+      setCredits((c) => Number((c + sellRevenueCr).toFixed(1)));
+      setCraftableItemsState((prev) => {
+        const prevItem = prev[itemId] || {developed: false, ownedCount: 0};
+        const nextCount = Math.max(0, prevItem.ownedCount - 1);
+        applyCraftedItemShipEffect(itemId, nextCount);
+        return {
+          ...prev,
+          [itemId]: {...prevItem, ownedCount: nextCount},
+        };
+      });
+      setFlightMessage(
+        `💰 ПРОДАНО ${
+          buyer === 'BUSINESS_80'
+            ? 'ЧАСТНОМУ БИЗНЕСУ ЗА 80% ЦЕНЫ'
+            : 'ПРАВИТЕЛЬСТВУ ПЛАНЕТЫ ЗА 50% ЦЕНЫ'
+        }: «${def.name.toUpperCase()}» → ПОЛУЧЕНО +${sellRevenueCr} CR!`
+      );
+    },
+    [applyCraftedItemShipEffect, craftableItemsState, playZxBeep]
   );
 
   const flightStateRef = useRef<{
@@ -3475,6 +3788,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   }, [minedElementsHold.Omega, playZxBeep]);
 
   // =========================================================================
+  // ЗОНА ОГНЕВОГО ПОРАЖЕНИЯ (МОТИВАЦИЯ ПОГОНИ И ПРОКАЧКИ ДВИГАТЕЛЕЙ):
+  // • От 100 до 500 ед. (и ближе ≤ 500 ед.): урон = 100% (1.0)
+  // • От 500 до 1000 ед.: градиентное снижение от 100% до 0% -> (1000 - dist) / 500
+  // • Свыше 1000 ед. (≥ 1000 ед.): урон = 0% (0.0) — цель вне зоны огневого поражения!
+  // =========================================================================
+  const getWeaponDamageMultiplierByDistance = useCallback((distUnits: number): number => {
+    if (distUnits <= 500) return 1;
+    if (distUnits >= 1000) return 0;
+    return (1000 - distUnits) / 500;
+  }, []);
+
+  // =========================================================================
   // ОНТОЛОГИЧЕСКАЯ МЕХАНИКА №2: ТЯЖЁЛОЕ ВООРУЖЕНИЕ — ГАММА-КВАНТОВЫЙ РАЗМЫКАТЕЛЬ УЗЛОВ (Клавиша V / Кнопка)
   // • Контролируемый пучок гамма-квантов вызывает лавинообразное размыкание локальных узлов в цели:
   //   аналог гамма-всплеска сверхновой, но БЕЗ ПОСЛЕСВЕЧЕНИЯ!
@@ -3519,6 +3844,21 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     }
 
     if (hitEntity) {
+      const targetDistUnits = Math.max(
+        1,
+        Math.round(Math.hypot(hitEntity.pos.x, hitEntity.pos.y, hitEntity.pos.z))
+      );
+      const rangeDmgMult = getWeaponDamageMultiplierByDistance(targetDistUnits);
+      if (rangeDmgMult <= 0) {
+        // Возвращаем заряд, если цель далеко за пределами зоны огневого поражения (≥ 1000 ед.)
+        setHeavyGammaCharges((c) => c + 1);
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ЦЕЛЬ ВНЕ ЗОНЫ ОГНЕВОГО ПОРАЖЕНИЯ (${targetDistUnits} ЕД. ≥ 1000 ЕД. → УРОН 0%)! ВКЛЮЧИТЕ АВТОПИЛОТ (Q) / ДВИГАТЕЛИ И СБЛИЗЬТЕСЬ В ЗОНУ 100–500 ЕД. (УРОН 100%)!`
+        );
+        return;
+      }
+
       // Если уничтожен космический мусор или груз на траектории — считается уничтожением астероида и вознаграждается соответственно!
       if (hitEntity.kind === 'CARGO' || hitEntity.kind === 'SPACE_DEBRIS') {
         rewardDestroyCargoOrDebrisAsAsteroid(hitEntity, 'GAMMA');
@@ -3577,6 +3917,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     }
   }, [
     currentSystemId,
+    getWeaponDamageMultiplierByDistance,
     heavyGammaCharges,
     maxCargoCapacity,
     playZxBeep,
@@ -3788,6 +4129,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     }
 
     if (hitEntity) {
+      const targetDistUnits = Math.max(
+        1,
+        Math.round(Math.hypot(hitEntity.pos.x, hitEntity.pos.y, hitEntity.pos.z))
+      );
+      const rangeDmgMult = getWeaponDamageMultiplierByDistance(targetDistUnits);
+      const rangeDmgPct = Math.round(rangeDmgMult * 100);
+
+      // Если цель дальше 1000 ед. — урон 0% (вне зоны огневого поражения, нужно догонять цель!)
+      if (rangeDmgMult <= 0) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ВНЕ ЗОНЫ ОГНЕВОГО ПОРАЖЕНИЯ (${targetDistUnits} ЕД. ≥ 1000 ЕД. → УРОН 0%)! ВКЛЮЧИТЕ АВТОПИЛОТ (Q) / ДВИГАТЕЛИ И ДОГОНИТЕ ЦЕЛЬ В ЗОНУ 100–500 ЕД. (УРОН 100%)!`
+        );
+        return;
+      }
+
       // =========================================================================
       // УНИЧТОЖЕНИЕ МУСОРА ИЛИ ГРУЗА НА ТРАЕКТОРИИ СЧИТАЕТСЯ УНИЧТОЖЕНИЕМ АСТЕРОИДА
       // И ВОЗНАГРАЖДАЕТСЯ СООТВЕТСТВЕННО!
@@ -3799,6 +4156,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
       // =========================================================================
       // ПРОСТОЙ ДЕБЕТ / КРЕДИТ И КОМАНДНЫЙ УЧЁТ ПОПАДАНИЙ В 3D-БОЮ (ЛАЗЕР):
+      // С УЧЁТОМ ГРАДИЕНТА УРОНА ОТ ДИСТАНЦИИ (100–500 ед. = 100%, 500–1000 ед. = градиент до 0%)
       // =========================================================================
       const activeCombo = WEAPON_COMBINATION_PRESETS[weaponComboMode];
       const defaultMaxMassKg = hitEntity.kind === 'THARGOID' ? 80000 : 50000;
@@ -3809,9 +4167,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       if (hitEntity.playerShotsHitCount === undefined) hitEntity.playerShotsHitCount = 0;
 
       const prevMassKg = hitEntity.massKg;
-      const damageFraction = Math.min(1, damage / Math.max(1, hitEntity.maxHp));
-      const rawSalvoImpactKg = Math.round(hitEntity.maxMassKg * damageFraction);
-      hitEntity.hp -= damage;
+      const effectiveDamage = Math.max(0.25, damage * rangeDmgMult);
+      const damageFraction = Math.min(1, effectiveDamage / Math.max(1, hitEntity.maxHp));
+      const rawSalvoImpactKg = Math.max(1, Math.round(hitEntity.maxMassKg * damageFraction));
+      const fullRawSalvoKg = Math.max(
+        1,
+        Math.round(hitEntity.maxMassKg * Math.min(1, damage / Math.max(1, hitEntity.maxHp)))
+      );
+      hitEntity.hp -= effectiveDamage;
       const isDestroyedNow = hitEntity.hp <= 0 || prevMassKg - rawSalvoImpactKg <= 0;
       const totalRemovedMassKg = isDestroyedNow ? prevMassKg : Math.min(prevMassKg, rawSalvoImpactKg);
 
@@ -3823,7 +4186,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         1,
         Math.round(playerAddedKg / activeCombo.totalDestroyedKgPerAction)
       );
-      const debitSalvoSpentKg = Math.round(playerAddedKg * 1.02);
+      const fullShotPlayerKg = isTeamCombatMode ? Math.round(fullRawSalvoKg * 0.6) : fullRawSalvoKg;
+      const debitSalvoSpentKg = Math.round(Math.max(playerAddedKg, fullShotPlayerKg) * 1.02);
 
       hitEntity.playerHitMassKg += playerAddedKg;
       hitEntity.teamHitMassKg += teamAddedKg;
@@ -3846,22 +4210,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         });
         setFlightMessage(
           isTeamCombatMode
-            ? `🤝 КОМАНДНЫЙ БОЙ (ЛАЗЕР): ТВОИ ПОПАДАНИЯ ${(hitEntity.playerHitMassKg / 1000).toFixed(
-                2
-              )} Т (${hitEntity.playerShotsHitCount} ВЫСТР.) · КОМАНДА ${(
+            ? `🤝 КОМАНДНЫЙ БОЙ (ЛАЗЕР · ДИСТ ${targetDistUnits} ЕД. · УРОН ${rangeDmgPct}%): ТВОИ ПОПАДАНИЯ ${(
+                hitEntity.playerHitMassKg / 1000
+              ).toFixed(2)} Т (${hitEntity.playerShotsHitCount} ВЫСТР.) · КОМАНДА ${(
                 hitEntity.teamHitMassKg / 1000
-              ).toFixed(2)} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(
+              ).toFixed(2)} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(2)} Т`
+            : `⚡ ПОПАДАНИЕ ЛАЗЕРА [ДИСТ ${targetDistUnits} ЕД. · УРОН ${rangeDmgPct}%]: ДЕБЕТ -${(
+                debitSalvoSpentKg / 1000
+              ).toFixed(2)} Т · СНЯТО ${(playerAddedKg / 1000).toFixed(
                 2
-              )} Т (ПОКА НЕ УНИЧТОЖЕН — 0 Т В ЗАЧЁТ!)`
-            : `⚡ ПОПАДАНИЕ ЛАЗЕРА: ДЕБЕТ ЗАЛПА -${(debitSalvoSpentKg / 1000).toFixed(
-                2
-              )} Т · ТВОИ ПОПАДАНИЯ ${(hitEntity.playerHitMassKg / 1000).toFixed(
-                2
-              )} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(
-                2
-              )} / ${(hitEntity.maxMassKg / 1000).toFixed(
-                0
-              )} Т (НЕ УНИЧТОЖЕН — ОЧКИ НЕ ЗАСЧИТЫВАЮТСЯ!)`
+              )} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(2)} / ${(
+                hitEntity.maxMassKg / 1000
+              ).toFixed(0)} Т${rangeDmgPct < 100 ? ' (СБЛИЗЬТЕСЬ <500 ЕД. ДЛЯ 100% УРОНА!)' : ''}`
         );
       }
 
@@ -3955,6 +4315,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     let hitAsteroidIdx = -1;
     let bestAstDist = Infinity;
     let hitAstPos: Vec3 = {x: 0, y: 0, z: 300};
+    let hitAstDist3D = 300;
     for (let i = 0; i < st.asteroids.length; i++) {
       const ast = st.asteroids[i];
       const cosA = Math.cos(ast.orbitAngle);
@@ -3980,11 +4341,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           bestAstDist = d;
           hitAsteroidIdx = i;
           hitAstPos = {x: ax, y: ay, z: Math.min(600, Math.max(120, az))};
+          hitAstDist3D = Math.max(1, Math.round(Math.hypot(ax, ay, az)));
         }
       }
     }
 
     if (hitAsteroidIdx !== -1) {
+      const astRangeMult = getWeaponDamageMultiplierByDistance(hitAstDist3D);
+      if (astRangeMult <= 0) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ БУЛЫЖНИК ВНЕ ЗОНЫ ОГНЕВОГО ПОРАЖЕНИЯ (${hitAstDist3D} ЕД. ≥ 1000 ЕД. → УРОН 0%)! ПОДЛЕТИТЕ В ЗОНУ 100–500 ЕД. (АВТОПИЛОТ Q)!`
+        );
+        return;
+      }
       const hitAst = st.asteroids[hitAsteroidIdx];
 
       if (!hitAst.isValuable) {
@@ -4037,7 +4407,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         );
       }
     }
-  }, [beltSafetyPct, currentSystemId, hasMilitaryLaser, isTeamCombatMode, joinedPlanetGroups, onEarnKarmaAndBonus, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
+  }, [beltSafetyPct, currentSystemId, getWeaponDamageMultiplierByDistance, hasMilitaryLaser, isTeamCombatMode, joinedPlanetGroups, onEarnKarmaAndBonus, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
 
   // ОРУЖИЕ №2 (Правая кнопка мыши ПКМ / R): Тяжёлый Плазменный Залп Огневой Башни в точку прицела мыши
   const handleFireSecondaryWeapon = useCallback(() => {
@@ -4077,6 +4447,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     }
 
     if (hitEntity) {
+      const targetDistUnits = Math.max(
+        1,
+        Math.round(Math.hypot(hitEntity.pos.x, hitEntity.pos.y, hitEntity.pos.z))
+      );
+      const rangeDmgMult = getWeaponDamageMultiplierByDistance(targetDistUnits);
+      const rangeDmgPct = Math.round(rangeDmgMult * 100);
+
+      // Если цель дальше 1000 ед. — урон 0% (вне зоны огневого поражения, нужно догонять!)
+      if (rangeDmgMult <= 0) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ВНЕ ЗОНЫ ОГНЕВОГО ПОРАЖЕНИЯ (${targetDistUnits} ЕД. ≥ 1000 ЕД. → УРОН 0%)! ВКЛЮЧИТЕ АВТОПИЛОТ (Q) / ДВИГАТЕЛИ И ДОГОНИТЕ ЦЕЛЬ В ЗОНУ 100–500 ЕД. (УРОН 100%)!`
+        );
+        return;
+      }
+
       // =========================================================================
       // УНИЧТОЖЕНИЕ МУСОРА ИЛИ ГРУЗА НА ТРАЕКТОРИИ СЧИТАЕТСЯ УНИЧТОЖЕНИЕМ АСТЕРОИДА
       // И ВОЗНАГРАЖДАЕТСЯ СООТВЕТСТВЕННО!
@@ -4086,7 +4472,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         return;
       }
 
-      // ПРОСТОЙ ДЕБЕТ / КРЕДИТ И КОМАНДНЫЙ УЧЁТ ПОПАДАНИЙ В 3D-БОЮ (ПЛАЗМА):
+      // ПРОСТОЙ ДЕБЕТ / КРЕДИТ И КОМАНДНЫЙ УЧЁТ ПОПАДАНИЙ В 3D-БОЮ (ПЛАЗМА) С ГРАДИЕНТОМ ДИСТАНЦИИ:
       const activeCombo = WEAPON_COMBINATION_PRESETS[weaponComboMode];
       const defaultMaxMassKg = hitEntity.kind === 'THARGOID' ? 80000 : 50000;
       if (hitEntity.maxMassKg === undefined) hitEntity.maxMassKg = defaultMaxMassKg;
@@ -4096,9 +4482,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       if (hitEntity.playerShotsHitCount === undefined) hitEntity.playerShotsHitCount = 0;
 
       const prevMassKg = hitEntity.massKg;
-      const damageFraction = Math.min(1, heavyDamage / Math.max(1, hitEntity.maxHp));
-      const rawSalvoImpactKg = Math.round(hitEntity.maxMassKg * damageFraction);
-      hitEntity.hp -= heavyDamage;
+      const effectiveHeavyDamage = Math.max(0.5, heavyDamage * rangeDmgMult);
+      const damageFraction = Math.min(1, effectiveHeavyDamage / Math.max(1, hitEntity.maxHp));
+      const rawSalvoImpactKg = Math.max(1, Math.round(hitEntity.maxMassKg * damageFraction));
+      const fullRawSalvoKg = Math.max(
+        1,
+        Math.round(hitEntity.maxMassKg * Math.min(1, heavyDamage / Math.max(1, hitEntity.maxHp)))
+      );
+      hitEntity.hp -= effectiveHeavyDamage;
       const isDestroyedNow = hitEntity.hp <= 0 || prevMassKg - rawSalvoImpactKg <= 0;
       const totalRemovedMassKg = isDestroyedNow ? prevMassKg : Math.min(prevMassKg, rawSalvoImpactKg);
 
@@ -4110,7 +4501,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         1,
         Math.round(playerAddedKg / activeCombo.totalDestroyedKgPerAction)
       );
-      const debitSalvoSpentKg = Math.round(playerAddedKg * 1.02);
+      const fullShotPlayerKg = isTeamCombatMode ? Math.round(fullRawSalvoKg * 0.6) : fullRawSalvoKg;
+      const debitSalvoSpentKg = Math.round(Math.max(playerAddedKg, fullShotPlayerKg) * 1.02);
 
       hitEntity.playerHitMassKg += playerAddedKg;
       hitEntity.teamHitMassKg += teamAddedKg;
@@ -4132,22 +4524,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         });
         setFlightMessage(
           isTeamCombatMode
-            ? `🤝 КОМАНДНЫЙ БОЙ (ПЛАЗМА): ТВОИ ПОПАДАНИЯ ${(hitEntity.playerHitMassKg / 1000).toFixed(
-                2
-              )} Т (${hitEntity.playerShotsHitCount} ВЫСТР.) · КОМАНДА ${(
+            ? `🤝 КОМАНДНЫЙ БОЙ (ПЛАЗМА · ДИСТ ${targetDistUnits} ЕД. · УРОН ${rangeDmgPct}%): ТВОИ ПОПАДАНИЯ ${(
+                hitEntity.playerHitMassKg / 1000
+              ).toFixed(2)} Т (${hitEntity.playerShotsHitCount} ВЫСТР.) · КОМАНДА ${(
                 hitEntity.teamHitMassKg / 1000
-              ).toFixed(2)} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(
+              ).toFixed(2)} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(2)} Т`
+            : `🔥 ПОПАДАНИЕ ПЛАЗМЫ [ДИСТ ${targetDistUnits} ЕД. · УРОН ${rangeDmgPct}%]: ДЕБЕТ -${(
+                debitSalvoSpentKg / 1000
+              ).toFixed(2)} Т · СНЯТО ${(playerAddedKg / 1000).toFixed(
                 2
-              )} Т (ПОКА НЕ УНИЧТОЖЕН — 0 Т В ЗАЧЁТ!)`
-            : `🔥 ПОПАДАНИЕ ПЛАЗМЫ: ДЕБЕТ ЗАЛПА -${(debitSalvoSpentKg / 1000).toFixed(
-                2
-              )} Т · ТВОИ ПОПАДАНИЯ ${(hitEntity.playerHitMassKg / 1000).toFixed(
-                2
-              )} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(
-                2
-              )} / ${(hitEntity.maxMassKg / 1000).toFixed(
-                0
-              )} Т (НЕ УНИЧТОЖЕН — ОЧКИ НЕ ЗАСЧИТЫВАЮТСЯ!)`
+              )} Т · ОСТАТОК ВРАГА ${(hitEntity.massKg / 1000).toFixed(2)} / ${(
+                hitEntity.maxMassKg / 1000
+              ).toFixed(0)} Т${rangeDmgPct < 100 ? ' (СБЛИЗЬТЕСЬ <500 ЕД. ДЛЯ 100% УРОНА!)' : ''}`
         );
       }
 
@@ -4204,6 +4592,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     let hitAsteroidIdx = -1;
     let bestAstDist = Infinity;
     let hitAstPos: Vec3 = {x: 0, y: 0, z: 300};
+    let hitAstDist3D = 300;
     for (let i = 0; i < st.asteroids.length; i++) {
       const ast = st.asteroids[i];
       const cosA = Math.cos(ast.orbitAngle);
@@ -4229,11 +4618,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           bestAstDist = d;
           hitAsteroidIdx = i;
           hitAstPos = {x: ax, y: ay, z: Math.min(600, Math.max(120, az))};
+          hitAstDist3D = Math.max(1, Math.round(Math.hypot(ax, ay, az)));
         }
       }
     }
 
     if (hitAsteroidIdx !== -1) {
+      const astRangeMult = getWeaponDamageMultiplierByDistance(hitAstDist3D);
+      if (astRangeMult <= 0) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ БУЛЫЖНИК ВНЕ ЗОНЫ ОГНЕВОГО ПОРАЖЕНИЯ (${hitAstDist3D} ЕД. ≥ 1000 ЕД. → УРОН 0%)! ПОДЛЕТИТЕ В ЗОНУ 100–500 ЕД. (АВТОПИЛОТ Q)!`
+        );
+        return;
+      }
       const hitAst = st.asteroids[hitAsteroidIdx];
       if (!hitAst.isValuable) {
         playZxBeep('EXPLODE');
@@ -4284,7 +4682,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         );
       }
     }
-  }, [beltSafetyPct, currentSystemId, isTeamCombatMode, joinedPlanetGroups, playZxBeep, screenMode, weaponComboMode]);
+  }, [beltSafetyPct, currentSystemId, getWeaponDamageMultiplierByDistance, isTeamCombatMode, joinedPlanetGroups, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
 
   // ЗАХВАТ ПРИ НАЖАТИИ КОЛЁСИКА МЫШИ (СКМ / C):
   // Захватывает помеченный (после огневого контакта!) ценный булыжник (Fe, Al, Ti, H₂O, Cu, Ni, Co, Li, Ag, Pt, Au)
@@ -5181,6 +5579,141 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     }
   }, [playZxBeep]);
 
+  // Отключение автопилота при нажатии любой клавиши клавиатуры (кроме колёсика скорости и клавиш мыши управления огнём)
+  const handleDisengageAutopilot = useCallback(
+    (reasonLabel?: string) => {
+      if (!autopilotTargetRef.current) return;
+      const prevName = autopilotTargetRef.current.name;
+      autopilotTargetRef.current = null;
+      setAutopilotTargetUi(null);
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🔓 АВТОПИЛОТ ВЫКЛЮЧЕН (${reasonLabel || 'НАЖАТА КЛАВИША'}): ЗАХВАТ ОБЪЕКТА «${prevName.toUpperCase()}» СНЯТ · РУЧНОЕ УПРАВЛЕНИЕ АКТИВНО`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // ЗАХВАТ ОБЪЕКТА АВТОПИЛОТОМ (Наведение курсора мыши на объект + нажатие клавиши Q):
+  // Объект плавно помещается в центр экрана, и корабль начинает движение в его сторону.
+  // У объекта, попавшего в захват автопилота, появляется предупреждение о захвате автопилотом, расстоянии до корабля и массе.
+  const handleEngageAutopilotAtCursor = useCallback(() => {
+    const st = flightStateRef.current;
+    let targetHit = hoveredScreenTargetRef.current;
+
+    if (!targetHit && projectedScreenTargetsRef.current.length > 0) {
+      const aimX = st.turretActive ? st.turretX : 430;
+      const aimY = st.turretActive ? st.turretY : 194;
+      let bestScore = Infinity;
+      for (const cand of projectedScreenTargetsRef.current) {
+        const d = Math.hypot(cand.canvasX - aimX, cand.canvasY - aimY);
+        if (d <= cand.hitRadius + 38) {
+          const score = d - cand.priority * 0.25;
+          if (score < bestScore) {
+            bestScore = score;
+            targetHit = cand;
+          }
+        }
+      }
+    }
+
+    if (!targetHit) {
+      if (autopilotTargetRef.current) {
+        handleDisengageAutopilot('КЛАВИША Q');
+      } else {
+        playZxBeep('HIT');
+        setFlightMessage(
+          '⚠️ АВТОПИЛОТ (Q): НАВЕДИТЕ КУРСОР МЫШИ НА ОБЪЕКТ И НАЖМИТЕ Q ДЛЯ ЗАХВАТА АВТОПИЛОТОМ!'
+        );
+      }
+      return;
+    }
+
+    // Если корабль был закреплён на стационарной орбите — снимаем фиксацию для свободного полёта автопилота к цели
+    if (st.stationaryOrbitPlanetId) {
+      st.stationaryOrbitPlanetId = null;
+      st.stationaryOrbitTurnRad = 0;
+      setStationaryOrbitInfo(null);
+    }
+
+    const canvas = canvasRef.current;
+    const container = viewportContainerRef.current;
+    let anchorLeftPx = targetHit.canvasX;
+    let anchorTopPx = targetHit.canvasY;
+    let viewportWidth = 760;
+    let viewportHeight = 480;
+    let screenRadiusPx = targetHit.hitRadius;
+
+    if (canvas) {
+      const rect = canvas.getBoundingClientRect();
+      viewportWidth = container?.clientWidth || rect.width || 760;
+      viewportHeight = container?.clientHeight || rect.height || 480;
+      const canvasAspect = canvas.width / canvas.height;
+      const rectAspect = rect.width / Math.max(1, rect.height);
+      let renderW = rect.width;
+      let renderH = rect.height;
+      let offsetX = 0;
+      let offsetY = 0;
+      if (rectAspect > canvasAspect) {
+        renderW = rect.height * canvasAspect;
+        offsetX = (rect.width - renderW) / 2;
+      } else {
+        renderH = rect.width / canvasAspect;
+        offsetY = (rect.height - renderH) / 2;
+      }
+      anchorLeftPx = offsetX + (targetHit.canvasX / canvas.width) * renderW;
+      anchorTopPx = offsetY + (targetHit.canvasY / canvas.height) * renderH;
+      screenRadiusPx = Math.max(12, (targetHit.hitRadius / canvas.width) * renderW);
+    }
+
+    const distUnits = Math.max(
+      1,
+      Math.round(Math.hypot(targetHit.camPos.x, targetHit.camPos.y, targetHit.camPos.z))
+    );
+
+    const nextLock: AutopilotLockState = {
+      id: targetHit.id,
+      kind: targetHit.profile.kind,
+      name: targetHit.profile.name,
+      nickname: targetHit.profile.nickname,
+      color: targetHit.profile.color,
+      camPos: {...targetHit.camPos},
+      standoffDist: targetHit.standoffDist,
+      distanceUnits: distUnits,
+      targetMassTons: targetHit.targetMassTons,
+      targetMassLabel: targetHit.targetMassLabel,
+      canvasX: targetHit.canvasX,
+      canvasY: targetHit.canvasY,
+      anchorLeftPx,
+      anchorTopPx,
+      screenRadiusPx,
+      viewportWidth,
+      viewportHeight,
+      planetId: targetHit.profile.kind === 'PLANET' ? targetHit.id : undefined,
+      planetOrder: targetHit.profile.planetOrder,
+      entityId: targetHit.profile.entityId,
+      asteroidId: targetHit.profile.asteroidId,
+    };
+
+    autopilotTargetRef.current = nextLock;
+    setAutopilotTargetUi(nextLock);
+
+    // Запускаем движение корабля в сторону захваченного объекта
+    if (st.targetSpeed < st.maxSpeed * 0.8) {
+      st.targetSpeed = st.maxSpeed;
+      setThrottleUi(100);
+    }
+    if (st.speed < 30) {
+      st.speed = 38;
+    }
+
+    setScreenMode('FLIGHT');
+    playZxBeep('MISSION');
+    setFlightMessage(
+      `🎯 ЗАХВАТ АВТОПИЛОТОМ (Q): «${nextLock.name.toUpperCase()}» ПЛАВНО ПОМЕЩАЕТСЯ В ЦЕНТР ЭКРАНА · ДВИЖЕНИЕ К ЦЕЛИ (ДИСТ: ${distUnits} ЕД. · МАССА КОРАБЛЯ: ${totalShipMassTons} Т)`
+    );
+  }, [handleDisengageAutopilot, playZxBeep, totalShipMassTons]);
+
   const handleFocusObjectFromProfile = useCallback(
     (profile: SpaceObjectProfileData) => {
       if (profile.kind === 'STAR') {
@@ -5208,7 +5741,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     [handleFocusLogisticsEntityInSight, handleNavigateSystemView]
   );
 
-  // Клавиатурное управление: WASD / Стрелки — полёт, I (при наведении курсора мыши на объект) — карточка объекта рядом с ним, X — стационарная орбита, F — стрельба, H — гиперпрыжок, T — стыковка
+  // Клавиатурное управление:
+  // • Наведение курсора на объект + клавиша Q — захват объекта автопилотом (плавно помещается в центр экрана и начинает движение в его сторону)
+  // • Нажатие ЛЮБОЙ клавиши кроме колёсика скорости и клавиш мыши управления огнём выключает автопилот!
+  // • Курсор мыши + клавиша I — карточка объекта рядом с ним
   useEffect(() => {
     if (!isOpen) return;
 
@@ -5225,6 +5761,31 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
       const code = e.code;
       const key = e.key.toLowerCase();
+      const isQKey = code === 'KeyQ' || key === 'q' || key === 'й';
+
+      // Если автопилот уже включён: нажатие ЛЮБОЙ клавиши клавиатуры выключает автопилот
+      // (или перезахватывает новый объект, если курсор наведён на другой объект и нажата Q)
+      if (autopilotTargetRef.current) {
+        if (isQKey) {
+          e.preventDefault();
+          if (e.repeat) return;
+          const hovered = hoveredScreenTargetRef.current;
+          if (hovered && hovered.id !== autopilotTargetRef.current.id) {
+            handleEngageAutopilotAtCursor();
+          } else {
+            handleDisengageAutopilot('КЛАВИША Q');
+          }
+          return;
+        } else {
+          handleDisengageAutopilot(`КЛАВИША ${e.key.toUpperCase()}`);
+        }
+      } else if (isQKey) {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleEngageAutopilotAtCursor();
+        return;
+      }
+
       flightStateRef.current.keys[code] = true;
 
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(code)) {
@@ -5292,6 +5853,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       window.removeEventListener('keyup', onKeyUp);
     };
   }, [
+    handleDisengageAutopilot,
+    handleEngageAutopilotAtCursor,
     handleFireHeavyGammaWeapon,
     handleFireLaser,
     handleHyperspaceJump,
@@ -5325,7 +5888,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           // W / ↑ — штурвал от себя (пикирование, нос вниз)
           // S / ↓ — штурвал на себя (кабрирование, нос вверх)
           // A / ← и D / → — крен крыльев влево / вправо (Roll)
-          // E / Shift — прибавить тягу (РУД +), Q / Ctrl — убавить тягу (РУД -)
+          // E / Shift — прибавить тягу (РУД +), Ctrl — убавить тягу (РУД -), Q — Автопилот
           const pitchInput =
             (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0) -
             (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0);
@@ -5334,9 +5897,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
           const throttleInput =
             (keys['KeyE'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['Equal'] ? 1 : 0) -
-            (keys['KeyQ'] || keys['ControlLeft'] || keys['ControlRight'] || keys['Minus'] ? 1 : 0);
+            (keys['ControlLeft'] || keys['ControlRight'] || keys['Minus'] ? 1 : 0);
 
           const isStationaryLocked = Boolean(st.stationaryOrbitPlanetId);
+          const activeAutopilot = autopilotTargetRef.current;
 
           if (isStationaryLocked) {
             st.targetSpeed = 0;
@@ -5376,10 +5940,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             0.81 + liveSpeedRatio * 0.09 + (1 - st.maneuverFactor) * 0.05
           );
 
-          if (isStationaryLocked) {
-            // На стационарной орбите корабль жёстко синхронизирован с осью планеты
+          if (isStationaryLocked || activeAutopilot) {
+            // На стационарной орбите или при захвате автопилотом ручные угловые скорости погашены
             st.pitchRate = 0;
             st.rollRate = 0;
+            if (activeAutopilot) {
+              st.bankAngle *= 0.88;
+            }
           } else {
             st.pitchRate = st.pitchRate * inertiaDamping + pitchInput * (0.0074 * effectiveMf);
             st.rollRate = st.rollRate * inertiaDamping + rollInput * (0.0126 * effectiveMf);
@@ -5459,41 +6026,81 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               setFlightMessage(`ARRIVED IN ${GALAXY_SYSTEMS[nextSys].name} · SCANNER ACTIVE`);
             }
           } else if (screenMode === 'FLIGHT') {
-            const cosRoll = Math.cos(st.rollRate);
-            const sinRoll = Math.sin(st.rollRate);
-            const cosPitch = Math.cos(st.pitchRate);
-            const sinPitch = Math.sin(st.pitchRate);
+            if (activeAutopilot) {
+              // АВТОПИЛОТ (Q): Плавное помещение захваченного объекта строго в центр экрана (cx, cy -> x=0, y=0)
+              // и движение корабля в его сторону!
+              const tx = activeAutopilot.camPos.x;
+              const ty = activeAutopilot.camPos.y;
+              const tz = activeAutopilot.camPos.z;
+              const dist3D = Math.max(1, Math.hypot(tx, ty, tz));
 
-            // =========================================================================
-            // СЦЕНА ВНУТРИ 3D-СФЕРЫ ЗВЁЗДНОЙ СИСТЕМЫ (R = 30 000):
-            // • В центре сферы — Звезда (жёлтый кружочек с лучиками, зарядка энергией от близости)
-            // • Внутри сферы — 4 Планеты (I. Меркурий R=6000, II. Венера R=12000, III. Земля R=18000, IV. Марс R=24000)
-            //   и Пояс Астероидов (R=27000)
-            // • С окраины сцены все планеты и звезда выглядят точками разных цветов с текстовым маркером
-            // • Пролёт от окраины (30 000) к Звезде (0) на макс. скорости (100 ед/с) = ровно 5 минут (300 с),
-            //   между планетами (шаг 6 000 ед.) = ровно 1 минута (60 с)!
-            // =========================================================================
-            const rotateCamVec = (v: Vec3): Vec3 => {
-              const x1 = v.x * cosRoll - v.y * sinRoll;
-              const y1 = v.x * sinRoll + v.y * cosRoll;
-              const y2 = y1 * cosPitch - v.z * sinPitch;
-              const z2 = y1 * sinPitch + v.z * cosPitch;
-              return {x: x1, y: y2, z: z2};
-            };
+              const yawErr = Math.atan2(tx, Math.max(15, tz));
+              const pitchErr = Math.atan2(ty, Math.max(15, Math.hypot(tx, tz)));
+              const smoothLerp = Math.min(1, dtSec * 4.5);
+              const dYaw = yawErr * smoothLerp;
+              const dPitch = pitchErr * smoothLerp;
 
-            // Вращаем 3D-базис плоскости эклиптики и позицию Центральной Звезды
-            st.eclipticU = rotateCamVec(st.eclipticU);
-            st.eclipticV = rotateCamVec(st.eclipticV);
-            st.eclipticN = rotateCamVec(st.eclipticN);
+              const cosY = Math.cos(dYaw);
+              const sinY = Math.sin(dYaw);
+              const cosP = Math.cos(dPitch);
+              const sinP = Math.sin(dPitch);
 
-            const rotStar = rotateCamVec(st.starPos);
-            // Точное смещение по реальному времени dtSec: при st.speed = 100 ед/с корабль проходит 6000 ед за 60 сек (1 мин) и 30000 ед за 300 сек (5 мин)!
-            const forwardStep = st.speed * dtSec;
-            st.starPos = {
-              x: rotStar.x,
-              y: rotStar.y,
-              z: rotStar.z - forwardStep,
-            };
+              const rotateAutopilotVec = (v: Vec3): Vec3 => {
+                const x1 = v.x * cosY - v.z * sinY;
+                const y1 = v.y;
+                const z1 = v.x * sinY + v.z * cosY;
+                const y2 = y1 * cosP - z1 * sinP;
+                const z2 = y1 * sinP + z1 * cosP;
+                return {x: x1, y: y2, z: z2};
+              };
+
+              st.eclipticU = rotateAutopilotVec(st.eclipticU);
+              st.eclipticV = rotateAutopilotVec(st.eclipticV);
+              st.eclipticN = rotateAutopilotVec(st.eclipticN);
+
+              const rotStar = rotateAutopilotVec(st.starPos);
+              const rotTarget = rotateAutopilotVec(activeAutopilot.camPos);
+              const rotTargetLen = Math.max(1, Math.hypot(rotTarget.x, rotTarget.y, rotTarget.z));
+
+              const remainDist = Math.max(0, dist3D - activeAutopilot.standoffDist);
+              const approachStep =
+                remainDist > 1.5
+                  ? Math.min(st.speed * dtSec, remainDist * Math.min(1, dtSec * 3.8))
+                  : 0;
+
+              st.starPos = {
+                x: rotStar.x - (rotTarget.x / rotTargetLen) * approachStep,
+                y: rotStar.y - (rotTarget.y / rotTargetLen) * approachStep,
+                z: rotStar.z - (rotTarget.z / rotTargetLen) * approachStep,
+              };
+            } else {
+              const cosRoll = Math.cos(st.rollRate);
+              const sinRoll = Math.sin(st.rollRate);
+              const cosPitch = Math.cos(st.pitchRate);
+              const sinPitch = Math.sin(st.pitchRate);
+
+              const rotateCamVec = (v: Vec3): Vec3 => {
+                const x1 = v.x * cosRoll - v.y * sinRoll;
+                const y1 = v.x * sinRoll + v.y * cosRoll;
+                const y2 = y1 * cosPitch - v.z * sinPitch;
+                const z2 = y1 * sinPitch + v.z * cosPitch;
+                return {x: x1, y: y2, z: z2};
+              };
+
+              // Вращаем 3D-базис плоскости эклиптики и позицию Центральной Звезды
+              st.eclipticU = rotateCamVec(st.eclipticU);
+              st.eclipticV = rotateCamVec(st.eclipticV);
+              st.eclipticN = rotateCamVec(st.eclipticN);
+
+              const rotStar = rotateCamVec(st.starPos);
+              // Точное смещение по реальному времени dtSec: при st.speed = 100 ед/с корабль проходит 6000 ед за 60 сек (1 мин) и 30000 ед за 300 сек (5 мин)!
+              const forwardStep = st.speed * dtSec;
+              st.starPos = {
+                x: rotStar.x,
+                y: rotStar.y,
+                z: rotStar.z - forwardStep,
+              };
+            }
 
             // =========================================================================
             // РЕЖИМ СТАЦИОНАРНОЙ ОРБИТЫ (КЛАВИША X):
@@ -5528,12 +6135,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
             // Обновляем орбитальное и осевое движение всех планет системы
             for (const planet of st.planets) {
+              const isAutopilotTargetingThisPlanet =
+                activeAutopilot &&
+                (activeAutopilot.planetId === planet.id ||
+                  (activeAutopilot.planetOrder &&
+                    planet.gobellObjects?.some(
+                      (o) => o.planetOrder === activeAutopilot.planetOrder
+                    )));
               const isHoveringThisPlanetObj =
                 (hoveredPlanetObjRef.current &&
                   hoveredPlanetObjRef.current.planetId === planet.id) ||
-                isHoveringPopupRef.current;
+                isHoveringPopupRef.current ||
+                Boolean(isAutopilotTargetingThisPlanet);
 
-              planet.orbitAngle += planet.orbitSpeed * (dtSec * 60);
+              if (!isAutopilotTargetingThisPlanet) {
+                planet.orbitAngle += planet.orbitSpeed * (dtSec * 60);
+              }
 
               if (lockedPlanet && planet.id === lockedPlanet.id) {
                 // Планета вращается вокруг своей оси в пространстве, и корабль на стационарной орбите
@@ -5738,7 +6355,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             // 3. РЕНДЕР ПОЯСА АСТЕРОИДОВ (R = 26 600 .. 27 500 за 4-й планетой Марс-IV) БЕЗ ТЕКСТОВЫХ ПОДПИСЕЙ НА ЭКРАНЕ:
             for (let i = 0; i < st.asteroids.length; i++) {
               const ast = st.asteroids[i];
-              ast.orbitAngle += ast.orbitSpeed * (dtSec * 60);
+              const isAutopilotTargetingThisAsteroid =
+                Boolean(activeAutopilot && activeAutopilot.asteroidId === ast.id);
+              if (!isAutopilotTargetingThisAsteroid) {
+                ast.orbitAngle += ast.orbitSpeed * (dtSec * 60);
+              }
               ast.rotAngle += ast.rotSpeed * (dtSec * 60);
 
               const cosA = Math.cos(ast.orbitAngle);
@@ -5792,17 +6413,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     }
                   }
 
-                  if (astScreenR >= 3.2 || ast.revealed) {
+                  if (astScreenR >= 3.2 || ast.revealed || isAutopilotTargetingThisAsteroid) {
                     const elMeta =
                       ast.revealed && ast.elementSymbol
                         ? ASTEROID_PERIODIC_ELEMENTS[ast.elementSymbol]
                         : null;
+                    const astMassTons = Math.max(5, Math.round(ast.size3D * 12));
                     frameScreenTargets.push({
                       id: ast.id,
                       canvasX: asx,
                       canvasY: asy,
                       hitRadius: Math.max(14, astScreenR + 8),
                       priority: ast.revealed ? 60 : 25,
+                      camPos: {x: ax, y: ay, z: az},
+                      standoffDist: Math.max(45, Math.round(ast.size3D * 2.5)),
+                      targetMassTons: astMassTons,
+                      targetMassLabel: `${astMassTons} т (${elMeta ? elMeta.displaySymbol : 'порода'})`,
                       profile: {
                         id: ast.id,
                         kind: 'ASTEROID',
@@ -5963,13 +6589,17 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     ctx.restore();
                   }
 
-                  // Регистрируем Звезду (Солнце) для вызова карточки профиля по клавише I при наведении курсора
+                  // Регистрируем Звезду (Солнце) для вызова карточки профиля по клавише I при наведении курсора и захвата автопилотом (Q)
                   frameScreenTargets.push({
                     id: `star-system-${currentSystemId}`,
                     canvasX: sx,
                     canvasY: sy,
                     hitRadius: Math.max(20, starRadius + 10),
                     priority: 50,
+                    camPos: {x: item.pos.x, y: item.pos.y, z: item.pos.z},
+                    standoffDist: 280,
+                    targetMassTons: 1989000000,
+                    targetMassLabel: '1.99×10²⁷ т (Звезда)',
                     profile: {
                       id: `star-system-${currentSystemId}`,
                       kind: 'STAR',
@@ -6204,7 +6834,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     if (planetR >= 18 && p.gobellObjects && p.gobellObjects.length > 0) {
                       const projectedMap = new Map<
                         string,
-                        {obj: PlanetGoBellObject; ox: number; oy: number; nz: number}
+                        {
+                          obj: PlanetGoBellObject;
+                          ox: number;
+                          oy: number;
+                          nx: number;
+                          ny: number;
+                          nz: number;
+                        }
                       >();
 
                       for (const gbObj of p.gobellObjects) {
@@ -6226,7 +6863,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         const ox = psx + nx * planetR;
                         const oy = psy - ny * planetR;
 
-                        projectedMap.set(gbObj.id, {obj: gbObj, ox, oy, nz});
+                        projectedMap.set(gbObj.id, {obj: gbObj, ox, oy, nx, ny, nz});
                         frameProjectedPlanetObjects.push({
                           obj: gbObj,
                           planetName: p.name,
@@ -6268,7 +6905,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                           karmaMinus: o.karmaMinus,
                         }));
 
-                      for (const {obj: gbObj, ox, oy} of projectedMap.values()) {
+                      for (const {obj: gbObj, ox, oy, nx, ny, nz} of projectedMap.values()) {
                         const isHovered = hoveredScreenTargetRef.current?.id === gbObj.id;
                         const baseR = Math.max(
                           6,
@@ -6378,12 +7015,29 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                             ? 3
                             : 4);
 
+                        const gbCamPos: Vec3 = {
+                          x: item.pos.x + nx * p.radius3D * 0.85,
+                          y: item.pos.y + ny * p.radius3D * 0.85,
+                          z: Math.max(45, item.pos.z - Math.abs(nz) * p.radius3D * 0.35),
+                        };
+                        const gbMassTons =
+                          gbObj.kind === 'GROUP' ? 500 : gbObj.kind === 'BUSINESS' ? 250 : 50;
+
                         frameScreenTargets.push({
                           id: gbObj.id,
                           canvasX: ox,
                           canvasY: oy,
                           hitRadius: Math.max(16, drawR + 8),
                           priority: 95,
+                          camPos: gbCamPos,
+                          standoffDist: Math.round(p.radius3D * 1.85),
+                          targetMassTons: gbMassTons,
+                          targetMassLabel:
+                            gbObj.kind === 'GROUP'
+                              ? `500 т (Узел Правительства ${p.cleanName})`
+                              : gbObj.kind === 'BUSINESS'
+                              ? `250 т (Терминал Бизнеса ${p.cleanName})`
+                              : `50 т (Маяк Объявления #${gbObj.slotId || 1})`,
                           profile: {
                             id: gbObj.id,
                             kind:
@@ -6475,12 +7129,30 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     4: 'Источник титана и сверхпрочной брони в системе · опорный форпост у Пояса Астероидов.',
                   };
 
+                  const planetMassTonsByOrder: Record<number, number> = {
+                    1: 328500,
+                    2: 4867000,
+                    3: 5972000,
+                    4: 641700,
+                  };
+                  const planetMassLabelByOrder: Record<number, string> = {
+                    1: '3.29×10²⁰ т (Меркурий)',
+                    2: '4.87×10²¹ т (Венера)',
+                    3: '5.97×10²¹ т (Земля)',
+                    4: '6.42×10²⁰ т (Марс)',
+                  };
+
                   frameScreenTargets.push({
                     id: p.id,
                     canvasX: psx,
                     canvasY: psy,
                     hitRadius: Math.max(20, planetR + 10),
                     priority: 55,
+                    camPos: {x: item.pos.x, y: item.pos.y, z: item.pos.z},
+                    standoffDist: Math.round(p.radius3D * 2.05),
+                    targetMassTons: planetMassTonsByOrder[pOrder] || 1000000,
+                    targetMassLabel:
+                      planetMassLabelByOrder[pOrder] || `1.0×10²¹ т (${p.cleanName})`,
                     profile: {
                       id: p.id,
                       kind: 'PLANET',
@@ -6584,6 +7256,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 canvasY: by,
                 hitRadius: Math.max(18, drawR + 8),
                 priority: 85,
+                camPos: {x: wx, y: wy, z: wz},
+                standoffDist: 55,
+                targetMassTons: 5,
+                targetMassLabel: '5 т (Подпространственный маяк)',
                 profile: {
                   id: beaconObjId,
                   kind: 'SUBSPACE_BEACON',
@@ -7188,12 +7864,38 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 };
               }
 
+              const entMassTons =
+                ent.kind === 'STATION'
+                  ? 25000
+                  : ent.kind === 'CARGO' || ent.kind === 'SOS_POD' || ent.kind === 'SPACE_DEBRIS'
+                  ? 1
+                  : Number(((ent.massKg ?? 50000) / 1000).toFixed(1));
+              const entMassLabel =
+                ent.kind === 'STATION'
+                  ? '25 000 т (Станция Кориолис)'
+                  : ent.kind === 'CARGO'
+                  ? '1 т (Грузовой контейнер)'
+                  : ent.kind === 'SOS_POD'
+                  ? '1 т (Спасательная капсула)'
+                  : ent.kind === 'SPACE_DEBRIS'
+                  ? '1 т (Обломки корпуса)'
+                  : `${entMassTons} т (Корабль / Модуль)`;
+
               frameScreenTargets.push({
                 id: ent.id,
                 canvasX: entScreenX,
                 canvasY: entScreenY,
                 hitRadius: Math.max(18, Math.min(64, apparentHalfSizePx + 14)),
                 priority: 80,
+                camPos: {x: ent.pos.x, y: ent.pos.y, z: ent.pos.z},
+                standoffDist:
+                  ent.kind === 'STATION'
+                    ? 150
+                    : ent.kind === 'CARGO' || ent.kind === 'SOS_POD'
+                    ? 45
+                    : 95,
+                targetMassTons: entMassTons,
+                targetMassLabel: entMassLabel,
                 profile: objProfile,
               });
             }
@@ -7316,7 +8018,96 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               };
             };
 
-            // 1) Если объект находится в зоне действия курсора мыши И нажата клавиша I — открываем/обновляем карточку этого объекта рядом с ним
+            // ОБНОВЛЕНИЕ ЗАХВАТА АВТОПИЛОТА (КЛАВИША Q):
+            // Поддерживаем актуальные 3D-координаты захваченного объекта, расстояние до корабля, массу и геометрическую рамку захвата на экране
+            if (autopilotTargetRef.current) {
+              const curAp = autopilotTargetRef.current;
+              const liveApHit = frameScreenTargets.find((t) => t.id === curAp.id);
+              if (liveApHit) {
+                const anchor = computeCardAnchorFromHit(liveApHit);
+                const liveDistUnits = Math.max(
+                  1,
+                  Math.round(
+                    Math.hypot(liveApHit.camPos.x, liveApHit.camPos.y, liveApHit.camPos.z)
+                  )
+                );
+                const updatedAp: AutopilotLockState = {
+                  ...curAp,
+                  camPos: {...liveApHit.camPos},
+                  standoffDist: liveApHit.standoffDist,
+                  distanceUnits: liveDistUnits,
+                  targetMassTons: liveApHit.targetMassTons,
+                  targetMassLabel: liveApHit.targetMassLabel,
+                  canvasX: liveApHit.canvasX,
+                  canvasY: liveApHit.canvasY,
+                  ...anchor,
+                };
+                autopilotTargetRef.current = updatedAp;
+                if (st.frameCounter % 2 === 0) {
+                  setAutopilotTargetUi(updatedAp);
+                }
+
+                // Рисуем геометрическую рамку захвата Автопилота (Q) вокруг захваченного объекта
+                const apR = Math.max(18, liveApHit.hitRadius + 6);
+                const apX = liveApHit.canvasX;
+                const apY = liveApHit.canvasY;
+                ctx.save();
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 2.2;
+                ctx.setLineDash([6, 4]);
+                ctx.beginPath();
+                ctx.arc(apX, apY, apR, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Угловые скобки захвата автопилота
+                const brk = Math.max(8, Math.min(16, apR * 0.42));
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 2.4;
+                ctx.beginPath();
+                // Верхний левый угол
+                ctx.moveTo(apX - apR, apY - apR + brk);
+                ctx.lineTo(apX - apR, apY - apR);
+                ctx.lineTo(apX - apR + brk, apY - apR);
+                // Верхний правый угол
+                ctx.moveTo(apX + apR - brk, apY - apR);
+                ctx.lineTo(apX + apR, apY - apR);
+                ctx.lineTo(apX + apR, apY - apR + brk);
+                // Нижний левый угол
+                ctx.moveTo(apX - apR, apY + apR - brk);
+                ctx.lineTo(apX - apR, apY + apR);
+                ctx.lineTo(apX - apR + brk, apY + apR);
+                // Нижний правый угол
+                ctx.moveTo(apX + apR - brk, apY + apR);
+                ctx.lineTo(apX + apR, apY + apR);
+                ctx.lineTo(apX + apR, apY + apR - brk);
+                ctx.stroke();
+
+                // Вектор доведения объекта к центру экрана (cx, cy)
+                if (Math.hypot(apX - cx, apY - cy) > 6) {
+                  ctx.setLineDash([3, 5]);
+                  ctx.strokeStyle = 'rgba(16, 185, 129, 0.7)';
+                  ctx.lineWidth = 1.4;
+                  ctx.beginPath();
+                  ctx.moveTo(apX, apY);
+                  ctx.lineTo(cx, cy);
+                  ctx.stroke();
+                }
+                ctx.restore();
+              } else {
+                // Если цель была уничтожена (например, астероид или корабль/груз сбит) — снимаем захват автопилота
+                const asteroidGone =
+                  curAp.asteroidId && !st.asteroids.some((a) => a.id === curAp.asteroidId);
+                const entityGone =
+                  curAp.entityId && !st.entities.some((e) => e.id === curAp.entityId);
+                if (asteroidGone || entityGone) {
+                  autopilotTargetRef.current = null;
+                  setAutopilotTargetUi(null);
+                }
+              }
+            }
+
+            // 1) Если объект находится в зоне действия курсора мыши И нажата клавиша I — открываем/обновляем карточку этого объекта в углу экрана
             if (isKeyIDownRef.current && bestHoveredTarget) {
               const currentOpenId = activeObjectProfileRef.current?.id;
               if (currentOpenId !== bestHoveredTarget.id || st.frameCounter % 3 === 0) {
@@ -7331,42 +8122,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 setActiveObjectProfile(nextProfile);
               }
             } else if (activeObjectProfileRef.current) {
-              // 2) Если карточка уже открыта: пока объект остаётся в зоне действия курсора мыши (или курсор внутри самой карточки),
-              //    обновляем координаты привязки карточки; а если курсор увели с объекта (и не на карточку) — закрываем карточку!
-              const stillOnSameObject =
-                bestHoveredTarget && bestHoveredTarget.id === activeObjectProfileRef.current.id;
-              if (stillOnSameObject && bestHoveredTarget) {
-                if (st.frameCounter % 3 === 0) {
-                  const anchor = computeCardAnchorFromHit(bestHoveredTarget);
-                  const nextProfile: SpaceObjectProfileData = {
-                    ...bestHoveredTarget.profile,
-                    canvasX: bestHoveredTarget.canvasX,
-                    canvasY: bestHoveredTarget.canvasY,
-                    ...anchor,
-                    initialTab: activeObjectProfileRef.current.initialTab,
-                  };
-                  activeObjectProfileRef.current = nextProfile;
-                  setActiveObjectProfile(nextProfile);
-                }
-              } else if (isHoveringObjectCardRef.current) {
-                const liveTarget = frameScreenTargets.find(
-                  (t) => t.id === activeObjectProfileRef.current?.id
-                );
-                if (liveTarget && st.frameCounter % 4 === 0) {
-                  const anchor = computeCardAnchorFromHit(liveTarget);
-                  const nextProfile: SpaceObjectProfileData = {
-                    ...liveTarget.profile,
-                    canvasX: liveTarget.canvasX,
-                    canvasY: liveTarget.canvasY,
-                    ...anchor,
-                    initialTab: activeObjectProfileRef.current.initialTab,
-                  };
-                  activeObjectProfileRef.current = nextProfile;
-                  setActiveObjectProfile(nextProfile);
-                }
-              } else {
-                activeObjectProfileRef.current = null;
-                setActiveObjectProfile(null);
+              // 2) Если карточка уже открыта в углу экрана: обновляем дистанцию и координаты объекта в реальном времени,
+              //    чтобы пилот мог свободно увести курсор в угол к карточке и нажимать в ней кнопки
+              const liveTarget = frameScreenTargets.find(
+                (t) => t.id === activeObjectProfileRef.current?.id
+              );
+              if (liveTarget && st.frameCounter % 4 === 0) {
+                const anchor = computeCardAnchorFromHit(liveTarget);
+                const nextProfile: SpaceObjectProfileData = {
+                  ...liveTarget.profile,
+                  canvasX: liveTarget.canvasX,
+                  canvasY: liveTarget.canvasY,
+                  ...anchor,
+                  initialTab: activeObjectProfileRef.current.initialTab,
+                };
+                activeObjectProfileRef.current = nextProfile;
+                setActiveObjectProfile(nextProfile);
               }
             }
 
@@ -7660,6 +8431,81 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             ctx.fillRect(bx - 2, stickTopY - 2, 4, 4);
           }
 
+          // Маркер самого корабля в центре 3D-радара (radarCx, radarCy)
+          ctx.fillStyle = '#00ffff';
+          ctx.beginPath();
+          ctx.arc(radarCx, radarCy, 2.8, 0, Math.PI * 2);
+          ctx.fill();
+
+          // ПУНКТИР НА РАДАРЕ МЕЖДУ КОРАБЛЁМ И ОБЪЕКТОМ, ПОПАВШИМ В ЗАХВАТ АВТОПИЛОТА (КЛАВИША Q):
+          const apRadarLock = autopilotTargetRef.current;
+          if (apRadarLock) {
+            const rawNx = Math.max(-1, Math.min(1, apRadarLock.camPos.x / SYSTEM_SPHERE_RADIUS));
+            const rawNz = Math.max(-1, Math.min(1, apRadarLock.camPos.z / SYSTEM_SPHERE_RADIUS));
+            const rawNy = Math.max(-1, Math.min(1, apRadarLock.camPos.y / 6000));
+
+            let apBx = radarCx + rawNx * radarRx * 0.85;
+            let apBy = radarCy - rawNz * radarRy * 0.8;
+            let apStickY = apBy - rawNy * 18;
+
+            // Если захваченный объект находится на малой/средней дистанции (астероид, груз, группа/бизнес на планете и т.д.),
+            // гарантируем минимальную видимую длину вектора на радаре в направлении цели, чтобы пунктир между кораблём и объектом всегда чётко читался
+            const dRadar = Math.hypot(apBx - radarCx, apStickY - radarCy);
+            if (dRadar < 26 && apRadarLock.distanceUnits > 5) {
+              const dirX = apRadarLock.camPos.x;
+              const dirZ = -apRadarLock.camPos.z;
+              const dirLen = Math.hypot(dirX, dirZ) || 1;
+              const minRadarDist = Math.min(
+                radarRy * 0.78,
+                Math.max(26, (apRadarLock.distanceUnits / 3500) * radarRy * 0.78)
+              );
+              apBx = radarCx + (dirX / dirLen) * minRadarDist * (radarRx / radarRy) * 0.55;
+              apBy = radarCy + (dirZ / dirLen) * minRadarDist;
+              apStickY = apBy - rawNy * 12;
+            }
+
+            ctx.save();
+            // Пунктир в плоскости радара (проекция курса)
+            if (Math.abs(apStickY - apBy) > 2) {
+              ctx.setLineDash([2, 3]);
+              ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(radarCx, radarCy);
+              ctx.lineTo(apBx, apBy);
+              ctx.lineTo(apBx, apStickY);
+              ctx.stroke();
+            }
+
+            // Главный яркий пунктир между кораблём (radarCx, radarCy) и захваченным объектом (apBx, apStickY)
+            ctx.setLineDash([4, 4]);
+            ctx.lineDashOffset = -((st.frameCounter * 0.5) % 8);
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(radarCx, radarCy);
+            ctx.lineTo(apBx, apStickY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Подсветка точки корабля и захваченного объекта на концах пунктира
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(radarCx, radarCy, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = '#fbbf24';
+            ctx.fillStyle = apRadarLock.color || '#10b981';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.arc(apBx, apStickY, 5.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(apBx, apStickY, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+
           // Компас наведения на станцию Coriolis и индикатор Солнечной Зарядки (справа от радара)
           const compX = radarCx + radarRx + 36;
           const compY = viewH + 28;
@@ -7887,6 +8733,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           </button>
           <button
             type="button"
+            onClick={() => setIsLabHangarModalOpen(true)}
+            className="px-2.5 py-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.45)]"
+            title="Два способа получить что-либо: 1) Купить за 100% цены; 2) Разработать в Лаборатории за 10% цены + Построить в Ангаре за 10% цены. Продать: Правительству планеты за 50% цены или Частному бизнесу за 80% цены. Лаборатория (+5т) и Ангар (+5т) присоединяются к общей массе корабля!"
+          >
+            <span>
+              🔬🏗️ ЛАБОРАТОРИЯ ({hasLaboratory ? '+5Т' : 'КУПИТЬ'}) И АНГАР ({hasHangar ? '+5Т' : 'КУПИТЬ'}) · РАЗРАБОТКА 10% + ПОСТРОЙКА 10% · ПРОДАЖА 50%/80%
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => setIsLogisticsModalOpen(true)}
             className="px-2.5 py-1 border-2 border-cyan-400 bg-cyan-500/20 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(34,211,238,0.45)]"
             title="Строгие траектории без хаотических движений: у каждой планеты свой автоматический логистический стандартный модуль (цикл: своя планета -> другая планета 1 -> орбита 1 мин -> возврат -> орбита 1 мин -> другая планета 2...). При гибели груз движется по траектории убитого корабля и исчезает в планете назначения. Уничтожение мусора/груза = уничтожение астероида!"
@@ -8056,7 +8912,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             className="w-full h-full object-contain bg-black cursor-crosshair"
           />
 
-          {/* БЫСТРАЯ КНОПКА ЗАКРЕПЛЕНИЯ / ОТКРЕПЛЕНИЯ НА СТАЦИОНАРНОЙ ОРБИТЕ ПЛАНЕТЫ (КЛАВИША X) ПРЯМО НА 3D-ЭКРАНЕ */}
+          {/* БЫСТРЫЕ КНОПКИ СТАЦИОНАРНОЙ ОРБИТЫ (X) И АВТОПИЛОТА (Q) НА 3D-ЭКРАНЕ */}
           {screenMode === 'FLIGHT' && !sentContactBanner && (
             <div className="absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap pointer-events-auto">
               <button
@@ -8075,6 +8931,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     : '🛰 ЗАКРЕПИТЬСЯ НА СТАЦИОНАРНОЙ ОРБИТЕ (X)'}
                 </span>
               </button>
+              {autopilotTargetUi && (
+                <button
+                  type="button"
+                  onClick={() => handleDisengageAutopilot('КНОПКА НА ЭКРАНЕ')}
+                  className="px-3.5 py-2 border-2 border-amber-300 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs transition-all shadow-[0_0_20px_rgba(251,191,36,0.75)] flex items-center gap-2"
+                  title="Автопилот (Q) удерживает цель в центре экрана и ведёт корабль к ней. Нажмите любую клавишу (кроме колёсика скорости и кнопок мыши огня) или кликните сюда для выключения автопилота."
+                >
+                  <span>
+                    🎯 АВТОПИЛОТ [Q]: {autopilotTargetUi.name.toUpperCase()} ({autopilotTargetUi.distanceUnits} ЕД.) · ВЫКЛЮЧИТЬ
+                  </span>
+                </button>
+              )}
               {stationaryOrbitInfo && (
                 <div className="px-2.5 py-1.5 bg-slate-950/90 border border-emerald-400/70 text-[10px] text-cyan-300 font-bold">
                   Осевое вращение планеты остановлено · Вся система вращается вокруг оси планеты [X — открепить]
@@ -8082,6 +8950,145 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               )}
             </div>
           )}
+
+          {/* ИНФОРМАЦИОННАЯ ТАБЛИЧКА АВТОПИЛОТА В УГЛУ ЭКРАНА (КЛАВИША Q):
+              Не перекрывает центр 3D-экрана! Показывает предупреждение о захвате автопилотом,
+              расстояние до корабля и массу (корабля и объекта), а также позволяет выбрать любой угол (↖ ↗ ↙ ↘) */}
+          {screenMode === 'FLIGHT' &&
+            autopilotTargetUi &&
+            (() => {
+              const apCornerStyle: React.CSSProperties =
+                autopilotCardCorner === 'TOP_RIGHT'
+                  ? {top: '10px', right: '10px'}
+                  : autopilotCardCorner === 'TOP_LEFT'
+                  ? {top: '48px', left: '12px'}
+                  : autopilotCardCorner === 'BOTTOM_RIGHT'
+                  ? {bottom: '10px', right: '10px'}
+                  : {bottom: '10px', left: '12px'};
+
+              return (
+                <div
+                  style={{
+                    ...apCornerStyle,
+                    width: '286px',
+                  }}
+                  className="absolute z-25 pointer-events-auto border-2 border-amber-400/90 bg-slate-950/90 backdrop-blur-sm text-slate-100 p-2 shadow-[0_0_20px_rgba(245,158,11,0.45)] font-mono space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-1 border-b border-amber-500/40 pb-1">
+                    <div className="flex items-center gap-1 text-[10px] font-extrabold text-amber-300 truncate">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 animate-pulse" />
+                      <span className="truncate">ЗАХВАТ АВТОПИЛОТОМ [Q]</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-0.5 bg-black/80 border border-amber-500/40 px-0.5 py-0.5">
+                        {(
+                          [
+                            {id: 'TOP_LEFT', label: '↖', title: 'В левый верхний угол'},
+                            {id: 'TOP_RIGHT', label: '↗', title: 'В правый верхний угол'},
+                            {id: 'BOTTOM_LEFT', label: '↙', title: 'В левый нижний угол'},
+                            {id: 'BOTTOM_RIGHT', label: '↘', title: 'В правый нижний угол'},
+                          ] as const
+                        ).map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setAutopilotCardCorner(c.id)}
+                            className={`px-1 text-[9px] font-extrabold ${
+                              autopilotCardCorner === c.id
+                                ? 'bg-amber-400 text-black'
+                                : 'text-amber-200/70 hover:text-white'
+                            }`}
+                            title={c.title}
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDisengageAutopilot('КНОПКА ПРЕДУПРЕЖДЕНИЯ')}
+                        className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[9px]"
+                        title="Выключить автопилот (также выключается нажатием любой клавиши клавиатуры)"
+                      >
+                        ВЫКЛ
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] font-extrabold text-white truncate">
+                    ЦЕЛЬ:{' '}
+                    <span style={{color: autopilotTargetUi.color}}>
+                      {autopilotTargetUi.name.toUpperCase()}
+                    </span>{' '}
+                    <span className="text-slate-300 font-normal">
+                      ({autopilotTargetUi.nickname})
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1 bg-black/80 border border-amber-500/40 p-1 text-[9px]">
+                    <div>
+                      <div className="text-[8px] text-slate-400">ДИСТАНЦИЯ ДО ЦЕЛИ:</div>
+                      <div className="text-cyan-300 font-extrabold text-[11px]">
+                        {autopilotTargetUi.distanceUnits} ЕД.
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[8px] text-slate-400">МАССА КОРАБЛЯ / ЦЕЛИ:</div>
+                      <div className="text-emerald-300 font-extrabold text-[10px] truncate">
+                        {totalShipMassTons} т / {autopilotTargetUi.targetMassTons} т
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Индикатор зоны огневого поражения (100–500 ед. = 100% урона, 500–1000 ед. = градиент до 0%, ≥1000 ед. = 0%) */}
+                  {(() => {
+                    const dist = autopilotTargetUi.distanceUnits;
+                    const dmgPct = Math.round(getWeaponDamageMultiplierByDistance(dist) * 100);
+                    const zoneColor =
+                      dmgPct === 100
+                        ? 'text-emerald-300 border-emerald-500/50 bg-emerald-950/30'
+                        : dmgPct > 0
+                        ? 'text-amber-300 border-amber-500/50 bg-amber-950/30'
+                        : 'text-rose-400 border-rose-500/50 bg-rose-950/30';
+                    const barColor =
+                      dmgPct === 100
+                        ? 'bg-emerald-400'
+                        : dmgPct > 0
+                        ? 'bg-amber-400'
+                        : 'bg-rose-500';
+                    return (
+                      <div className={`border p-1 text-[8px] space-y-0.5 ${zoneColor}`}>
+                        <div className="flex items-center justify-between font-extrabold">
+                          <span>
+                            {dmgPct === 100
+                              ? '🔥 ЗОНА ОГНЯ (≤500 ЕД.):'
+                              : dmgPct > 0
+                              ? '⚡ ГРАДИЕНТ (500–1000 ЕД.):'
+                              : '🚫 ВНЕ ЗОНЫ ОГНЯ (≥1000 ЕД.):'}
+                          </span>
+                          <span>УРОН {dmgPct}%</span>
+                        </div>
+                        <div className="w-full h-1 bg-black/80 border border-slate-700 overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${barColor}`}
+                            style={{width: `${dmgPct}%`}}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="text-[8px] text-amber-200 leading-tight flex items-center justify-between gap-1">
+                    <span className="truncate">Масса цели: <b>{autopilotTargetUi.targetMassLabel}</b></span>
+                    <span className="text-yellow-300 font-bold shrink-0">📡 Пунктир</span>
+                  </div>
+
+                  <div className="text-[8px] text-slate-400 leading-tight border-t border-slate-800 pt-0.5">
+                    Колёсико — скорость ({throttleUi}%) · Мышь — огонь · Любая клавиша — стоп
+                  </div>
+                </div>
+              );
+            })()}
 
           {/* КАРТОЧКА ПРОФИЛЯ ЛЮБОГО ОБЪЕКТА (СОЛНЦЕ, ПЛАНЕТА, ГРУППА, БИЗНЕС, ОБЪЯВЛЕНИЕ, МОДУЛЬ, ГРУЗ, АСТЕРОИД) — ПОЯВЛЯЕТСЯ РЯДОМ С ОБЪЕКТОМ ТОЛЬКО КОГДА ОБЪЕКТ В ЗОНЕ ДЕЙСТВИЯ КУРСОРА МЫШИ И НАЖАТА КЛАВИША I */}
           <SpaceObjectProfileModal
@@ -9396,6 +10403,25 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     </button>
                   </div>
 
+                  {/* ЛАБОРАТОРИЯ (+5 Т) И АНГАР (+5 Т): 2 СПОСОБА ПОЛУЧИТЬ ЧТО-ЛИБО (КУПИТЬ 100% ИЛИ РАЗРАБОТАТЬ 10% + ПОСТРОИТЬ 10%) И ПРОДАТЬ (50% ПРАВИТЕЛЬСТВУ / 80% БИЗНЕСУ) */}
+                  <div className="p-3 border-2 border-emerald-400 bg-emerald-950/20 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="font-extrabold text-emerald-300 text-sm">
+                        🔬🏗️ ЛАБОРАТОРИЯ ({hasLaboratory ? 'КУПЛЕНА · +5 Т' : '5 Т · 250 CR'}) И АНГАР ({hasHangar ? 'КУПЛЕН · +5 Т' : '5 Т · 250 CR'}) · КРАФТ 10% + 10% И ПРОДАЖА 50% / 80%
+                      </div>
+                      <div className="text-slate-300 text-xs">
+                        Два способа получить что-либо: <b>1) Купить за 100% цены</b> или <b>2) Разработать в Лаборатории за 10% цены + Построить в Ангаре за 10% цены (итого 20%)</b>. Продать можно <b>Правительству планеты за 50% цены</b> или <b>Частному бизнесу за 80% цены</b>. Лаборатория и Ангар весят по <b>5 т</b> и присоединяются к общей массе корабля (<b>{totalShipMassTons} т</b>)!
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsLabHangarModalOpen(true)}
+                      className="px-3.5 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold shrink-0"
+                    >
+                      ОТКРЫТЬ ЛАБОРАТОРИЮ И АНГАР (+5Т/+5Т)
+                    </button>
+                  </div>
+
                   {/* КОНСТРУКТОР МАССЫ КОРАБЛЯ (50 Т + БРОНЯ КАК ВЕС), БОЕЗАПАСА (50 Т + 10% = 550 ВЫСТРЕЛОВ) И КОМБИНИРОВАНИЯ ОРУЖИЯ (100 КГ / 50+50 КГ / 2×50 КГ) */}
                   <div className="p-3 border-2 border-amber-400 bg-amber-950/20 flex items-center justify-between gap-3 flex-wrap">
                     <div className="space-y-1">
@@ -9563,6 +10589,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     {screenMode === 'DOCKED'
                       ? 'ВЗЛЁТ СО СТАНЦИИ (T)'
                       : 'СТЫКОВКА · МИССИИ GOBELL И ТОРГОВЛЯ (T)'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsLabHangarModalOpen(true)}
+                  className="py-2 px-2 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300 font-extrabold flex items-center justify-center gap-1 col-span-2"
+                  title="Лаборатория (+5т) для разработки за 10% цены и Ангар (+5т) для постройки за 10% цены · Продажа Правительству (50%) или Частному бизнесу (80%)"
+                >
+                  <span>
+                    🔬🏗️ ЛАБОРАТОРИЯ ({hasLaboratory ? '+5т' : 'нет'}) И АНГАР ({hasHangar ? '+5т' : 'нет'}) · 10%+10% / 50%–80%
                   </span>
                 </button>
                 <button
@@ -10312,8 +11348,42 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     <span>МАССА / БРОНЯ ({totalShipMassTons}t):</span>
                   </span>
                   <span className="text-[10px] text-slate-300">
-                    Груз: {usedCargoTons}t + Броня: {armorExtraTons}t
+                    Груз: {usedCargoTons}t + Броня: {armorExtraTons}t + Лаб/Анг: {labAndHangarMassTons}t
                   </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1 text-[9px]">
+                  <button
+                    type="button"
+                    onClick={hasLaboratory ? () => setIsLabHangarModalOpen(true) : handleBuyLaboratory}
+                    className={`py-1 px-1 border font-extrabold truncate ${
+                      hasLaboratory
+                        ? 'border-cyan-400 bg-cyan-500/25 text-cyan-200'
+                        : 'border-slate-700 bg-black text-slate-300 hover:border-cyan-400'
+                    }`}
+                    title="Лаборатория для разработки (10% цены): масса +5 т присоединяется к общей массе корабля"
+                  >
+                    {hasLaboratory ? '🔬 Лаб: +5т (Вкл)' : `🔬 Купить Лаб (+5т · ${LAB_MODULE_PRICE_CR} CR)`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={hasHangar ? () => setIsLabHangarModalOpen(true) : handleBuyHangar}
+                    className={`py-1 px-1 border font-extrabold truncate ${
+                      hasHangar
+                        ? 'border-amber-400 bg-amber-500/25 text-amber-200'
+                        : 'border-slate-700 bg-black text-slate-300 hover:border-amber-400'
+                    }`}
+                    title="Ангар для строительства (10% цены): масса +5 т присоединяется к общей массе корабля"
+                  >
+                    {hasHangar ? '🏗️ Ангар: +5т (Вкл)' : `🏗️ Купить Ангар (+5т · ${HANGAR_MODULE_PRICE_CR} CR)`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsLabHangarModalOpen(true)}
+                    className="py-1 px-1 border border-emerald-400 bg-emerald-400 text-black hover:bg-emerald-300 font-extrabold truncate"
+                    title="Открыть меню: 1) Купить за 100% цены; 2) Разработать (10%) и Построить (10%); Продать за 50% (Правительству) или 80% (Бизнесу)"
+                  >
+                    ⚙️ Крафт 10%/80%
+                  </button>
                 </div>
 
                 {/* Наглядные шкалы компромисса: Скорость ↔ Манёвренность (Инерция) и Масса ↔ Защищённость */}
@@ -10515,6 +11585,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               </div>
 
               <div className="text-[11px] text-slate-300 space-y-0.5 pt-1 border-t border-slate-800">
+                <div>• <b className="text-emerald-300">Зона огневого поражения</b> — от <b>100 до 500 ед.</b> урон <b>100%</b> · от <b>500 до 1000 ед.</b> снижается градиентно до <b>0%</b> · свыше <b>1000 ед.</b> урон <b>0%</b> (догоняйте цель!)</div>
+                <div>• <b className="text-amber-300">Курсор мыши + Клавиша Q</b> — Автопилот: захват объекта, плавное помещение в центр экрана и движение к нему (предупреждение о захвате, расстоянии и массе + пунктир на радаре; любая клавиша кроме колёсика скорости и кнопок мыши огня выключает автопилот)</div>
                 <div>• <b className="text-cyan-300">Курсор мыши + Клавиша I</b> — Карточка профиля любого объекта (Солнце, Планета, Группа, Бизнес, Объявление, Модуль, Груз, Астероид)</div>
                 <div>• <b className="text-emerald-400">Клавиша X</b> — Закрепиться / Открепиться на стационарной орбите планеты</div>
                 <div>• <b className="text-yellow-300">Указатель мыши</b> — Прицел Огневой Башни (чистая геометрия без текстов)</div>
@@ -10757,6 +11829,27 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           </div>
         </div>
       )}
+      {/* МОДАЛЬНОЕ ОКНО: ЛАБОРАТОРИЯ (+5 Т) И АНГАР (+5 Т) — КУПИТЬ (100%) ИЛИ РАЗРАБОТАТЬ (10%) И ПОСТРОИТЬ (10%), ПРОДАТЬ ЗА 50% (ПРАВИТЕЛЬСТВУ) ИЛИ 80% (БИЗНЕСУ) */}
+      <LabHangarCraftingModal
+        isOpen={isLabHangarModalOpen}
+        onClose={() => setIsLabHangarModalOpen(false)}
+        credits={credits}
+        hasLaboratory={hasLaboratory}
+        hasHangar={hasHangar}
+        baseShipMassWithoutLabHangarTons={baseShipMassWithoutLabHangarTons}
+        totalShipMassTons={totalShipMassTons}
+        itemsState={craftableItemsState}
+        onBuyLaboratory={handleBuyLaboratory}
+        onSellLaboratory={handleSellLaboratory}
+        onBuyHangar={handleBuyHangar}
+        onSellHangar={handleSellHangar}
+        onBuyItemFullPrice={handleBuyItemFullPrice}
+        onDevelopItem10Pct={handleDevelopItem10Pct}
+        onBuildItem10Pct={handleBuildItem10Pct}
+        onDevelopAndBuildCombo20Pct={handleDevelopAndBuildCombo20Pct}
+        onSellItem={handleSellCraftedItem}
+      />
+
       {/* МОДАЛЬНОЕ ОКНО: ДОКУМЕНТ «ПОЛНОЕ ОПИСАНИЕ ФИНАЛЬНОЙ КОНФИГУРАЦИИ ИГРЫ» */}
       <FullGameConfigDocModal
         isOpen={isFullConfigDocOpen}
