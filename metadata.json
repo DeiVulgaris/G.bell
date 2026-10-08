@@ -1,0 +1,6 @@
+{
+  "name": "Геопространственная матрица 90х90 км",
+  "description": "Рабочее пространство 90х90 км с матрицей городов 3х3 (London, Moscow, Beijing, Cairo, Bell City, Delhi, Paris, Tokyo, Washington, D.C.) с условными центрами и подготовкой карты.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

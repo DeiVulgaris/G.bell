@@ -1,0 +1,1317 @@
+{
+  "updatedAt": 1791086742898,
+  "activeDemoCommunityId": "community-fedorovka",
+  "activeDemoProfileId": "demo-user-1791085242830",
+  "searchCenter": {
+    "lat": 48.080676,
+    "lng": 35.0415
+  },
+  "demoCommunities": [
+    {
+      "id": "community-fedorovka",
+      "name": "Федоровка",
+      "description": "Комьюнити села (Украина): молоко, яйца, покос травы, вспашка огорода, обрезание деревьев, электрик, строитель, группы рыбалка, охота и клуб",
+      "centerLat": 50.4501,
+      "centerLng": 30.5234
+    },
+    {
+      "id": "community-refugees-eu",
+      "name": "Беженцы Украины в Европе",
+      "description": "Демонстрация комьюнити украинцев в городах Европы: взаимопомощь, жильё, переводчики, работа, документы и локальные группы",
+      "centerLat": 52.2297,
+      "centerLng": 21.0122
+    }
+  ],
+  "demoProfiles": [
+    {
+      "id": "demo-user-1791085242830",
+      "userTag": "Lvd6zTcK",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Олег Васильевич",
+      "nickname": "@Олег",
+      "description": "Рыбалка на Днепре  лодка снасти  прикормка",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.369424,
+      "lngOffset": 4.5181,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791083902096",
+      "userTag": "chRjQoFp",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Юра",
+      "nickname": "@Юра",
+      "description": "Рыбак  артель",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.368183000000002,
+      "lngOffset": 4.514221000000003,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791083773871",
+      "userTag": "sST2saMG",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Тамара Ивановна",
+      "nickname": "@Тамара",
+      "description": "Председатель  дачного кооператива",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3698189999999997,
+      "lngOffset": 4.519495000000003,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791083390771",
+      "userTag": "xQR6igYR",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Юра",
+      "nickname": "@Юра",
+      "description": "Электрик  Дачный кооператив",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3703319999999977,
+      "lngOffset": 4.521003000000004,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791083030647",
+      "userTag": "ja5srNFM",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Алла",
+      "nickname": "@Алла",
+      "description": "Свежие яйца",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.365212999999997,
+      "lngOffset": 4.505178000000004,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791082365459",
+      "userTag": "VmEiio4c",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Сан Саныч",
+      "nickname": "@Саня",
+      "description": "Подсобные  работы  стрижка травы",
+      "showName": true,
+      "showNickname": true,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3691049999999976,
+      "lngOffset": 4.509391000000004,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791082226118",
+      "userTag": "RWJPEkBK",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Василий",
+      "nickname": "@Вася",
+      "description": "Подсобные работы",
+      "showName": true,
+      "showNickname": true,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3675029999999992,
+      "lngOffset": 4.512921000000002,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791081547006",
+      "userTag": "nykiFytQ",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Людмила",
+      "nickname": "@Люда",
+      "description": "Уроки  игры на пианино фортепиано",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3659329999999983,
+      "lngOffset": 4.503437999999999,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791080358995",
+      "userTag": "ddJYjLu7",
+      "tier": "FREE",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Артем",
+      "nickname": "@Тема",
+      "description": "Пассажирские перевозки   микроавтобус",
+      "showName": true,
+      "showNickname": true,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.368045000000002,
+      "lngOffset": 4.509526000000005,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1",
+      "userTag": "48K9mP2x",
+      "tier": "PRO",
+      "proPictogram": "CROWN",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "name": "Andrii Myshko",
+      "nickname": "@Admin",
+      "description": "Admin Demo",
+      "showName": true,
+      "showNickname": true,
+      "showDescription": true,
+      "latOffset": -2.367728999999997,
+      "lngOffset": 4.509899000000001,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "proPackage": "PRO_PLUS_3",
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 2,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 3,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        },
+        {
+          "slotId": 4,
+          "draftText": "",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "OFF",
+          "autoRenewDays": 7,
+          "published": null
+        }
+      ],
+      "subscriptionPayoffUsd": 0,
+      "advertDraftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "communityId": "community-fedorovka"
+    }
+  ]
+}
