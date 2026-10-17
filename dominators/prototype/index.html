@@ -92,7 +92,7 @@ function draw(){
   if(o.type==='asteroid'){
    ctx.beginPath();ctx.moveTo(-p.r,-p.r*.4);ctx.lineTo(-p.r*.4,-p.r);ctx.lineTo(p.r*.8,-p.r*.7);ctx.lineTo(p.r,p.r*.5);ctx.lineTo(-p.r*.2,p.r);ctx.closePath();ctx.stroke();
   }
-  ctx.globalAlpha=1;ctx.fillStyle=o.color;ctx.font='11px system-ui';ctx.fillText(o.name,p.r+7,4);
+  ctx.globalAlpha=1;
   ctx.restore();
  }
  requestAnimationFrame(draw);
