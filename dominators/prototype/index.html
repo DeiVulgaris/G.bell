@@ -58,15 +58,29 @@ let stars=[];
 function resize(){dpr=Math.min(devicePixelRatio||1,2);w=innerWidth;h=innerHeight;canvas.width=w*dpr;canvas.height=h*dpr;canvas.style.width=w+'px';canvas.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0);stars=Array.from({length:260},()=>({x:Math.random()*w,y:Math.random()*h,a:.25+Math.random()*.7,r:Math.random()*1.5}));}
 addEventListener('resize',resize);resize();
 function project(o){let x=o.x,y=o.y,z=o.z;let cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);let xx=x*cy-z*sy,zz=x*sy+z*cy,yy=y*cp-zz*sp;zz=y*sp+zz*cp;const focal=Math.min(w,h)*.9;const depth=zz+1000;if(depth<30)return null;return {x:w/2+xx*focal/depth,y:h/2-yy*focal/depth,scale:focal/depth,r:Math.max(1,o.r*focal/depth),depth};}
+function drawWireSphere(p,r,color,rotation=0){
+  // Проецируем сетку сферы как набор эллипсов с перспективным масштабом.
+  ctx.save();ctx.translate(p.x,p.y);ctx.strokeStyle=color;ctx.lineWidth=.8;ctx.globalAlpha=.7;
+  for(let i=1;i<5;i++){const k=i/5;ctx.beginPath();ctx.ellipse(0,0,r*Math.sqrt(1-k*k),r*k,rotation,0,Math.PI*2);ctx.stroke();}
+  for(let i=0;i<4;i++){const a=(Math.PI/4)*i;ctx.beginPath();ctx.ellipse(0,0,r,Math.max(1,r*Math.abs(Math.cos(a))),a,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+function drawOrbits(){
+  // Иллюстративные орбитальные эллипсы в плоскости системы.
+  const orbitData=[{a:Math.min(w,h)*.11,b:Math.min(w,h)*.07},{a:Math.min(w,h)*.17,b:Math.min(w,h)*.105},{a:Math.min(w,h)*.23,b:Math.min(w,h)*.145},{a:Math.min(w,h)*.30,b:Math.min(w,h)*.18}];
+  ctx.save();ctx.translate(w/2,h/2);ctx.rotate(-.12-yaw*.12);ctx.strokeStyle='#4b8eb044';ctx.lineWidth=1;
+  orbitData.forEach(o=>{ctx.beginPath();ctx.ellipse(0,0,o.a,o.b,0,0,Math.PI*2);ctx.stroke();});ctx.restore();
+}
 function draw(){ctx.clearRect(0,0,w,h);ctx.fillStyle='#020711';ctx.fillRect(0,0,w,h);
 let grad=ctx.createRadialGradient(w*.5,h*.5,10,w*.5,h*.5,Math.max(w,h)*.7);grad.addColorStop(0,'#0b1b31');grad.addColorStop(1,'#020711');ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
 stars.forEach(s=>{ctx.globalAlpha=s.a;ctx.fillStyle='#c9e5ff';ctx.fillRect(s.x,s.y,s.r,s.r)});ctx.globalAlpha=1;
-// subtle system boundary
+// system orbit guides and outer boundary
+drawOrbits();
 ctx.strokeStyle='#397f9b25';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(w/2,h/2,Math.min(w,h)*.43,Math.min(w,h)*.27,-yaw*.3,0,Math.PI*2);ctx.stroke();
 const visible=objects.map(o=>({o,p:project(o)})).filter(q=>q.p).sort((a,b)=>b.p.depth-a.p.depth);
 visible.forEach(({o,p})=>{ctx.save();ctx.translate(p.x,p.y);if(o.type==='star'){let g=ctx.createRadialGradient(0,0,0,0,0,p.r*2.8);g.addColorStop(0,'#fff8ce');g.addColorStop(.25,'#ffce70aa');g.addColorStop(1,'#ffb64a00');ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,p.r*2.8,0,Math.PI*2);ctx.fill();}
 ctx.strokeStyle=o.color;ctx.globalAlpha=.82;ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,p.r,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=.38;
-if(o.type==='planet'||o.type==='star'){ctx.beginPath();ctx.ellipse(0,0,p.r,p.r*.35,0,0,Math.PI*2);ctx.stroke();}
+if(o.type==='planet'||o.type==='star'){drawWireSphere({x:0,y:0},p.r,o.color,0);}
 if(o.type==='station'){ctx.strokeRect(-p.r*1.5,-p.r*.7,p.r*3,p.r*1.4);ctx.beginPath();ctx.moveTo(-p.r*2,0);ctx.lineTo(p.r*2,0);ctx.moveTo(0,-p.r*1.6);ctx.lineTo(0,p.r*1.6);ctx.stroke();}
 if(o.type==='asteroid'){ctx.beginPath();ctx.moveTo(-p.r,-p.r*.4);ctx.lineTo(-p.r*.4,-p.r);ctx.lineTo(p.r*.8,-p.r*.7);ctx.lineTo(p.r,p.r*.5);ctx.lineTo(-p.r*.2,p.r);ctx.closePath();ctx.stroke();}
 ctx.globalAlpha=1;
@@ -84,7 +98,7 @@ $('energy').addEventListener('input',e=>thrust=+e.target.value);
 $('scanner').addEventListener('input',e=>scan=+e.target.value);
 $('hit').addEventListener('click',()=>{if(charge<=0){$('status').textContent='Корабль уже потерял питание. Сбрось сцену для нового теста.';return;}charge=Math.max(0,charge-10);$('status').textContent=charge===0?'КРИТИЧЕСКОЕ СОСТОЯНИЕ: аккумулятор разряжен. Эвакуация пилота — следующий этап прототипа.':'Удар принят щитом. Заряд аккумулятора: '+charge+'%. Щит сохраняет номинал, пока заряд выше нуля.';});
 $('reset').addEventListener('click',()=>{yaw=0;pitch=0;charge=100;thrust=50;scan=10;selected=null;locked=false;$('energy').value=50;$('scanner').value=10;$('status').textContent='СЦЕНА СБРОШЕНА · выбери объект кликом';});
-addEventListener('keydown',e=>{if(e.key==='Escape'){locked=false;$('status').textContent='Автопилот отключён';}if(e.key===' '){speed=Math.min(100,speed+thrust/10);}});
+addEventListener('keydown',e=>{if(e.key==='Escape'){locked=false;$('status').textContent='Автопилот отключён';}if(e.key===' '){speed=Math.min(100,speed+thrust/10);$('status').textContent='Тяга приложена · скорость '+speed.toFixed(1)+' u/s';}if(e.key.toLowerCase()==='w'){speed=Math.min(100,speed+thrust/20);}if(e.key.toLowerCase()==='s'){speed=Math.max(0,speed-thrust/20);}});
 addEventListener('keyup',e=>{if(e.key===' ')speed=Math.max(0,speed-1)});
 let prev=performance.now();function loop(t){let dt=Math.min(.05,(t-prev)/1000);prev=t;if(locked&&selected){const desiredYaw=Math.atan2(selected.x,selected.z),desiredPitch=Math.atan2(selected.y,Math.hypot(selected.x,selected.z));yaw+=(desiredYaw-yaw)*Math.min(1,dt*1.8);pitch+=(desiredPitch-pitch)*Math.min(1,dt*1.8);}requestAnimationFrame(loop)}requestAnimationFrame(loop);draw();
 })();
