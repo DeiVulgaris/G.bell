@@ -14,54 +14,43 @@ canvas{display:block;width:100%;height:100%}
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/controls/OrbitControls.js';
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x02050b);
-const camera = new THREE.PerspectiveCamera(52, innerWidth/innerHeight, 0.1, 200);
-camera.position.set(0, 4, 25);
-const renderer = new THREE.WebGLRenderer({antialias:true});
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x02050b);
+const camera=new THREE.PerspectiveCamera(52,innerWidth/innerHeight,0.1,200);
+camera.position.set(0,4,25);
+const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.target.set(0,0,0);
+controls.minDistance=4;controls.maxDistance=45;
+const R=18;
 
-const controls = new OrbitControls(camera,renderer.domElement);
-controls.enableDamping = true;
-controls.target.set(0,0,0);
-controls.minDistance = 4;
-controls.maxDistance = 45;
-
-const R = 18;
-
-// Planetarium projection is drawn as an equirectangular map and mapped to the
-// INSIDE of the spherical scene. The sphere itself has no visible wireframe.
-const mapCanvas = document.createElement('canvas');
-mapCanvas.width = 2048; mapCanvas.height = 1024;
-const ctx = mapCanvas.getContext('2d');
-ctx.fillStyle = '#020711'; ctx.fillRect(0,0,mapCanvas.width,mapCanvas.height);
-
-// Star field projected onto the inner spherical surface.
-let seed = 72831;
-function rand(){ seed=(seed*1664525+1013904223)>>>0; return seed/4294967296; }
+// Equirectangular planetarium projection mapped onto the INSIDE of the sphere.
+const mapCanvas=document.createElement('canvas');
+mapCanvas.width=2048;mapCanvas.height=1024;
+const ctx=mapCanvas.getContext('2d');
+ctx.fillStyle='#020711';ctx.fillRect(0,0,mapCanvas.width,mapCanvas.height);
+let seed=72831;
+function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
 for(let i=0;i<2400;i++){
-  const x=rand()*mapCanvas.width, y=rand()*mapCanvas.height;
-  const r=rand()*1.25+0.2, a=rand()*0.7+0.15;
+  const x=rand()*mapCanvas.width,y=rand()*mapCanvas.height;
+  const r=rand()*1.25+0.2,a=rand()*0.7+0.15;
   ctx.fillStyle='rgba(180,215,255,'+a+')';
   ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
 }
-
-// A planetarium-style solar system projection on the spherical surface map.
-const cx=mapCanvas.width*0.5, cy=mapCanvas.height*0.5;
-ctx.save(); ctx.translate(cx,cy);
+const cx=mapCanvas.width*0.5,cy=mapCanvas.height*0.5;
+ctx.save();ctx.translate(cx,cy);
 for(let i=1;i<=7;i++){
   ctx.beginPath();ctx.ellipse(0,0,75*i,25*i,0,0,Math.PI*2);
   ctx.strokeStyle='rgba(85,170,225,0.5)';ctx.lineWidth=1.4;ctx.stroke();
 }
 const planets=[
-  {x:-80,y:-10,r:7,c:'#d4b18a'},
-  {x:58,y:24,r:9,c:'#6dbddc'},
-  {x:142,y:-34,r:12,c:'#d4a86e'},
-  {x:-190,y:35,r:15,c:'#8caedb'},
-  {x:270,y:40,r:19,c:'#b7a17d'}
+{x:-80,y:-10,r:7,c:'#d4b18a'},{x:58,y:24,r:9,c:'#6dbddc'},
+{x:142,y:-34,r:12,c:'#d4a86e'},{x:-190,y:35,r:15,c:'#8caedb'},
+{x:270,y:40,r:19,c:'#b7a17d'}
 ];
 for(const p of planets){
   ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
@@ -70,22 +59,18 @@ for(const p of planets){
 ctx.beginPath();ctx.arc(0,0,23,0,Math.PI*2);
 ctx.fillStyle='#ffe5a0';ctx.shadowColor='#ffc75e';ctx.shadowBlur=36;ctx.fill();ctx.shadowBlur=0;
 ctx.restore();
-
-const projectionTexture = new THREE.CanvasTexture(mapCanvas);
-projectionTexture.colorSpace = THREE.SRGBColorSpace;
-projectionTexture.mapping = THREE.EquirectangularReflectionMapping;
-const innerSphere = new THREE.Mesh(
+const projectionTexture=new THREE.CanvasTexture(mapCanvas);
+projectionTexture.colorSpace=THREE.SRGBColorSpace;
+const innerSphere=new THREE.Mesh(
   new THREE.SphereGeometry(R,128,80),
-  new THREE.MeshBasicMaterial({map:projectionTexture, side:THREE.BackSide})
+  new THREE.MeshBasicMaterial({map:projectionTexture,side:THREE.BackSide})
 );
 scene.add(innerSphere);
 
-// Projector: the only physical object in the center of the scene.
-const projector = new THREE.Group();
-scene.add(projector);
-const metal = new THREE.MeshStandardMaterial({color:0x172737,metalness:0.85,roughness:0.25});
-const brass = new THREE.MeshStandardMaterial({color:0xa17a43,metalness:0.8,roughness:0.23});
-const lensMaterial = new THREE.MeshBasicMaterial({color:0x9edfff});
+// The projector is the only physical object in the center.
+const projector=new THREE.Group();scene.add(projector);
+const metal=new THREE.MeshStandardMaterial({color:0x172737,metalness:0.85,roughness:0.25});
+const brass=new THREE.MeshStandardMaterial({color:0xa17a43,metalness:0.8,roughness:0.23});
 function cylinder(rt,rb,h,mat,y){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,48),mat);
   m.position.y=y;projector.add(m);
@@ -95,7 +80,7 @@ cylinder(0.95,1.28,0.32,brass,-1.18);
 cylinder(0.72,0.9,0.6,metal,-0.72);
 const core=new THREE.Mesh(new THREE.SphereGeometry(0.78,32,24),metal);
 core.position.y=0.15;projector.add(core);
-const lens=new THREE.Mesh(new THREE.SphereGeometry(0.32,24,18),lensMaterial);
+const lens=new THREE.Mesh(new THREE.SphereGeometry(0.32,24,18),new THREE.MeshBasicMaterial({color:0x9edfff}));
 lens.position.set(0,0.15,0.72);projector.add(lens);
 for(let i=0;i<8;i++){
   const a=i*Math.PI/4;
@@ -104,15 +89,11 @@ for(let i=0;i<8;i++){
 }
 const ring=new THREE.Mesh(new THREE.TorusGeometry(1.02,0.055,12,64),brass);
 ring.position.y=0.12;ring.rotation.x=Math.PI/2;projector.add(ring);
-
 scene.add(new THREE.AmbientLight(0x7894ad,1.5));
 const projectorLight=new THREE.PointLight(0x79cfff,18,12);
 projectorLight.position.set(0,0.2,0.7);scene.add(projectorLight);
-
 function animate(){
-  requestAnimationFrame(animate);
-  controls.update();
-  projector.rotation.y+=0.001;
+  requestAnimationFrame(animate);controls.update();projector.rotation.y+=0.001;
   renderer.render(scene,camera);
 }
 animate();
