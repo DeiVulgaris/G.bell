@@ -1,10 +1,10 @@
 {
-  "updatedAt": 1791086742898,
+  "updatedAt": 1791650625844,
   "activeDemoCommunityId": "community-fedorovka",
-  "activeDemoProfileId": "demo-user-1791085242830",
+  "activeDemoProfileId": "demo-user-1791649569927",
   "searchCenter": {
-    "lat": 48.080676,
-    "lng": 35.0415
+    "lat": 48.083501,
+    "lng": 35.028102
   },
   "demoCommunities": [
     {
@@ -24,20 +24,20 @@
   ],
   "demoProfiles": [
     {
-      "id": "demo-user-1791085242830",
-      "userTag": "Lvd6zTcK",
-      "tier": "FREE",
+      "id": "demo-user-1791649569927",
+      "userTag": "MEmPZff5",
+      "tier": "BUSINESS",
       "proPackage": "PRO_PLUS_3",
       "proPictogram": "GOLD_BUST",
       "karmaPlus": 3,
       "karmaMinus": 0,
       "consecutiveMinuses": 0,
       "bannedUntilMs": null,
-      "name": "Олег Васильевич",
-      "nickname": "@Олег",
-      "description": "Рыбалка на Днепре  лодка снасти  прикормка",
+      "name": "Магазин",
+      "nickname": "Світанок",
+      "description": "Продовольчі товари",
       "showName": true,
-      "showNickname": false,
+      "showNickname": true,
       "showDescription": true,
       "disabledWords": [],
       "groupSlots": [
@@ -104,7 +104,377 @@
       "advertSlots": [
         {
           "slotId": 1,
-          "draftText": "Продам велосипед горный отличное состояние или сдам в аренду",
+          "draftText": "Магазину на постоянную работу требуется продавец",
+          "redirectUrlDraft": "https://svitanok-market.example.com/vacancy",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Магазину на постоянную работу требуется продавец",
+            "redirectUrl": "https://svitanok-market.example.com/vacancy",
+            "publishedAtMs": 1791649754612,
+            "expiresAtMs": 1791736154612,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.083501,
+              "lng": 35.028102
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 2,
+          "draftText": "Завезли свежее пиво в тегах.",
+          "redirectUrlDraft": "https://svitanok-market.example.com/drinks",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Завезли свежее пиво в тегах.",
+            "redirectUrl": "https://svitanok-market.example.com/drinks",
+            "publishedAtMs": 1791649789178,
+            "expiresAtMs": 1791736189178,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.083501,
+              "lng": 35.028102
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 3,
+          "draftText": "Есть крышки для консервации",
+          "redirectUrlDraft": "https://svitanok-market.example.com/catalog",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Есть крышки для консервации",
+            "redirectUrl": "https://svitanok-market.example.com/catalog",
+            "publishedAtMs": 1791649818307,
+            "expiresAtMs": 1791736218307,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.083501,
+              "lng": 35.028102
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 4,
+          "draftText": "Завоз мяса в среду после обеда",
+          "redirectUrlDraft": "https://svitanok-market.example.com/fresh-meat",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Завоз мяса в среду после обеда",
+            "redirectUrl": "https://svitanok-market.example.com/fresh-meat",
+            "publishedAtMs": 1791649870705,
+            "expiresAtMs": 1791736270705,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.083501,
+              "lng": 35.028102
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        }
+      ],
+      "advertDraftText": "Магазину на постоянную работу требуется продавец",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.366599000000001,
+      "lngOffset": 4.504701999999998,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-fedorovka",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791107849330",
+      "userTag": "jGbxJAtB",
+      "tier": "PRO",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "STAR",
+      "karmaPlus": 3,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Оля",
+      "nickname": "@0685426574",
+      "description": "Молока сметана",
+      "showName": true,
+      "showNickname": true,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "Моя закрытая группа (Семья / Бригада)",
+          "description": "Координация участников на карте в реальном времени и общий чат",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "Продам  молодую корову",
+          "isEditing": false,
+          "placementMode": "NATIVE",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Продам  молодую корову",
+            "publishedAtMs": 1791538981683,
+            "expiresAtMs": 1791625381683,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.081992,
+              "lng": 35.024119
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 2,
+          "draftText": "Продам молодую корову",
+          "isEditing": false,
+          "placementMode": "GUEST",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Продам молодую корову",
+            "publishedAtMs": 1791539055591,
+            "expiresAtMs": 1791625455591,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.06577146640824,
+              "lng": 34.98757924432414
+            },
+            "status": "GUEST",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 3,
+          "draftText": "Продам молодую корову",
+          "isEditing": false,
+          "placementMode": "GUEST",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "Продам молодую корову",
+            "publishedAtMs": 1791539112936,
+            "expiresAtMs": 1791625512936,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.06137014439626,
+              "lng": 35.029660897896754
+            },
+            "status": "GUEST",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        },
+        {
+          "slotId": 4,
+          "draftText": "продам молодую корову",
+          "isEditing": false,
+          "placementMode": "GUEST",
+          "autoRenewMode": "INFINITE",
+          "autoRenewDays": 7,
+          "published": {
+            "text": "продам молодую корову",
+            "publishedAtMs": 1791539159947,
+            "expiresAtMs": 1791625559947,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.03407744707559,
+              "lng": 35.0335174032923
+            },
+            "status": "GUEST",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
+        }
+      ],
+      "advertDraftText": "Продам  молодую корову",
+      "publishedAdvert": null,
+      "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "sosActive": false,
+      "sosExpiresAtMs": null,
+      "latOffset": -2.3681079999999994,
+      "lngOffset": 4.500719,
+      "autoGeo": true,
+      "pushNotifications": true,
+      "showDistance": true,
+      "communityId": "community-1791540377717",
+      "subscriptionPayoffUsd": 0
+    },
+    {
+      "id": "demo-user-1791085242830",
+      "userTag": "Lvd6zTcK",
+      "tier": "PRO",
+      "proPackage": "PRO_PLUS_3",
+      "proPictogram": "GOLD_BUST",
+      "karmaPlus": -12,
+      "karmaMinus": 0,
+      "consecutiveMinuses": 0,
+      "bannedUntilMs": null,
+      "name": "Олег Васильевич",
+      "nickname": "@Олег",
+      "description": "Нужна помощь сел аккумулятор прикурить авто провода есть",
+      "showName": true,
+      "showNickname": false,
+      "showDescription": true,
+      "disabledWords": [],
+      "groupSlots": [
+        {
+          "slotId": 1,
+          "tag": "GO-79Tvd26",
+          "tagDraft": "GO-79Tvd26",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 2,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        },
+        {
+          "slotId": 3,
+          "tag": "",
+          "tagDraft": "",
+          "isEditing": false,
+          "adminApproved": true
+        }
+      ],
+      "createdProGroups": [
+        {
+          "slotId": 1,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 2,
+          "isCreated": false,
+          "accessType": "CLOSED",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 3,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        },
+        {
+          "slotId": 4,
+          "isCreated": false,
+          "accessType": "OPEN",
+          "tag": "",
+          "name": "",
+          "description": "",
+          "isEditing": true
+        }
+      ],
+      "advertSlots": [
+        {
+          "slotId": 1,
+          "draftText": "",
           "isEditing": false,
           "placementMode": "NATIVE",
           "autoRenewMode": "OFF",
@@ -144,8 +514,8 @@
       "sosText": "Нужна помощь сел аккумулятор прикурить авто провода есть",
       "sosActive": false,
       "sosExpiresAtMs": null,
-      "latOffset": -2.369424,
-      "lngOffset": 4.5181,
+      "latOffset": -2.369424000000002,
+      "lngOffset": 4.5181000000000004,
       "autoGeo": true,
       "pushNotifications": true,
       "showDistance": true,
@@ -172,8 +542,8 @@
       "groupSlots": [
         {
           "slotId": 1,
-          "tag": "",
-          "tagDraft": "",
+          "tag": "GO-79Tvd26",
+          "tagDraft": "GO-79Tvd26",
           "isEditing": false,
           "adminApproved": true
         },
@@ -1075,8 +1445,8 @@
       "groupSlots": [
         {
           "slotId": 1,
-          "tag": "",
-          "tagDraft": "",
+          "tag": "GO-79Tvd26",
+          "tagDraft": "GO-79Tvd26",
           "isEditing": false,
           "adminApproved": true
         },
@@ -1189,10 +1559,10 @@
       "userTag": "48K9mP2x",
       "tier": "PRO",
       "proPictogram": "CROWN",
-      "karmaPlus": 3,
+      "karmaPlus": -57,
       "karmaMinus": 0,
       "name": "Andrii Myshko",
-      "nickname": "@Admin",
+      "nickname": "Admin",
       "description": "Admin Demo",
       "showName": true,
       "showNickname": true,
@@ -1232,12 +1602,12 @@
       "createdProGroups": [
         {
           "slotId": 1,
-          "isCreated": false,
-          "accessType": "CLOSED",
-          "tag": "",
-          "name": "Моя закрытая группа (Семья / Бригада)",
-          "description": "Координация участников на карте в реальном времени и общий чат",
-          "isEditing": true
+          "isCreated": true,
+          "accessType": "OPEN",
+          "tag": "GO-79Tvd26",
+          "name": "Рыбалка на Днепровском водохранилище",
+          "description": "Координация консультация  помощь компания   рыбакам  на  Днепровском водохранилище",
+          "isEditing": false
         },
         {
           "slotId": 2,
@@ -1273,27 +1643,66 @@
           "draftText": "Продам велосипед горный отличное состояние или сдам в аренду",
           "isEditing": false,
           "placementMode": "NATIVE",
-          "autoRenewMode": "OFF",
+          "autoRenewMode": "INFINITE",
           "autoRenewDays": 7,
-          "published": null
+          "published": {
+            "text": "Продам велосипед горный отличное состояние или сдам в аренду",
+            "publishedAtMs": 1791129106843,
+            "expiresAtMs": 1791564220787,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.082371,
+              "lng": 35.033299
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "INFINITE",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
         },
         {
           "slotId": 2,
-          "draftText": "",
+          "draftText": "продам что нибудь",
           "isEditing": false,
-          "placementMode": "NATIVE",
+          "placementMode": "GUEST",
           "autoRenewMode": "OFF",
           "autoRenewDays": 7,
-          "published": null
+          "published": {
+            "text": "продам что нибудь",
+            "publishedAtMs": 1791129425537,
+            "expiresAtMs": 1791215825537,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.064504348745515,
+              "lng": 34.99187511741563
+            },
+            "status": "GUEST",
+            "autoRenewMode": "OFF",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
         },
         {
           "slotId": 3,
-          "draftText": "",
+          "draftText": "куплю грецкие орехи",
           "isEditing": false,
           "placementMode": "NATIVE",
           "autoRenewMode": "OFF",
           "autoRenewDays": 7,
-          "published": null
+          "published": {
+            "text": "куплю грецкие орехи",
+            "publishedAtMs": 1791140107022,
+            "expiresAtMs": 1791226507022,
+            "stoppedEarly": false,
+            "position": {
+              "lat": 48.082371,
+              "lng": 35.033299
+            },
+            "status": "NATIVE",
+            "autoRenewMode": "OFF",
+            "autoRenewDays": 7,
+            "autoRenewUntilMs": null
+          }
         },
         {
           "slotId": 4,

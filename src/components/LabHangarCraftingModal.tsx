@@ -70,6 +70,15 @@ export const CRAFTABLE_SPACE_ITEMS: CraftableItemDefinition[] = [
     fullPriceCr: 600,
     effectBadge: 'Высокий спрос у бизнеса (продажа 80% = 480 CR)',
   },
+  {
+    id: 'AUTONOMOUS_SENTINEL_SENTRY',
+    name: 'Автономный Часовой «Сентинел-Ω» (Без двигателя)',
+    categoryLabel: 'Орбитальная автономная техника',
+    description:
+      'Стационарная боевая платформа без маршевого двигателя (0 кН). Оснащена фотонно-гамма солнечным конвертором класса звёзд, ёмким аккумулятором (5 000 ГЭУ) и орудием с 4 режимами силы удара (35 кг, 125 кг, 380 кг, 1100 кг).',
+    fullPriceCr: 1200,
+    effectBadge: 'Солнечный конвертор + Аккумулятор + 4 режима силы удара',
+  },
 ];
 
 export interface CraftableItemState {

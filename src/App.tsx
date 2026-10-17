@@ -30,6 +30,9 @@ import {
   ShieldCheck,
   PhoneOff,
   Rocket,
+  Users,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import {GoBellEliteGame, GoBellMissionSeed} from './components/GoBellEliteGame';
 import {
@@ -509,6 +512,7 @@ const DEFAULT_DEMO_COMMUNITIES: DemoCommunityItem[] = [
 
 interface PublishedAdvertState {
   text: string;
+  redirectUrl?: string;
   publishedAtMs: number;
   expiresAtMs: number;
   stoppedEarly: boolean;
@@ -522,7 +526,9 @@ interface PublishedAdvertState {
 interface AdvertSlotItem {
   slotId: number;
   draftText: string;
+  redirectUrlDraft?: string;
   isEditing: boolean;
+  isEditingRedirectUrl?: boolean;
   placementMode: 'NATIVE' | 'GUEST';
   autoRenewMode: AdvertAutoRenewMode;
   autoRenewDays: number;
@@ -534,12 +540,21 @@ interface AdvertSlotItem {
   monetizeWithdrawingUntilMs?: number | null; // 24-часовой буфер возврата слота с биржи после нажатия ВЫКЛ
 }
 
+function normalizeRedirectUrl(rawUrl?: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
 function createDefaultAdvertSlots(firstSlotText = ''): AdvertSlotItem[] {
   return [
     {
       slotId: 1,
       draftText: firstSlotText,
+      redirectUrlDraft: '',
       isEditing: false,
+      isEditingRedirectUrl: false,
       placementMode: 'NATIVE',
       autoRenewMode: 'OFF',
       autoRenewDays: 7,
@@ -548,7 +563,9 @@ function createDefaultAdvertSlots(firstSlotText = ''): AdvertSlotItem[] {
     {
       slotId: 2,
       draftText: '',
+      redirectUrlDraft: '',
       isEditing: false,
+      isEditingRedirectUrl: false,
       placementMode: 'NATIVE',
       autoRenewMode: 'OFF',
       autoRenewDays: 7,
@@ -557,7 +574,9 @@ function createDefaultAdvertSlots(firstSlotText = ''): AdvertSlotItem[] {
     {
       slotId: 3,
       draftText: '',
+      redirectUrlDraft: '',
       isEditing: false,
+      isEditingRedirectUrl: false,
       placementMode: 'NATIVE',
       autoRenewMode: 'OFF',
       autoRenewDays: 7,
@@ -566,7 +585,9 @@ function createDefaultAdvertSlots(firstSlotText = ''): AdvertSlotItem[] {
     {
       slotId: 4,
       draftText: '',
+      redirectUrlDraft: '',
       isEditing: false,
+      isEditingRedirectUrl: false,
       placementMode: 'NATIVE',
       autoRenewMode: 'OFF',
       autoRenewDays: 7,
@@ -824,6 +845,39 @@ function HybridMapContent() {
   const [activeMarkerId, setActiveMarkerId] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const hoveredMarkerIdRef = useRef<string | null>(null);
+  const [copiedGroupTag, setCopiedGroupTag] = useState<string | null>(null);
+  const [groupJoinNotice, setGroupJoinNotice] = useState<{
+    tag: string;
+    type: 'success' | 'no_space' | 'already';
+    text: string;
+  } | null>(null);
+
+  const handleCopyGroupTag = useCallback((rawTag: string) => {
+    const cleanTag = rawTag.trim().replace(/^#+/, '');
+    if (!cleanTag) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(cleanTag).catch(() => {
+        // fallback below if clipboard permission denied
+      });
+    }
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = cleanTag;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    } catch {
+      // ignore
+    }
+    setCopiedGroupTag(cleanTag);
+    setTimeout(() => {
+      setCopiedGroupTag((prev) => (prev === cleanTag ? null : prev));
+    }, 2000);
+  }, []);
 
   useEffect(() => {
     hoveredMarkerIdRef.current = hoveredMarkerId;
@@ -849,9 +903,60 @@ function HybridMapContent() {
     const chosenList = fileList.length > localList.length ? fileList : localList;
     if (chosenList.length > 0) {
       return chosenList.map((p) => {
+        const fileMatch = fileList.find((fp) => fp.id === p.id || fp.userTag === p.userTag);
+        const hasLocalCreatedGroups =
+          Array.isArray(p.createdProGroups) && p.createdProGroups.some((cg) => cg && cg.isCreated);
+        const mergedCreatedProGroups =
+          !hasLocalCreatedGroups && Array.isArray(fileMatch?.createdProGroups)
+            ? fileMatch.createdProGroups
+            : p.createdProGroups;
+        const mergedGroupSlots = Array.isArray(p.groupSlots)
+          ? p.groupSlots.map((slot, idx) => {
+              if (slot && typeof slot.tag === 'string' && slot.tag.trim().length > 0) return slot;
+              const fileSlot = fileMatch?.groupSlots?.[idx];
+              if (fileSlot && typeof fileSlot.tag === 'string' && fileSlot.tag.trim().length > 0) {
+                return fileSlot;
+              }
+              return (
+                slot || {
+                  slotId: idx + 1,
+                  tag: '',
+                  tagDraft: '',
+                  isEditing: false,
+                  adminApproved: true,
+                }
+              );
+            })
+          : fileMatch?.groupSlots;
+
+        const mergedAdvertSlots = Array.isArray(p.advertSlots)
+          ? p.advertSlots.map((slot, idx) => {
+              const fileSlot = fileMatch?.advertSlots?.[idx];
+              const fallbackRedirect =
+                slot?.redirectUrlDraft ||
+                slot?.published?.redirectUrl ||
+                fileSlot?.redirectUrlDraft ||
+                fileSlot?.published?.redirectUrl ||
+                '';
+              return {
+                ...slot,
+                redirectUrlDraft: fallbackRedirect,
+                published: slot?.published
+                  ? {
+                      ...slot.published,
+                      redirectUrl: slot.published.redirectUrl || fallbackRedirect || undefined,
+                    }
+                  : null,
+              };
+            })
+          : fileMatch?.advertSlots;
+
         if (p.id === 'demo-user-1' || p.userTag === '48K9mP2x') {
           return {
             ...p,
+            createdProGroups: mergedCreatedProGroups,
+            groupSlots: mergedGroupSlots,
+            advertSlots: mergedAdvertSlots,
             tier: 'PRO',
             proPackage: 'PRO_PLUS_3',
             proPictogram: 'CROWN',
@@ -860,12 +965,18 @@ function HybridMapContent() {
         if (p.userTag === 'VmEiio4c') {
           return {
             ...p,
+            createdProGroups: mergedCreatedProGroups,
+            groupSlots: mergedGroupSlots,
+            advertSlots: mergedAdvertSlots,
             tier: 'FREE',
           };
         }
         if (p.userTag === 'Lvd6zTcK' && p.name === 'Александр') {
           return {
             ...p,
+            createdProGroups: mergedCreatedProGroups,
+            groupSlots: mergedGroupSlots,
+            advertSlots: mergedAdvertSlots,
             name: 'Олег Васильевич',
             nickname: '@Олег',
             description: 'Рыбалка на Днепре  лодка снасти  прикормка',
@@ -876,7 +987,12 @@ function HybridMapContent() {
             lngOffset: 4.5181,
           };
         }
-        return p;
+        return {
+          ...p,
+          createdProGroups: mergedCreatedProGroups,
+          groupSlots: mergedGroupSlots,
+          advertSlots: mergedAdvertSlots,
+        };
       });
     }
     return [
@@ -1872,16 +1988,17 @@ function HybridMapContent() {
         dp.tier === 'PRO' ? PRO_PACKAGE_META[dp.proPackage || 'PRO'].advertSlots : 4;
       const dpCreatedList = (dp.createdProGroups || []).slice(0, dpAllowedGroups);
       for (const cg of dpCreatedList) {
-        if (cg.isCreated && cg.tag.trim()) {
-          const norm = cg.tag.trim().toLowerCase();
+        const cgTag = (cg?.tag || '').trim().replace(/^#+/, '');
+        if (cg?.isCreated && cgTag) {
+          const norm = cgTag.toLowerCase();
           catalog[norm] = {
-            tag: cg.tag.trim(),
-            name: censorProfanityText(cg.name.trim()) || `Группа ${cg.tag.trim()}`,
+            tag: cgTag,
+            name: censorProfanityText((cg.name || '').trim()) || `Группа ${cgTag}`,
             description:
-              censorProfanityText(cg.description.trim()) ||
+              censorProfanityText((cg.description || '').trim()) ||
               'Группа, созданная пользователем PRO.',
-            accessType: cg.accessType,
-            adminName: `${censorProfanityText(dp.name)} (Создатель группы)`,
+            accessType: cg.accessType || 'OPEN',
+            adminName: `${censorProfanityText(dp.name || '')} (Создатель группы)`,
             adminId: dp.id,
             adminLatOffset: dp.latOffset,
             adminLngOffset: dp.lngOffset,
@@ -1893,16 +2010,17 @@ function HybridMapContent() {
     if (currentAccountTier !== 'FREE') {
       const myAllowedGroups =
         currentAccountTier === 'PRO' ? PRO_PACKAGE_META[myProPackage].advertSlots : 4;
-      for (const cg of myCreatedProGroups.slice(0, myAllowedGroups)) {
-        if (cg.isCreated && cg.tag.trim()) {
-          const norm = cg.tag.trim().toLowerCase();
+      for (const cg of (myCreatedProGroups || []).slice(0, myAllowedGroups)) {
+        const cgTag = (cg?.tag || '').trim().replace(/^#+/, '');
+        if (cg?.isCreated && cgTag) {
+          const norm = cgTag.toLowerCase();
           catalog[norm] = {
-            tag: cg.tag.trim(),
-            name: censorProfanityText(cg.name.trim()) || `Группа ${cg.tag.trim()}`,
+            tag: cgTag,
+            name: censorProfanityText((cg.name || '').trim()) || `Группа ${cgTag}`,
             description:
-              censorProfanityText(cg.description.trim()) ||
+              censorProfanityText((cg.description || '').trim()) ||
               'Группа, созданная пользователем PRO.',
-            accessType: cg.accessType,
+            accessType: cg.accessType || 'OPEN',
             adminName: `${combinedMyDisplayName} (Создатель группы)`,
             adminId: activeDemoProfileId,
             adminLatOffset: myPositionOffset.lat,
@@ -1940,12 +2058,14 @@ function HybridMapContent() {
       if (dp.bannedUntilMs && nowMs < dp.bannedUntilMs) continue;
       const dpGroupTags = (dp.groupSlots || [])
         .filter((s) => {
-          const info = allKnownGroupsCatalog[s.tag.trim().toLowerCase()];
+          const rawTag = (s?.tag || '').trim().replace(/^#+/, '');
+          if (!rawTag) return false;
+          const info = allKnownGroupsCatalog[rawTag.toLowerCase()];
           const isClosed =
-            info?.accessType === 'CLOSED' || s.tag.trim().toUpperCase().startsWith('GC-');
-          return s.tag.trim().length > 0 && (!isClosed || s.adminApproved);
+            info?.accessType === 'CLOSED' || rawTag.toUpperCase().startsWith('GC-');
+          return !isClosed || Boolean(s?.adminApproved);
         })
-        .map((s) => s.tag.trim())
+        .map((s) => (s?.tag || '').trim().replace(/^#+/, ''))
         .join(' ');
 
       const dpAllowedCreated =
@@ -1954,10 +2074,71 @@ function HybridMapContent() {
           : dp.tier === 'PRO'
           ? PRO_PACKAGE_META[dp.proPackage || 'PRO'].advertSlots
           : 4;
-      const dpCreatedTags = (dp.createdProGroups || [])
+      const dpActiveCreatedGroups = (dp.createdProGroups || [])
         .slice(0, dpAllowedCreated)
-        .filter((cg) => cg.isCreated && cg.tag.trim().length > 0)
-        .map((cg) => cg.tag.trim())
+        .filter((cg) => cg && cg.isCreated && (cg.tag || '').trim().length > 0);
+      const dpCreatedTags = dpActiveCreatedGroups
+        .map(
+          (cg) =>
+            `${(cg.tag || '').trim()} ${censorProfanityText((cg.name || '').trim())} ${censorProfanityText(
+              (cg.description || '').trim()
+            )}`
+        )
+        .join(' ');
+
+      // Все группы, в которых состоит пользователь (как созданные им, так и те, в которые он вступил по тегу)
+      const dpMemberGroupsByKey: Record<
+        string,
+        {
+          slotKey: string;
+          slotId: number;
+          tag: string;
+          name: string;
+          description: string;
+          accessType: 'OPEN' | 'CLOSED';
+        }
+      > = {};
+      for (const cg of dpActiveCreatedGroups) {
+        const cleanTag = (cg.tag || '').trim().replace(/^#+/, '');
+        if (!cleanTag) continue;
+        dpMemberGroupsByKey[cleanTag.toLowerCase()] = {
+          slotKey: `created-${cg.slotId}`,
+          slotId: cg.slotId || 1,
+          tag: cleanTag,
+          name: censorProfanityText((cg.name || '').trim() || `Группа #${cleanTag}`),
+          description: censorProfanityText(
+            (cg.description || '').trim() || 'Координация участников группы на карте'
+          ),
+          accessType: cg.accessType || 'OPEN',
+        };
+      }
+      for (const gs of dp.groupSlots || []) {
+        const cleanTag = (gs?.tag || '').trim().replace(/^#+/, '');
+        if (!cleanTag) continue;
+        const lower = cleanTag.toLowerCase();
+        const info = allKnownGroupsCatalog[lower];
+        const isClosed =
+          info?.accessType === 'CLOSED' || cleanTag.toUpperCase().startsWith('GC-');
+        if (isClosed && !gs?.adminApproved) continue;
+        if (!dpMemberGroupsByKey[lower]) {
+          dpMemberGroupsByKey[lower] = {
+            slotKey: `joined-${gs.slotId || 1}`,
+            slotId: gs.slotId || 1,
+            tag: info?.tag || cleanTag,
+            name: censorProfanityText(
+              info?.name ||
+                (isClosed ? `Закрытая группа #${cleanTag}` : `Открытая группа #${cleanTag}`)
+            ),
+            description: censorProfanityText(
+              info?.description || 'Координация участников группы на карте'
+            ),
+            accessType: isClosed ? 'CLOSED' : 'OPEN',
+          };
+        }
+      }
+      const dpAllMemberGroups = Object.values(dpMemberGroupsByKey);
+      const dpJoinedGroupsSearchText = dpAllMemberGroups
+        .map((mg) => `${mg.tag} ${mg.name} ${mg.description}`)
         .join(' ');
 
       const dpParts: string[] = [dp.userTag];
@@ -1968,6 +2149,7 @@ function HybridMapContent() {
         dpParts.push(censorProfanityText(dp.description.trim()));
       if (dpGroupTags) dpParts.push(dpGroupTags);
       if (dpCreatedTags) dpParts.push(dpCreatedTags);
+      if (dpJoinedGroupsSearchText) dpParts.push(dpJoinedGroupsSearchText);
       const dpText = dpParts.join(' ');
       if (!dpText) continue;
 
@@ -1999,7 +2181,53 @@ function HybridMapContent() {
         },
         updatedAt: 'Активен',
         contact: dp.showNickname ? censorProfanityText(dp.nickname) : undefined,
+        createdGroupsInfo: dpAllMemberGroups.map((mg) => ({
+          tag: mg.tag,
+          name: mg.name,
+          description: mg.description,
+          accessType: mg.accessType,
+        })),
       });
+
+      // Все группы, в которых состоит этот пользователь (созданные или в которые он вступил), для отображения таблички группы и фильтра GROUPS
+      for (const mg of dpAllMemberGroups) {
+        const memberDisplayName = dpVisibleIdentity || censorProfanityText(dp.name);
+        community.unshift({
+          id: `${dp.id}-group-${mg.slotKey}`,
+          authorName: memberDisplayName,
+          visibleName: dpVisibleName || memberDisplayName,
+          visibleNickname: `#${mg.tag}`,
+          visibleIdentityLabel: memberDisplayName,
+          visibleDescription: mg.description,
+          karmaPlus: dp.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS,
+          karmaMinus: dp.karmaMinus ?? 0,
+          userTier: dp.tier,
+          proPictogram: dp.proPictogram || 'GOLD_BUST',
+          category: 'GROUPS',
+          profileText: `${mg.tag} ${mg.name} ${mg.description} ${memberDisplayName}`.trim(),
+          latOffset: dp.latOffset,
+          lngOffset: dp.lngOffset,
+          position: {
+            lat: anchorClusterCenter.lat + dp.latOffset,
+            lng: anchorClusterCenter.lng + dp.lngOffset,
+          },
+          updatedAt:
+            mg.accessType === 'CLOSED' ? 'Закрытая группа (GC-)' : 'Открытая группа (GO-)',
+          contact: `#${mg.tag}`,
+          ownerProfileId: dp.id,
+          slotId: mg.slotId,
+          groupTag: mg.tag,
+          groupName: mg.name,
+          groupDescription: mg.description,
+          groupAccessType: mg.accessType,
+          createdGroupsInfo: dpAllMemberGroups.map((g) => ({
+            tag: g.tag,
+            name: g.name,
+            description: g.description,
+            accessType: g.accessType,
+          })),
+        });
+      }
 
       // Все активные слоты объявлений другого демо-пользователя
       const dpSlotsCount =
@@ -2012,6 +2240,13 @@ function HybridMapContent() {
       for (const slot of dpActiveSlots) {
         if (slot.published && !slot.published.stoppedEarly && nowMs < slot.published.expiresAtMs) {
           const remMs = Math.max(0, slot.published.expiresAtMs - nowMs);
+          const rawDpRedirect =
+            dp.tier === 'BUSINESS'
+              ? (slot.published.redirectUrl || slot.redirectUrlDraft || '').trim()
+              : (slot.published.redirectUrl || '').trim();
+          const dpAdvertRedirectUrl = rawDpRedirect
+            ? normalizeRedirectUrl(rawDpRedirect)
+            : undefined;
           community.unshift({
             id: `${dp.id}-advert-${slot.slotId}`,
             authorName: dpVisibleIdentity || censorProfanityText(dp.name),
@@ -2019,6 +2254,7 @@ function HybridMapContent() {
             visibleDescription: censorProfanityText(slot.published.text),
             karmaPlus: dp.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS,
             karmaMinus: dp.karmaMinus ?? 0,
+            userTier: dp.tier,
             category: 'ADVERT',
             profileText: censorProfanityText(slot.published.text),
             latOffset: slot.published.position.lat - anchorClusterCenter.lat,
@@ -2027,6 +2263,7 @@ function HybridMapContent() {
             updatedAt: `Осталось показа: ${formatDurationHMS(remMs)}`,
             contact: dp.showNickname ? censorProfanityText(dp.nickname) : 'Объявление 24ч',
             advertStatus: slot.published.status,
+            advertRedirectUrl: dpAdvertRedirectUrl,
             ownerProfileId: dp.id,
             slotId: slot.slotId,
           });
@@ -2068,6 +2305,67 @@ function HybridMapContent() {
     const isMyProfileInSelectedCommunity =
       (myCommunityId || 'community-fedorovka') === activeDemoCommunityId;
 
+    const myActiveCreatedGroups =
+      currentAccountTier !== 'FREE'
+        ? (myCreatedProGroups || [])
+            .slice(0, allowedAdvertSlotsCount)
+            .filter((cg) => cg && cg.isCreated && (cg.tag || '').trim().length > 0)
+        : [];
+
+    const myMemberGroupsByKey: Record<
+      string,
+      {
+        slotKey: string;
+        slotId: number;
+        tag: string;
+        name: string;
+        description: string;
+        accessType: 'OPEN' | 'CLOSED';
+      }
+    > = {};
+    for (const cg of myActiveCreatedGroups) {
+      const cleanTag = (cg.tag || '').trim().replace(/^#+/, '');
+      if (!cleanTag) continue;
+      myMemberGroupsByKey[cleanTag.toLowerCase()] = {
+        slotKey: `created-${cg.slotId}`,
+        slotId: cg.slotId || 1,
+        tag: cleanTag,
+        name: censorProfanityText((cg.name || '').trim() || `Группа #${cleanTag}`),
+        description: censorProfanityText(
+          (cg.description || '').trim() || 'Координация участников группы на карте'
+        ),
+        accessType: cg.accessType || 'OPEN',
+      };
+    }
+    for (const gs of groupSlots || []) {
+      const cleanTag = (gs?.tag || '').trim().replace(/^#+/, '');
+      if (!cleanTag) continue;
+      const lower = cleanTag.toLowerCase();
+      const info = allKnownGroupsCatalog[lower];
+      const isClosed =
+        info?.accessType === 'CLOSED' || cleanTag.toUpperCase().startsWith('GC-');
+      if (isClosed && !gs?.adminApproved) continue;
+      if (!myMemberGroupsByKey[lower]) {
+        myMemberGroupsByKey[lower] = {
+          slotKey: `joined-${gs.slotId || 1}`,
+          slotId: gs.slotId || 1,
+          tag: info?.tag || cleanTag,
+          name: censorProfanityText(
+            info?.name ||
+              (isClosed ? `Закрытая группа #${cleanTag}` : `Открытая группа #${cleanTag}`)
+          ),
+          description: censorProfanityText(
+            info?.description || 'Координация участников группы на карте'
+          ),
+          accessType: isClosed ? 'CLOSED' : 'OPEN',
+        };
+      }
+    }
+    const myAllMemberGroups = Object.values(myMemberGroupsByKey);
+    const myJoinedGroupsSearchText = myAllMemberGroups
+      .map((mg) => `${mg.tag} ${mg.name} ${mg.description}`)
+      .join(' ');
+
     if (
       settingsAutoGeo &&
       isMyProfileInSelectedCommunity &&
@@ -2075,24 +2373,25 @@ function HybridMapContent() {
       hasAnyVisibleField &&
       combinedMyProfileText.trim().length > 0
     ) {
-      const approvedGroupTags = groupSlots
+      const approvedGroupTags = (groupSlots || [])
         .filter((s) => {
-          const info = allKnownGroupsCatalog[s.tag.trim().toLowerCase()];
+          const clean = (s?.tag || '').trim().replace(/^#+/, '');
+          const info = allKnownGroupsCatalog[clean.toLowerCase()];
           const isClosed =
-            info?.accessType === 'CLOSED' || s.tag.trim().toUpperCase().startsWith('GC-');
-          return s.tag.trim().length > 0 && (!isClosed || s.adminApproved);
+            info?.accessType === 'CLOSED' || clean.toUpperCase().startsWith('GC-');
+          return clean.length > 0 && (!isClosed || Boolean(s?.adminApproved));
         })
-        .map((s) => s.tag.trim())
+        .map((s) => (s?.tag || '').trim().replace(/^#+/, ''))
         .join(' ');
 
-      const myCreatedGroupTags =
-        currentAccountTier !== 'FREE'
-          ? myCreatedProGroups
-              .slice(0, allowedAdvertSlotsCount)
-              .filter((cg) => cg.isCreated && cg.tag.trim().length > 0)
-              .map((cg) => cg.tag.trim())
-              .join(' ')
-          : '';
+      const myCreatedGroupTags = myActiveCreatedGroups
+        .map(
+          (cg) =>
+            `${(cg.tag || '').trim()} ${censorProfanityText((cg.name || '').trim())} ${censorProfanityText(
+              (cg.description || '').trim()
+            )}`
+        )
+        .join(' ');
 
       const myVisibleName =
         showProfileName && profileName.trim() ? censorProfanityText(profileName.trim()) : '';
@@ -2124,7 +2423,7 @@ function HybridMapContent() {
             : currentAccountTier === 'BUSINESS'
             ? 'BUSINESS'
             : undefined,
-        profileText: `${combinedMyProfileText} ${approvedGroupTags} ${myCreatedGroupTags}`.trim(),
+        profileText: `${combinedMyProfileText} ${approvedGroupTags} ${myCreatedGroupTags} ${myJoinedGroupsSearchText}`.trim(),
         disabledWords: Array.from(myDisabledWords),
         latOffset: myPositionOffset.lat,
         lngOffset: myPositionOffset.lng,
@@ -2137,7 +2436,58 @@ function HybridMapContent() {
             ? `SOS (осталось ${formatDurationHMS(Math.max(0, mySosExpiresAtMs - nowMs))})`
             : 'Активен',
         contact: showProfileNickname ? censorProfanityText(profileNickname) : undefined,
+        createdGroupsInfo: myAllMemberGroups.map((mg) => ({
+          tag: mg.tag,
+          name: mg.name,
+          description: mg.description,
+          accessType: mg.accessType,
+        })),
       });
+    }
+
+    // Все группы текущего пользователя (созданные или в которые он вступил) отображаются на карте и в фильтре GROUPS
+    if (settingsAutoGeo && isMyProfileInSelectedCommunity && !isMyProfileCurrentlyBanned) {
+      const myVisibleNameForGroup =
+        showProfileName && profileName.trim()
+          ? censorProfanityText(profileName.trim())
+          : combinedMyDisplayName;
+      for (const mg of myAllMemberGroups) {
+        community.unshift({
+          id: `my-created-group-${mg.slotKey}`,
+          authorName: combinedMyDisplayName,
+          visibleName: myVisibleNameForGroup,
+          visibleNickname: `#${mg.tag}`,
+          visibleIdentityLabel: combinedMyDisplayName,
+          visibleDescription: mg.description,
+          karmaPlus: myKarmaPlus,
+          karmaMinus: myKarmaMinus,
+          userTier: currentAccountTier,
+          proPictogram: myProPictogram,
+          category: 'GROUPS',
+          profileText: `${mg.tag} ${mg.name} ${mg.description} ${combinedMyDisplayName}`.trim(),
+          latOffset: myPositionOffset.lat,
+          lngOffset: myPositionOffset.lng,
+          position: {
+            lat: anchorClusterCenter.lat + myPositionOffset.lat,
+            lng: anchorClusterCenter.lng + myPositionOffset.lng,
+          },
+          updatedAt:
+            mg.accessType === 'CLOSED' ? 'Закрытая группа (GC-)' : 'Открытая группа (GO-)',
+          contact: `#${mg.tag}`,
+          ownerProfileId: 'my-own-profile',
+          slotId: mg.slotId,
+          groupTag: mg.tag,
+          groupName: mg.name,
+          groupDescription: mg.description,
+          groupAccessType: mg.accessType,
+          createdGroupsInfo: myAllMemberGroups.map((g) => ({
+            tag: g.tag,
+            name: g.name,
+            description: g.description,
+            accessType: g.accessType,
+          })),
+        });
+      }
     }
 
     // Все опубликованные слоты объявлений текущего пользователя видимы на карте независимо от активности профиля
@@ -2150,6 +2500,13 @@ function HybridMapContent() {
             : slot.published.autoRenewMode === 'DAYS' && slot.published.autoRenewUntilMs
             ? ` · Автопродление (${slot.published.autoRenewDays} дн.)`
             : '';
+        const rawMyRedirect =
+          currentAccountTier === 'BUSINESS'
+            ? (slot.published.redirectUrl || slot.redirectUrlDraft || '').trim()
+            : (slot.published.redirectUrl || '').trim();
+        const myAdvertRedirectUrl = rawMyRedirect
+          ? normalizeRedirectUrl(rawMyRedirect)
+          : undefined;
         community.unshift({
           id: `my-published-advert-${slot.slotId}`,
           authorName: combinedMyDisplayName,
@@ -2157,6 +2514,7 @@ function HybridMapContent() {
           visibleDescription: censorProfanityText(slot.published.text),
           karmaPlus: myKarmaPlus,
           karmaMinus: myKarmaMinus,
+          userTier: currentAccountTier,
           category: 'ADVERT',
           profileText: censorProfanityText(slot.published.text),
           latOffset: slot.published.position.lat - anchorClusterCenter.lat,
@@ -2165,6 +2523,7 @@ function HybridMapContent() {
           updatedAt: `Осталось цикла 24ч: ${formatDurationHMS(remainingDisplayMs)}${autoRenewLabel}`,
           contact: showProfileNickname ? censorProfanityText(profileNickname) : 'Объявление 24ч',
           advertStatus: slot.published.status,
+          advertRedirectUrl: myAdvertRedirectUrl,
           ownerProfileId: 'my-own-profile',
           slotId: slot.slotId,
         });
@@ -2207,7 +2566,64 @@ function HybridMapContent() {
     myCommunityId,
   ]);
 
-  // Parse query words and expand with AI synonyms when AI Assistant mode is ON
+  // Parse query words and expand with AI associations ("вот тебе слово — верни ассоциации") when AI Assistant mode is ON
+  const [smartphoneAiAssociations, setSmartphoneAiAssociations] = useState<string[]>([]);
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
+    if (!aiAssistantEnabled || !trimmed) {
+      setSmartphoneAiAssociations([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const win = window as unknown as {
+          GoBellNativeAI?: {getAssociations?: (word: string) => Promise<string[] | string>};
+          ai?: {
+            languageModel?: {
+              create?: () => Promise<{prompt: (text: string) => Promise<string>}>;
+            };
+          };
+          LanguageModel?: {
+            create?: () => Promise<{prompt: (text: string) => Promise<string>}>;
+          };
+        };
+
+        let rawResponse = '';
+        if (typeof win.GoBellNativeAI?.getAssociations === 'function') {
+          const res = await win.GoBellNativeAI.getAssociations(trimmed);
+          rawResponse = Array.isArray(res) ? res.join(', ') : String(res || '');
+        } else {
+          const modelFactory = win.ai?.languageModel || win.LanguageModel;
+          if (typeof modelFactory?.create === 'function') {
+            const session = await modelFactory.create();
+            rawResponse = await session.prompt(
+              `Верни только список из 8 коротких слов-ассоциаций и синонимов через запятую (без пояснений) к слову: ${trimmed}`
+            );
+          }
+        }
+
+        if (!cancelled && rawResponse) {
+          const parsed = rawResponse
+            .toLowerCase()
+            .split(/[\s,.;:!?()[\]"{}<>/\\|+=*~`#-]+/)
+            .map((w) => w.trim())
+            .filter((w) => w.length >= 2);
+          setSmartphoneAiAssociations(Array.from(new Set(parsed)).slice(0, 12));
+        }
+      } catch {
+        // Fallback to built-in associations dictionary if smartphone AI agent is not active
+      }
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery, aiAssistantEnabled]);
+
   const queryTerms = useMemo(() => {
     const baseWords = searchQuery
       .toLowerCase()
@@ -2216,7 +2632,7 @@ function HybridMapContent() {
       .filter((w) => w.length >= 1);
 
     if (!aiAssistantEnabled || baseWords.length === 0) {
-      return {baseWords, expandedWords: baseWords};
+      return {baseWords, expandedWords: baseWords, associationsOnly: [] as string[]};
     }
 
     const expandedSet = new Set<string>(baseWords);
@@ -2228,12 +2644,19 @@ function HybridMapContent() {
         }
       }
     }
+    for (const assoc of smartphoneAiAssociations) {
+      expandedSet.add(assoc);
+    }
+
+    const expandedWords = Array.from(expandedSet);
+    const associationsOnly = expandedWords.filter((w) => !baseWords.includes(w));
 
     return {
       baseWords,
-      expandedWords: Array.from(expandedSet),
+      expandedWords,
+      associationsOnly,
     };
-  }, [searchQuery, aiAssistantEnabled]);
+  }, [searchQuery, aiAssistantEnabled, smartphoneAiAssociations]);
 
   // Если в поиск введён тег закрытой группы (GC-...), определяем эту закрытую группу, чтобы найти её админа ВНЕ ЗАВИСИМОСТИ от радиуса!
   const searchedClosedGroupInfo: GroupCatalogInfo | null = useMemo(() => {
@@ -2314,7 +2737,8 @@ function HybridMapContent() {
     activeDemoProfileId,
   ]);
 
-  // Calculate object counts for each filter button (ALL, GROUPS, ADVERT, BUSINESS, SOS) in the search radius
+  // Calculate object counts for each filter button (ALL, GROUPS, ADVERT, BUSINESS, SOS) in the search radius.
+  // For GROUPS, count the number of UNIQUE groups (by groupTag) within the search radius, regardless of how many participants each group has.
   const categoryCounts: Record<FilterCategory, number> = useMemo(() => {
     const counts: Record<FilterCategory, number> = {
       ALL: profilesInRadiusMatchingQuery.length,
@@ -2324,11 +2748,23 @@ function HybridMapContent() {
       SOS: 0,
     };
 
+    const uniqueGroupTags = new Set<string>();
+
     for (const item of profilesInRadiusMatchingQuery) {
-      if (item.profile.category) {
+      if (item.profile.category === 'GROUPS') {
+        const normTag = (item.profile.groupTag || item.profile.id)
+          .trim()
+          .replace(/^#+/, '')
+          .toLowerCase();
+        if (normTag) {
+          uniqueGroupTags.add(normTag);
+        }
+      } else if (item.profile.category) {
         counts[item.profile.category] += 1;
       }
     }
+
+    counts.GROUPS = uniqueGroupTags.size;
 
     return counts;
   }, [profilesInRadiusMatchingQuery]);
@@ -2336,7 +2772,7 @@ function HybridMapContent() {
   // Helper: resolve group info by unique group tag + count active members in current search radius
   const resolveGroupDetails = useCallback(
     (rawTag: string): {info: GroupCatalogInfo; activeMembersInRadius: number} | null => {
-      const clean = rawTag.trim();
+      const clean = rawTag.trim().replace(/^#+/, '');
       if (!clean) return null;
       const lower = clean.toLowerCase();
       const isClosedByPrefix = clean.toUpperCase().startsWith('GC-');
@@ -2352,19 +2788,27 @@ function HybridMapContent() {
         adminName: 'Создатель группы',
       };
 
-      let count = 0;
+      const memberKeys = new Set<string>();
       for (const profile of allActiveProfiles) {
+        if (profile.category === 'ADVERT' || profile.category === 'SOS') continue;
         const dist = getDistanceMeters(searchCenter, profile.position);
         if (dist > radiusMeters) continue;
         const tags = extractWordTags(profile.profileText);
-        if (tags.some((t) => t.normalized === lower)) {
-          count += 1;
+        const hasInMemberList = (profile.createdGroupsInfo || []).some(
+          (g) => g.tag.trim().replace(/^#+/, '').toLowerCase() === lower
+        );
+        if (
+          profile.groupTag?.trim().replace(/^#+/, '').toLowerCase() === lower ||
+          hasInMemberList ||
+          tags.some((t) => t.normalized.replace(/^#+/, '') === lower)
+        ) {
+          memberKeys.add(profile.ownerProfileId || profile.id);
         }
       }
 
       return {
         info: catalogEntry,
-        activeMembersInRadius: count,
+        activeMembersInRadius: memberKeys.size,
       };
     },
     [allActiveProfiles, searchCenter, radiusMeters, allKnownGroupsCatalog]
@@ -2374,16 +2818,26 @@ function HybridMapContent() {
   // If a group's "Показать на карте" button is active (activeGroupMapTag), all category filters are disabled and ONLY members of that group tag are shown!
   const filteredResults: EnrichedProfileResult[] = useMemo(() => {
     if (activeGroupMapTag) {
-      const targetNorm = activeGroupMapTag.trim().toLowerCase();
-      const groupOnly: EnrichedProfileResult[] = [];
+      const targetNorm = activeGroupMapTag.trim().replace(/^#+/, '').toLowerCase();
+      const rawGroupMatches: EnrichedProfileResult[] = [];
       for (const profile of allActiveProfiles) {
+        if (profile.category === 'ADVERT' || profile.category === 'SOS') continue;
         const distanceMeters = getDistanceMeters(searchCenter, profile.position);
         if (distanceMeters > radiusMeters) continue;
         const wordTags = extractWordTags(profile.profileText);
         const activeTags = wordTags.filter((t) => t.active).map((t) => t.word);
-        const activeNorm = wordTags.filter((t) => t.active).map((t) => t.normalized);
-        if (activeNorm.includes(targetNorm)) {
-          groupOnly.push({
+        const activeNorm = wordTags
+          .filter((t) => t.active)
+          .map((t) => t.normalized.replace(/^#+/, ''));
+        const hasInMemberList = (profile.createdGroupsInfo || []).some(
+          (g) => g.tag.trim().replace(/^#+/, '').toLowerCase() === targetNorm
+        );
+        if (
+          profile.groupTag?.trim().replace(/^#+/, '').toLowerCase() === targetNorm ||
+          hasInMemberList ||
+          activeNorm.includes(targetNorm)
+        ) {
+          rawGroupMatches.push({
             profile,
             distanceMeters,
             activeTags,
@@ -2391,6 +2845,17 @@ function HybridMapContent() {
           });
         }
       }
+      const matchedOwnerIds = new Set(
+        rawGroupMatches
+          .filter((r) => r.profile.category !== 'GROUPS')
+          .map((r) => r.profile.id)
+      );
+      const groupOnly = rawGroupMatches.filter(
+        (r) =>
+          r.profile.category !== 'GROUPS' ||
+          !r.profile.ownerProfileId ||
+          !matchedOwnerIds.has(r.profile.ownerProfileId)
+      );
       groupOnly.sort((a, b) => a.distanceMeters - b.distanceMeters);
       return groupOnly;
     }
@@ -2971,7 +3436,7 @@ function HybridMapContent() {
           <div className="flex items-center gap-2">
             {/* ПОИСКОВАЯ СТРОКА GOBELL: ПОЛЕ ВВОДА ТЕГОВ И КНОПКА GoBell СПРАВА */}
             <div className="relative flex-1 flex items-center bg-slate-950/95 border border-slate-700/90 focus-within:border-sky-400 rounded-xl p-1 transition-colors">
-              {/* Единое поле ввода поиска по тегам GoBell */}
+              {/* Единое поле ввода поиска по тегам G. Bell */}
               <input
                 ref={searchInputRef}
                 type="text"
@@ -2979,13 +3444,14 @@ function HybridMapContent() {
                 onFocus={() => setIsFilterDropdownOpen(true)}
                 onClick={() => setIsFilterDropdownOpen(true)}
                 onChange={(e) => {
+                  setActiveGroupMapTag(null);
                   setSearchQuery(e.target.value);
                   setIsFilterDropdownOpen(true);
                 }}
                 placeholder={
                   aiAssistantEnabled
-                    ? 'GoBell + ИИ: поиск по тегам и смыслу...'
-                    : 'GoBell: поиск по словам-тегам в профилях...'
+                    ? 'G. Bell + ИИ: поиск по тегам и смыслу...'
+                    : 'G. Bell: поиск по словам-тегам в профилях...'
                 }
                 className="w-full bg-transparent px-3 py-1.5 text-sm text-white placeholder-slate-400 focus:outline-none min-w-0"
               />
@@ -2995,6 +3461,7 @@ function HybridMapContent() {
                 <button
                   type="button"
                   onClick={() => {
+                    setActiveGroupMapTag(null);
                     setSearchQuery('');
                   }}
                   className="p-1 mr-1 text-slate-400 hover:text-white shrink-0"
@@ -3004,18 +3471,19 @@ function HybridMapContent() {
                 </button>
               )}
 
-              {/* Кнопка справа: GoBell */}
+              {/* Кнопка справа: G. Bell (Global · Game · Google · Bell) */}
               <button
                 type="button"
                 onClick={() => {
+                  setActiveGroupMapTag(null);
                   setSearchSystemMode('TAG_SYSTEM');
                   setIsFilterDropdownOpen(true);
                   searchInputRef.current?.focus();
                 }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 bg-sky-500 text-slate-950 shadow-sm"
-                title="Поиск GoBell по словам-тегам профилей в радиусе"
+                className="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all shrink-0 bg-sky-500 text-slate-950 shadow-sm tracking-tight"
+                title="G. Bell (Global · Game · Google · Bell) — поиск по словам-тегам профилей в радиусе"
               >
-                GoBell
+                G. Bell
               </button>
             </div>
 
@@ -3051,80 +3519,52 @@ function HybridMapContent() {
                   <User className="w-4 h-4 text-sky-400" />
                   <span className="hidden sm:inline">Кабинет</span>
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextGeo = !settingsAutoGeo;
-                    setSettingsAutoGeo(nextGeo);
-                    if (nextGeo) {
-                      const myPos = {
-                        lat: anchorClusterCenter.lat + myPositionOffset.lat,
-                        lng: anchorClusterCenter.lng + myPositionOffset.lng,
-                      };
-                      setUserPhysicalGeo(myPos);
-                      setSearchCenter(myPos);
-                      setActiveMarkerId('my-own-profile');
-                      map?.panTo(myPos);
-                    }
-                  }}
-                  className={`px-2.5 py-2.5 rounded-xl text-xs font-extrabold border transition-all flex items-center gap-1.5 shrink-0 ${
-                    settingsAutoGeo
-                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)]'
-                      : 'bg-rose-950/80 border-rose-500/70 text-rose-300'
-                  }`}
-                  title={
-                    settingsAutoGeo
-                      ? 'Геолокация смартфона ВКЛЮЧЕНА: ваш профиль светится на реальной карте GoBell и игра ELITE 3D доступна'
-                      : 'Геолокация смартфона ВЫКЛЮЧЕНА: вы скрыты с карты GoBell, для запуска ELITE 3D необходимо включить геолокацию!'
-                  }
-                >
-                  <Navigation className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">
-                    {settingsAutoGeo ? 'ГЕО: ВКЛ' : 'ГЕО: ВЫКЛ'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsEliteGameOpen(true)}
-                  className="px-3 py-2.5 rounded-xl bg-black hover:bg-slate-900 border-2 border-cyan-400 text-yellow-300 text-xs font-extrabold flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(0,255,255,0.45)] transition-transform hover:scale-105"
-                  title="Запустить космический 3D-симулятор GoBell: ELITE (требуется активная геолокация смартфона — игрок светится на реальной карте GoBell)"
-                >
-                  <Rocket className="w-4 h-4 text-cyan-400" />
-                  <span>ELITE 3D</span>
-                  {settingsAutoGeo && (
-                    <span
-                      className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"
-                      title="Вы светитесь на реальной карте GoBell"
-                    />
-                  )}
-                </button>
               </>
             )}
           </div>
 
-          {/* Подсказка ИИ-помощника, если он включен в режиме GoBell */}
+          {/* Подсказка ИИ-помощника («слово -> ассоциации -> поиск по ассоциациям»), если он включен в режиме GoBell */}
           {searchSystemMode === 'TAG_SYSTEM' && aiAssistantEnabled && isFilterDropdownOpen && (
-            <div className="mt-2 pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap text-xs">
-              <span className="text-amber-300 flex items-center gap-1.5 font-medium">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>
-                  ИИ-режим GoBell: учитываются смежные слова-теги ({queryTerms.expandedWords.length || 'все'})
+            <div className="mt-2 pt-2 border-t border-slate-800/80 space-y-1.5 text-xs">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-amber-300 flex items-center gap-1.5 font-medium">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {queryTerms.baseWords.length > 0
+                      ? `ИИ-ассоциации к запросу (${queryTerms.associationsOnly.length}): поиск идёт по слову и его ассоциациям`
+                      : 'ИИ-режим («слово → ассоциации»): введите слово для поиска по ассоциациям'}
+                  </span>
                 </span>
-              </span>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {['помощь', 'кофе', 'авто', 'ремонт', 'спорт'].map((hint) => (
-                  <button
-                    key={hint}
-                    type="button"
-                    onClick={() => setSearchQuery(hint)}
-                    className="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] transition-colors"
-                  >
-                    #{hint}
-                  </button>
-                ))}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {['рыбалка', 'помощь', 'продукты', 'авто', 'ремонт', 'огород'].map((hint) => (
+                    <button
+                      key={hint}
+                      type="button"
+                      onClick={() => {
+                        setActiveGroupMapTag(null);
+                        setSearchQuery(hint);
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] transition-colors"
+                    >
+                      #{hint}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {queryTerms.associationsOnly.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                  <span className="text-[11px] text-slate-400 mr-1">Ассоциации:</span>
+                  {queryTerms.associationsOnly.slice(0, 14).map((assoc) => (
+                    <span
+                      key={assoc}
+                      className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-200 font-mono text-[10px]"
+                    >
+                      #{assoc}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -3328,28 +3768,37 @@ function HybridMapContent() {
                 onSelectCenter={handleSelectSearchCenter}
               />
 
-              {/* Маркер центра поиска */}
-              <AdvancedMarker position={searchCenter} title="Центр радиуса поиска">
+              {/* Маркер центра поиска (Точка G) */}
+              <AdvancedMarker
+                position={searchCenter}
+                title="Начните путь с Точки G! · Центр радиуса поиска G. Bell"
+              >
                 <div className="relative flex items-center justify-center">
-                  <div className="w-5 h-5 rounded-full bg-sky-500/30 border-2 border-sky-400 flex items-center justify-center shadow-lg">
-                    <div className="w-2 h-2 rounded-full bg-white" />
+                  <div className="w-6 h-6 rounded-full bg-sky-500/40 border-2 border-sky-400 flex items-center justify-center shadow-[0_0_12px_rgba(56,189,248,0.85)]">
+                    <span className="text-[10px] font-black text-white leading-none">G.</span>
                   </div>
                 </div>
               </AdvancedMarker>
 
-              {/* Маркеры активных пользователей и 24ч-объявлений в радиусе поиска:
+              {/* Маркеры активных пользователей, участников групп и 24ч-объявлений в радиусе поиска:
                   - Местные объявления (NATIVE), привязанные к пользователю, отображаются как 1–4 ВРАЩАЮЩИХСЯ ЗНАКА ДОЛЛАРА ($) прямо НАД ГОЛОВОЙ иконки пользователя!
+                  - Таблички групп (GROUPS), в которых состоит или которые создал пользователь, отображаются ВНИЗУ ИКОНКИ ПОД ИМЕНЕМ И КАРМОЙ у всех участников группы!
                   - Гостевые объявления (GUEST), привязанные к месту, отображаются как ВРАЩАЮЩАЯСЯ И ПУЛЬСИРУЮЩАЯ МОНЕТКА ($) на точке карты! */}
               {(() => {
                 const visibleOwnerIds = new Set(
                   filteredResults
-                    .filter((r) => r.profile.category !== 'ADVERT')
+                    .filter(
+                      (r) =>
+                        r.profile.category !== 'ADVERT' && r.profile.category !== 'GROUPS'
+                    )
                     .map((r) => r.profile.id)
                 );
+                const renderedGroupOwnerIds = new Set<string>();
 
                 return filteredResults.map((item) => {
-                  const {profile, distanceMeters} = item;
+                  const {profile} = item;
                   const isPublishedAdvert = profile.category === 'ADVERT';
+                  const isPublishedGroup = profile.category === 'GROUPS';
 
                   // Если это местное объявление (NATIVE) и иконка самого владельца уже видна на карте —
                   // мы не рисуем дублирующий маркер под ногами владельца, так как это объявление висит вращающимся $ прямо НАД ЕГО ГОЛОВОЙ!
@@ -3360,6 +3809,19 @@ function HybridMapContent() {
                     visibleOwnerIds.has(profile.ownerProfileId)
                   ) {
                     return null;
+                  }
+
+                  // Если это объект категории GROUPS:
+                  // 1) когда иконка самого участника уже видна на карте (например, в режиме ALL) — не рисуем дублирующий маркер, так как табличка группы выводится прямо внизу под именем и кармой этого участника;
+                  // 2) в режиме фильтра GROUPS рисуем ровно один маркер на каждого участника со всеми его табличками групп внизу под именем и кармой.
+                  if (isPublishedGroup && profile.ownerProfileId) {
+                    if (visibleOwnerIds.has(profile.ownerProfileId)) {
+                      return null;
+                    }
+                    if (renderedGroupOwnerIds.has(profile.ownerProfileId)) {
+                      return null;
+                    }
+                    renderedGroupOwnerIds.add(profile.ownerProfileId);
                   }
 
                   // Если гостевая монетка (GUEST) попала ровно в те же координаты, где стоит чей-то аватар или другая гостевая монетка,
@@ -3391,14 +3853,29 @@ function HybridMapContent() {
                     }
                   }
 
-                  // Находим все активные местные объявления (NATIVE, от 1 до 4 шт.), привязанные к этому пользователю, чтобы вывести их вращающимися зелёными монетками над его головой
+                  const ownerKey = profile.ownerProfileId || profile.id;
+                  const baseUserProfile =
+                    isPublishedGroup && profile.ownerProfileId
+                      ? allActiveProfiles.find((p) => p.id === profile.ownerProfileId) || profile
+                      : profile;
+
+                  // Находим все активные местные объявления (NATIVE, от 1 до 4 шт.), привязанные к этому пользователю, чтобы вывести их вращающимися зелёными монетками НАД ЕГО ГОЛОВОЙ
                   const attachedNativeAdverts = !isPublishedAdvert
                     ? allActiveProfiles
                         .filter(
                           (p) =>
                             p.category === 'ADVERT' &&
                             p.advertStatus === 'NATIVE' &&
-                            p.ownerProfileId === profile.id
+                            p.ownerProfileId === ownerKey
+                        )
+                        .sort((a, b) => (a.slotId || 1) - (b.slotId || 1))
+                    : [];
+
+                  // Находим все группы, в которых состоит этот пользователь (как созданные им, так и те, в которые он вступил), чтобы вывести их табличками ВНИЗУ ИКОНКИ ПОД ИМЕНЕМ И КАРМОЙ
+                  const attachedMemberGroups = !isPublishedAdvert
+                    ? allActiveProfiles
+                        .filter(
+                          (p) => p.category === 'GROUPS' && p.ownerProfileId === ownerKey
                         )
                         .sort((a, b) => (a.slotId || 1) - (b.slotId || 1))
                     : [];
@@ -3406,34 +3883,55 @@ function HybridMapContent() {
                   const activeOverheadAdvert = attachedNativeAdverts.find(
                     (ad) => activeMarkerId === ad.id
                   );
+                  const activeBottomGroup = attachedMemberGroups.find(
+                    (grp) => activeMarkerId === grp.id
+                  );
 
                   const effectiveTier =
-                    profile.userTier ||
-                    (profile.category === 'BUSINESS' ? 'BUSINESS' : 'FREE');
-                  const isProfileCardOpen = activeMarkerId === profile.id;
+                    baseUserProfile.userTier ||
+                    (baseUserProfile.category === 'BUSINESS' ? 'BUSINESS' : 'FREE');
+                  const isProfileCardOpen =
+                    activeMarkerId === baseUserProfile.id ||
+                    (isPublishedGroup && activeMarkerId === profile.id && !activeBottomGroup);
                   const isAnyHoveredOrTapped =
-                    isProfileCardOpen || Boolean(activeOverheadAdvert);
+                    isProfileCardOpen ||
+                    Boolean(activeOverheadAdvert) ||
+                    Boolean(activeBottomGroup);
 
-                  // Какой объект сейчас показан во всплывающей карточке над маркером (открывается при клике или тапе на иконке объекта на карте)
-                  const displayedPopupProfile = activeOverheadAdvert || profile;
+                  // Какой объект сейчас показан во всплывающей карточке над маркером:
+                  // - при клике на монетку объявления сверху -> карточка объявления;
+                  // - при клике на табличку группы внизу под именем и кармой -> карточка группы;
+                  // - при клике на саму иконку участника или его имя/карму -> карточка профиля участника!
+                  const displayedPopupProfile =
+                    activeOverheadAdvert || activeBottomGroup || baseUserProfile;
                   const isPopupShowingAdvert =
                     Boolean(activeOverheadAdvert) || isPublishedAdvert;
+                  const isPopupShowingGroup = Boolean(activeBottomGroup);
                   const markerLabelName =
-                    profile.visibleName ||
-                    profile.visibleIdentityLabel ||
-                    profile.authorName;
-                  const markerKarmaPlus = profile.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS;
-                  const markerKarmaMinus = profile.karmaMinus ?? 0;
+                    baseUserProfile.visibleName ||
+                    baseUserProfile.visibleIdentityLabel ||
+                    baseUserProfile.authorName;
+                  const markerKarmaPlus =
+                    baseUserProfile.karmaPlus ?? DEFAULT_STARTING_KARMA_PLUS;
+                  const markerKarmaMinus = baseUserProfile.karmaMinus ?? 0;
 
                   return (
                     <AdvancedMarker
                       key={profile.id}
                       position={effectiveMarkerPosition}
                       clickable={true}
-                      zIndex={isAnyHoveredOrTapped ? 100 : isPublishedAdvert ? 40 : 20}
+                      zIndex={
+                        isAnyHoveredOrTapped
+                          ? 100
+                          : isPublishedAdvert || attachedMemberGroups.length > 0
+                          ? 40
+                          : 20
+                      }
                       onClick={() => {
                         closeFilterDropdown();
-                        setActiveMarkerId((prev) => (prev === profile.id ? null : profile.id));
+                        setActiveMarkerId((prev) =>
+                          prev === baseUserProfile.id ? null : baseUserProfile.id
+                        );
                       }}
                     >
                       <div
@@ -3450,7 +3948,7 @@ function HybridMapContent() {
                             transform: `scale(${markerZoomScale})`,
                           }}
                         >
-                          {/* Карточка профиля возле объекта на карте — появляется при клике или тапе на иконке объекта (Имя, Ник, Карма и Описание) */}
+                          {/* Карточка профиля / группы / объявления возле объекта на карте — появляется при клике или тапе */}
                           {isAnyHoveredOrTapped && (
                             <div
                               onClick={(e) => e.stopPropagation()}
@@ -3460,7 +3958,7 @@ function HybridMapContent() {
                               }}
                               className="absolute bottom-full left-1/2 pb-3.5 z-30 pointer-events-auto"
                             >
-                              <div className="px-3.5 py-3 rounded-2xl bg-slate-950/95 border border-slate-700 text-xs text-slate-100 shadow-2xl min-w-[245px] max-w-[305px] text-left leading-snug animate-in fade-in duration-100 space-y-2.5">
+                              <div className="px-3.5 py-3 rounded-2xl bg-slate-950/95 border border-slate-700 text-xs text-slate-100 shadow-2xl min-w-[255px] max-w-[315px] text-left leading-snug animate-in fade-in duration-100 space-y-2.5">
                                 {isPopupShowingAdvert ? (
                                   <>
                                     <div className="flex items-start justify-between gap-2">
@@ -3511,36 +4009,374 @@ function HybridMapContent() {
                                       </div>
                                     </div>
 
-                                    {/* Кнопка Запрос на контакт прямо в карточке объявления */}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleOpenContactRequestForm({
-                                          id: displayedPopupProfile.id,
-                                          authorName: displayedPopupProfile.authorName,
-                                          category: 'ADVERT',
-                                        });
-                                      }}
-                                      className="w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition-colors shadow-md flex items-center justify-center gap-1.5"
-                                    >
-                                      <ShieldCheck className="w-3.5 h-3.5" />
-                                      <span>Запрос на контакт</span>
-                                    </button>
+                                    {/* В объявлении бизнес-профиля (или при наличии URL перехода) показывается кнопка «Перейти» в новом окне вместо «Запрос на контакт» */}
+                                    {displayedPopupProfile.advertRedirectUrl ||
+                                    displayedPopupProfile.userTier === 'BUSINESS' ? (
+                                      <div className="space-y-1.5">
+                                        {displayedPopupProfile.advertRedirectUrl && (
+                                          <div
+                                            className="px-2 py-1 rounded-lg bg-slate-900/90 border border-amber-500/30 text-[10px] font-mono text-amber-300 truncate"
+                                            title={displayedPopupProfile.advertRedirectUrl}
+                                          >
+                                            🔗 {displayedPopupProfile.advertRedirectUrl}
+                                          </div>
+                                        )}
+                                        {displayedPopupProfile.advertRedirectUrl ? (
+                                          <a
+                                            href={normalizeRedirectUrl(
+                                              displayedPopupProfile.advertRedirectUrl
+                                            )}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-full py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs transition-colors shadow-md flex items-center justify-center gap-1.5"
+                                            title={`Открыть в новом окне: ${displayedPopupProfile.advertRedirectUrl}`}
+                                          >
+                                            <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                            <span>Перейти</span>
+                                          </a>
+                                        ) : (
+                                          <div className="w-full py-2 px-3 rounded-xl bg-slate-800/90 border border-amber-500/40 text-amber-200 font-bold text-[11px] text-center">
+                                            Перейти (укажите URL в слоте объявления)
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenContactRequestForm({
+                                            id: displayedPopupProfile.id,
+                                            authorName: displayedPopupProfile.authorName,
+                                            category: 'ADVERT',
+                                          });
+                                        }}
+                                        className="w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition-colors shadow-md flex items-center justify-center gap-1.5"
+                                      >
+                                        <ShieldCheck className="w-3.5 h-3.5" />
+                                        <span>Запрос на контакт</span>
+                                      </button>
+                                    )}
                                   </>
+                                ) : isPopupShowingGroup ? (
+                                  (() => {
+                                    const gTag =
+                                      displayedPopupProfile.groupTag ||
+                                      (displayedPopupProfile.visibleNickname || '').replace(/^#+/, '');
+                                    const gDetails = gTag ? resolveGroupDetails(gTag) : null;
+                                    const gAccess =
+                                      displayedPopupProfile.groupAccessType ||
+                                      gDetails?.info.accessType ||
+                                      (gTag.toUpperCase().startsWith('GC-') ? 'CLOSED' : 'OPEN');
+                                    const gName =
+                                      displayedPopupProfile.groupName ||
+                                      gDetails?.info.name ||
+                                      displayedPopupProfile.visibleName ||
+                                      `Группа #${gTag}`;
+                                    const gDesc =
+                                      displayedPopupProfile.groupDescription ||
+                                      gDetails?.info.description ||
+                                      displayedPopupProfile.visibleDescription ||
+                                      'Координация участников группы на карте';
+                                    const isThisGroupFilteredOnMap =
+                                      Boolean(activeGroupMapTag) &&
+                                      activeGroupMapTag!.trim().replace(/^#+/, '').toLowerCase() ===
+                                        gTag.trim().replace(/^#+/, '').toLowerCase();
+                                    const isTagCopied =
+                                      Boolean(gTag) &&
+                                      copiedGroupTag?.toLowerCase() ===
+                                        gTag.trim().replace(/^#+/, '').toLowerCase();
+                                    const cleanGTag = gTag.trim().replace(/^#+/, '');
+                                    const cleanGTagLower = cleanGTag.toLowerCase();
+                                    const isAlreadyInMyProfile =
+                                      groupSlots.some(
+                                        (s) =>
+                                          (s?.tag || '')
+                                            .trim()
+                                            .replace(/^#+/, '')
+                                            .toLowerCase() === cleanGTagLower
+                                      ) ||
+                                      (currentAccountTier !== 'FREE' &&
+                                        myCreatedProGroups
+                                          .slice(0, allowedAdvertSlotsCount)
+                                          .some(
+                                            (cg) =>
+                                              cg?.isCreated &&
+                                              (cg?.tag || '')
+                                                .trim()
+                                                .replace(/^#+/, '')
+                                                .toLowerCase() === cleanGTagLower
+                                          ));
+                                    const currentJoinNotice =
+                                      groupJoinNotice &&
+                                      groupJoinNotice.tag.toLowerCase() === cleanGTagLower
+                                        ? groupJoinNotice
+                                        : null;
+
+                                    return (
+                                      <>
+                                        <div className="flex items-start justify-between gap-2 pb-2 border-b border-slate-800">
+                                          <div className="space-y-1 min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span
+                                                className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase border ${
+                                                  gAccess === 'CLOSED'
+                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+                                                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                                                }`}
+                                              >
+                                                {gAccess === 'CLOSED'
+                                                  ? 'Закрытая группа GC-'
+                                                  : 'Открытая группа GO-'}
+                                              </span>
+                                              {gTag && (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCopyGroupTag(gTag);
+                                                  }}
+                                                  className={`px-2 py-0.5 rounded border font-mono text-[11px] font-extrabold flex items-center gap-1 transition-colors ${
+                                                    isTagCopied
+                                                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                                      : 'bg-slate-900 hover:bg-slate-800 border-emerald-500/50 text-emerald-300'
+                                                  }`}
+                                                  title="Скопировать номер группы для добавления в свои группы"
+                                                >
+                                                  <span>#{gTag}</span>
+                                                  {isTagCopied ? (
+                                                    <Check className="w-3 h-3 shrink-0" />
+                                                  ) : (
+                                                    <Copy className="w-3 h-3 shrink-0 opacity-80" />
+                                                  )}
+                                                </button>
+                                              )}
+                                            </div>
+                                            <div className="text-sm font-extrabold text-white leading-snug break-words">
+                                              {gName}
+                                            </div>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setGroupJoinNotice(null);
+                                              setActiveMarkerId(null);
+                                            }}
+                                            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white shrink-0"
+                                            title="Закрыть карточку"
+                                          >
+                                            <X className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+
+                                        {/* Кнопка копирования номера группы для добавления в свои группы */}
+                                        {gTag && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleCopyGroupTag(gTag);
+                                            }}
+                                            className={`w-full py-1.5 px-2.5 rounded-xl border text-[11px] font-extrabold flex items-center justify-between gap-2 transition-all ${
+                                              isTagCopied
+                                                ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-md'
+                                                : 'bg-slate-900/95 hover:bg-slate-800 border-emerald-500/40 text-emerald-300'
+                                            }`}
+                                            title="Скопировать номер группы, чтобы вставить его в раздел Groups"
+                                          >
+                                            <span className="font-mono">Номер: {gTag}</span>
+                                            <span className="flex items-center gap-1">
+                                              {isTagCopied ? (
+                                                <>
+                                                  <Check className="w-3.5 h-3.5" />
+                                                  <span>Скопировано!</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Copy className="w-3.5 h-3.5" />
+                                                  <span>Скопировать номер</span>
+                                                </>
+                                              )}
+                                            </span>
+                                          </button>
+                                        )}
+
+                                        <div className="text-xs font-semibold text-slate-200 leading-snug">
+                                          {gDesc}
+                                        </div>
+
+                                        <div className="pt-1.5 border-t border-slate-800 flex items-center justify-between gap-2 text-[11px]">
+                                          <span className="text-slate-400 truncate">
+                                            Админ:{' '}
+                                            <strong className="text-white">
+                                              {gDetails?.info.adminName ||
+                                                displayedPopupProfile.authorName}
+                                            </strong>
+                                          </span>
+                                          <span className="text-emerald-300 font-mono font-bold shrink-0">
+                                            Участников: {gDetails?.activeMembersInRadius ?? 1}
+                                          </span>
+                                        </div>
+
+                                        {/* Табличка уведомления (в том числе если места в профиле для этой группы нет) */}
+                                        {currentJoinNotice && (
+                                          <div
+                                            className={`p-2 rounded-xl border text-[11px] font-extrabold leading-snug flex items-center justify-between gap-2 ${
+                                              currentJoinNotice.type === 'no_space'
+                                                ? 'bg-rose-950/95 border-rose-500 text-rose-200 shadow-md'
+                                                : 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-md'
+                                            }`}
+                                          >
+                                            <span>{currentJoinNotice.text}</span>
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setGroupJoinNotice(null);
+                                              }}
+                                              className="p-0.5 rounded hover:bg-black/30 shrink-0"
+                                            >
+                                              <X className="w-3 h-3" />
+                                            </button>
+                                          </div>
+                                        )}
+
+                                        <div className="flex flex-col gap-1.5 pt-1">
+                                          {cleanGTag && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isAlreadyInMyProfile) {
+                                                  setGroupJoinNotice({
+                                                    tag: cleanGTag,
+                                                    type: 'already',
+                                                    text: `Вы уже состоите в группе #${cleanGTag}`,
+                                                  });
+                                                  return;
+                                                }
+                                                const normalizedSlots: UserGroupSlot[] = [
+                                                  1, 2, 3,
+                                                ].map((slotId, idx) => {
+                                                  const existing = groupSlots[idx];
+                                                  return existing
+                                                    ? {...existing, slotId}
+                                                    : {
+                                                        slotId,
+                                                        tag: '',
+                                                        tagDraft: '',
+                                                        isEditing: false,
+                                                        adminApproved: true,
+                                                      };
+                                                });
+                                                const freeSlotIdx = normalizedSlots.findIndex(
+                                                  (s) => !(s.tag || '').trim()
+                                                );
+                                                if (freeSlotIdx === -1) {
+                                                  setGroupJoinNotice({
+                                                    tag: cleanGTag,
+                                                    type: 'no_space',
+                                                    text: 'Места в профиле для этой группы нет (все 3 слота групп заняты)',
+                                                  });
+                                                  return;
+                                                }
+                                                const updatedSlots = normalizedSlots.map(
+                                                  (s, idx) =>
+                                                    idx === freeSlotIdx
+                                                      ? {
+                                                          ...s,
+                                                          tag: cleanGTag,
+                                                          tagDraft: cleanGTag,
+                                                          isEditing: false,
+                                                          adminApproved: true,
+                                                        }
+                                                      : s
+                                                );
+                                                setGroupSlots(updatedSlots);
+                                                setGroupJoinNotice({
+                                                  tag: cleanGTag,
+                                                  type: 'success',
+                                                  text: `Группа #${cleanGTag} добавлена в ваш профиль (слот #${
+                                                    freeSlotIdx + 1
+                                                  })`,
+                                                });
+                                              }}
+                                              className={`w-full py-2 px-3 rounded-xl font-extrabold text-xs transition-all border flex items-center justify-center gap-1.5 shadow-md ${
+                                                isAlreadyInMyProfile
+                                                  ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/60'
+                                                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950 border-amber-300'
+                                              }`}
+                                              title="Автоматически вписать эту группу в свободный слот вашего профиля"
+                                            >
+                                              <Users className="w-3.5 h-3.5 shrink-0" />
+                                              <span>
+                                                {isAlreadyInMyProfile
+                                                  ? 'Вы в этой группе ✓'
+                                                  : 'Присоединиться к группе'}
+                                              </span>
+                                            </button>
+                                          )}
+                                          {gTag && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setActiveGroupMapTag(
+                                                  isThisGroupFilteredOnMap ? null : gTag
+                                                );
+                                              }}
+                                              className={`w-full py-2 px-3 rounded-xl font-extrabold text-xs transition-all border flex items-center justify-center gap-1.5 shadow-md ${
+                                                isThisGroupFilteredOnMap
+                                                  ? 'bg-emerald-500 text-slate-950 border-emerald-300 ring-2 ring-emerald-400/40'
+                                                  : 'bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border-emerald-500/50'
+                                              }`}
+                                              title="Показать на карте только участников этой группы в выбранном радиусе поиска"
+                                            >
+                                              <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                              <span>
+                                                {isThisGroupFilteredOnMap
+                                                  ? 'Показать всю группу (активно)'
+                                                  : 'Показать всю группу'}
+                                              </span>
+                                            </button>
+                                          )}
+                                          {gDetails && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleOpenGroupChat(gDetails.info);
+                                                setIsCabinetOpen(true);
+                                              }}
+                                              className="w-full py-1.5 px-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-[11px] transition-colors flex items-center justify-center gap-1"
+                                            >
+                                              <MessageSquare className="w-3 h-3" />
+                                              <span>Чат группы</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()
                                 ) : (
                                   <>
                                     {/* Верхняя строка карточки профиля: Имя, Ник и кнопка закрытия */}
                                     <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-slate-800">
                                       <div className="min-w-0 flex-1 space-y-0.5">
-                                        {(profile.visibleName || profile.visibleIdentityLabel) && (
+                                        {(baseUserProfile.visibleName ||
+                                          baseUserProfile.visibleIdentityLabel) && (
                                           <div className="text-xs font-extrabold text-white truncate">
-                                            {profile.visibleName || profile.visibleIdentityLabel}
+                                            {baseUserProfile.visibleName ||
+                                              baseUserProfile.visibleIdentityLabel}
                                           </div>
                                         )}
-                                        {(profile.visibleNickname || profile.contact) && (
+                                        {(baseUserProfile.visibleNickname ||
+                                          baseUserProfile.contact) && (
                                           <div className="text-[11px] font-mono font-bold text-amber-300 truncate">
-                                            {profile.visibleNickname || profile.contact}
+                                            {baseUserProfile.visibleNickname ||
+                                              baseUserProfile.contact}
                                           </div>
                                         )}
                                       </div>
@@ -3571,22 +4407,116 @@ function HybridMapContent() {
                                     </div>
 
                                     {/* Описание профиля */}
-                                    {profile.visibleDescription &&
-                                      profile.visibleDescription.trim().length > 0 && (
+                                    {baseUserProfile.visibleDescription &&
+                                      baseUserProfile.visibleDescription.trim().length > 0 && (
                                         <div className="text-sm font-semibold text-white leading-snug">
-                                          {profile.visibleDescription}
+                                          {baseUserProfile.visibleDescription}
                                         </div>
                                       )}
 
-                                    {profile.id !== 'my-own-profile' ? (
+                                    {/* Все группы участника прямо в карточке профиля */}
+                                    {attachedMemberGroups.length > 0 && (
+                                      <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                                        <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
+                                          <Users className="w-3 h-3" />
+                                          <span>Группы участника на карте:</span>
+                                        </div>
+                                        {attachedMemberGroups.map((grp) => {
+                                          const gTag = grp.groupTag || '';
+                                          const gDetails = gTag ? resolveGroupDetails(gTag) : null;
+                                          const isGrpCopied =
+                                            Boolean(gTag) &&
+                                            copiedGroupTag?.toLowerCase() ===
+                                              gTag.trim().replace(/^#+/, '').toLowerCase();
+                                          return (
+                                            <div
+                                              key={grp.id}
+                                              className="p-2 rounded-xl bg-slate-900/95 border border-emerald-500/40 space-y-1.5"
+                                            >
+                                              <div className="flex items-center justify-between gap-1.5">
+                                                <span className="text-xs font-extrabold text-white truncate">
+                                                  {grp.groupName || grp.visibleName}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCopyGroupTag(gTag);
+                                                  }}
+                                                  className={`px-2 py-0.5 rounded border font-mono text-[10px] font-extrabold shrink-0 flex items-center gap-1 transition-colors ${
+                                                    isGrpCopied
+                                                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                                      : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/50 text-emerald-300'
+                                                  }`}
+                                                  title="Скопировать номер группы для вступления"
+                                                >
+                                                  <span>#{gTag}</span>
+                                                  {isGrpCopied ? (
+                                                    <Check className="w-3 h-3" />
+                                                  ) : (
+                                                    <Copy className="w-3 h-3" />
+                                                  )}
+                                                </button>
+                                              </div>
+                                              {grp.groupDescription && (
+                                                <div className="text-[11px] text-slate-300 leading-snug">
+                                                  {grp.groupDescription}
+                                                </div>
+                                              )}
+                                              <div className="pt-1 flex items-center justify-between gap-1.5 flex-wrap">
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCopyGroupTag(gTag);
+                                                  }}
+                                                  className={`px-2 py-0.5 rounded-lg border text-[10px] font-extrabold flex items-center gap-1 transition-colors ${
+                                                    isGrpCopied
+                                                      ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                                      : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border-slate-700'
+                                                  }`}
+                                                >
+                                                  {isGrpCopied ? (
+                                                    <>
+                                                      <Check className="w-2.5 h-2.5" />
+                                                      <span>Номер скопирован</span>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <Copy className="w-2.5 h-2.5" />
+                                                      <span>Копировать {gTag}</span>
+                                                    </>
+                                                  )}
+                                                </button>
+                                                {gDetails && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenGroupChat(gDetails.info);
+                                                      setIsCabinetOpen(true);
+                                                    }}
+                                                    className="px-2 py-0.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-[10px] transition-colors"
+                                                  >
+                                                    Чат ({gDetails.activeMembersInRadius})
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {baseUserProfile.id !== 'my-own-profile' ? (
                                       <button
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           handleOpenContactRequestForm({
-                                            id: profile.id,
-                                            authorName: profile.authorName,
-                                            category: profile.category,
+                                            id: baseUserProfile.id,
+                                            authorName: baseUserProfile.authorName,
+                                            category: baseUserProfile.category,
                                           });
                                         }}
                                         className="mt-1 w-full py-1.5 px-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-xs transition-colors"
@@ -3600,7 +4530,7 @@ function HybridMapContent() {
                                           <span>📡 Геолокация смартфона ВКЛ</span>
                                         </div>
                                         <div className="text-[10px] text-slate-200 font-normal">
-                                          Когда вы играете в <b>ELITE 3D</b>, ваш маяк светится на реальной карте GoBell!
+                                          Когда вы играете в <b>G. Bell: ELITE 3D</b>, ваш маяк светится на реальной карте G. Bell!
                                         </div>
                                       </div>
                                     )}
@@ -3610,7 +4540,7 @@ function HybridMapContent() {
                             </div>
                           )}
 
-                          {/* ОТДЕЛЬНАЯ ЗОНА 1: АКТИВНЫЕ МЕСТНЫЕ ОБЪЯВЛЕНИЯ (1–4 ШТ.): ПРЯМО НАД ГОЛОВОЙ КРУТЯТСЯ 1–4 ЗЕЛЁНЫЕ МОНЕТКИ ($) */}
+                          {/* ОТДЕЛЬНАЯ ЗОНА 1 (СВЕРХУ НАД ИКОНКОЙ — МЕСТО ТОЛЬКО ДЛЯ ОБЪЯВЛЕНИЙ): АКТИВНЫЕ МЕСТНЫЕ ОБЪЯВЛЕНИЯ (1–4 ШТ.) КРУТЯТСЯ ЗЕЛЁНЫМИ МОНЕТКАМИ ($) */}
                           {attachedNativeAdverts.length > 0 && (
                             <div className="mb-2.5 flex items-center justify-center gap-3 z-20">
                               {attachedNativeAdverts.map((ad) => {
@@ -3648,21 +4578,21 @@ function HybridMapContent() {
                           {/* ОТДЕЛЬНАЯ ЗОНА 2: ИКОНКА ОБЪЕКТА НА КАРТЕ, А ПОД НЕЙ — ИМЯ И КАРМА */}
                           <div
                             onMouseEnter={() => {
-                              hoveredMarkerIdRef.current = profile.id;
-                              setHoveredMarkerId(profile.id);
+                              hoveredMarkerIdRef.current = baseUserProfile.id;
+                              setHoveredMarkerId(baseUserProfile.id);
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
                               closeFilterDropdown();
                               setActiveMarkerId((prev) =>
-                                prev === profile.id ? null : profile.id
+                                prev === baseUserProfile.id ? null : baseUserProfile.id
                               );
                             }}
                             className={`relative flex flex-col items-center cursor-pointer transition-transform duration-150 ${
                               isProfileCardOpen ? 'scale-115' : 'hover:scale-110'
                             }`}
                           >
-                            {profile.id === 'my-own-profile' && settingsAutoGeo && (
+                            {baseUserProfile.id === 'my-own-profile' && settingsAutoGeo && (
                               <>
                                 <span className="absolute -top-1 w-11 h-11 rounded-full bg-emerald-400/35 animate-ping pointer-events-none" />
                                 <span className="absolute -top-1.5 w-12 h-12 rounded-full border-2 border-cyan-400/80 shadow-[0_0_18px_rgba(16,185,129,0.95)] pointer-events-none" />
@@ -3705,7 +4635,7 @@ function HybridMapContent() {
                             ) : effectiveTier === 'PRO' ? (
                               <div className="flex items-center justify-center">
                                 <ProCustomPictogramGraphic
-                                  type={profile.proPictogram}
+                                  type={baseUserProfile.proPictogram}
                                   sizeClass="w-8 h-8"
                                 />
                               </div>
@@ -3720,9 +4650,9 @@ function HybridMapContent() {
                             )}
 
                             {/* ПОД ИКОНКОЙ ОБЪЕКТА НА КАРТЕ: ИМЯ И КАРМА */}
-                            <div className="mt-1 px-2 py-0.5 rounded-lg bg-slate-950/90 border border-slate-700/90 shadow-md flex flex-col items-center leading-tight max-w-[140px]">
+                            <div className="mt-1 px-2 py-0.5 rounded-lg bg-slate-950/90 border border-slate-700/90 shadow-md flex flex-col items-center leading-tight max-w-[155px]">
                               {markerLabelName && (
-                                <span className="text-[10px] font-extrabold text-white truncate max-w-[130px]">
+                                <span className="text-[10px] font-extrabold text-white truncate max-w-[145px]">
                                   {markerLabelName}
                                 </span>
                               )}
@@ -3733,6 +4663,55 @@ function HybridMapContent() {
                               </div>
                             </div>
                           </div>
+
+                          {/* ОТДЕЛЬНАЯ ЗОНА 3: ТАБЛИЧКА ГРУППЫ ВНИЗУ ИКОНКИ ПОД ИМЕНЕМ И КАРМОЙ (И У СОЗДАТЕЛЯ, И У ВСЕХ УЧАСТНИКОВ ГРУППЫ) */}
+                          {attachedMemberGroups.length > 0 && (
+                            <div className="mt-1 flex flex-col items-center gap-1 z-20">
+                              {attachedMemberGroups.map((grp) => {
+                                const isThisGrpSelected = activeMarkerId === grp.id;
+                                const isClosed = grp.groupAccessType === 'CLOSED';
+                                const fullGroupTitle = (
+                                  grp.groupName ||
+                                  grp.visibleName ||
+                                  ''
+                                ).trim();
+                                const firstThreeWords = fullGroupTitle
+                                  .split(/\s+/)
+                                  .filter(Boolean)
+                                  .slice(0, 3)
+                                  .join(' ');
+                                return (
+                                  <div
+                                    key={grp.id}
+                                    onMouseEnter={() => {
+                                      hoveredMarkerIdRef.current = grp.id;
+                                      setHoveredMarkerId(grp.id);
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      closeFilterDropdown();
+                                      setActiveMarkerId((prev) =>
+                                        prev === grp.id ? null : grp.id
+                                      );
+                                    }}
+                                    className={`px-2.5 py-0.5 rounded-full border shadow-lg flex items-center gap-1.5 cursor-pointer transition-transform duration-150 ${
+                                      isThisGrpSelected ? 'scale-110' : 'hover:scale-105'
+                                    } ${
+                                      isClosed
+                                        ? 'bg-amber-950/95 border-amber-400 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]'
+                                        : 'bg-emerald-950/95 border-emerald-400 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.6)]'
+                                    }`}
+                                    title={`Группа: ${fullGroupTitle} — нажмите, чтобы открыть карточку группы`}
+                                  >
+                                    <Users className="w-3 h-3 shrink-0 text-emerald-300" />
+                                    <span className="text-[10px] font-extrabold text-white whitespace-nowrap max-w-[220px] truncate">
+                                      {firstThreeWords || fullGroupTitle}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </AdvancedMarker>
@@ -3743,12 +4722,14 @@ function HybridMapContent() {
           )}
         </Map>
 
-        {/* Нижняя плашка статуса центра поиска на карте (только в режиме GoBell, приподнята над нижней демо-панелью) */}
+        {/* Нижняя плашка статуса центра поиска на карте (только в режиме G. Bell, приподнята над нижней демо-панелью) */}
         {searchSystemMode === 'TAG_SYSTEM' && (
           <div className="absolute bottom-20 left-4 z-20 bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3.5 py-2 shadow-xl flex items-center gap-3 text-xs">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-sky-400" />
-              <span className="text-slate-300 font-medium">Центр радиуса:</span>
+              <span className="w-4 h-4 rounded-full bg-sky-400 text-slate-950 font-black text-[9px] flex items-center justify-center">
+                G.
+              </span>
+              <span className="text-slate-300 font-medium">Точка G (центр радиуса):</span>
               <span className="font-mono text-sky-300">
                 {searchCenter.lat.toFixed(4)}, {searchCenter.lng.toFixed(4)}
               </span>
@@ -3770,8 +4751,8 @@ function HybridMapContent() {
               />
               <span className={settingsAutoGeo ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold'}>
                 {settingsAutoGeo
-                  ? 'Смартфон GPS ВКЛ: Вы светитесь на карте GoBell'
-                  : 'GPS ВЫКЛ: Профиль скрыт с карты (ELITE 3D заблокирована)'}
+                  ? 'Смартфон GPS ВКЛ: Вы светитесь на карте G. Bell'
+                  : 'GPS ВЫКЛ: Профиль скрыт с карты (G. Bell: ELITE 3D заблокирована)'}
               </span>
             </span>
           </div>
@@ -3895,7 +4876,9 @@ function HybridMapContent() {
                             {badgeLabel}
                           </span>
                           <h3 className="text-sm sm:text-base font-bold text-white">
-                            {profile.authorName}
+                            {profile.category === 'GROUPS' && profile.groupName
+                              ? `${profile.groupName} (#${profile.groupTag}) — ${profile.authorName}`
+                              : profile.authorName}
                           </h3>
                           <span className="text-xs text-slate-400">· {profile.updatedAt}</span>
                         </div>
@@ -3927,11 +4910,11 @@ function HybridMapContent() {
                         )}
                       </div>
 
-                      {/* Блок расстояния от центра поиска + переход на карту */}
+                      {/* Блок расстояния от центра поиска (Точки G) + переход на карту */}
                       <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
                         <div className="text-right">
                           <div className="text-[10px] uppercase tracking-wider text-slate-400">
-                            Расстояние от центра
+                            От Точки G (центра)
                           </div>
                           <div className="text-lg font-mono font-bold text-sky-400">
                             {formatDistance(distanceMeters)}
@@ -3939,21 +4922,41 @@ function HybridMapContent() {
                         </div>
 
                         <div className="flex items-center gap-2 flex-wrap">
-                          {profile.id !== 'my-own-profile' && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleOpenContactRequestForm({
-                                  id: profile.id,
-                                  authorName: profile.authorName,
-                                  category: profile.category,
-                                })
-                              }
-                              className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-colors flex items-center gap-1.5"
-                            >
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              <span>Запрос на контакт</span>
-                            </button>
+                          {profile.category === 'ADVERT' &&
+                          (profile.advertRedirectUrl || profile.userTier === 'BUSINESS') ? (
+                            profile.advertRedirectUrl ? (
+                              <a
+                                href={normalizeRedirectUrl(profile.advertRedirectUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300 text-xs font-extrabold transition-colors flex items-center gap-1.5 shadow-sm"
+                                title={`Перейти по ссылке: ${profile.advertRedirectUrl}`}
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Перейти</span>
+                              </a>
+                            ) : (
+                              <span className="px-3 py-1.5 rounded-xl bg-slate-800 text-amber-300 border border-amber-500/40 text-xs font-semibold">
+                                Перейти (URL не задан)
+                              </span>
+                            )
+                          ) : (
+                            profile.id !== 'my-own-profile' && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOpenContactRequestForm({
+                                    id: profile.id,
+                                    authorName: profile.authorName,
+                                    category: profile.category,
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border border-emerald-500/40 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                <span>Запрос на контакт</span>
+                              </button>
+                            )
                           )}
 
                           <button
@@ -4088,10 +5091,10 @@ function HybridMapContent() {
               ) : (
                 <div className="animate-gobell-marquee items-center whitespace-nowrap text-xs font-semibold text-amber-300">
                   <span className="mx-6">
-                    ★ PRO Level Features: More tags. More groups. Group administration. Access to Go Bell Exchange.
+                    ★ Начните путь с Точки G! · G. Bell (Global · Galactic · Game · Google · Bell) PRO: Больше тегов. Больше групп. Администрирование групп. Доступ к бирже G. Bell Exchange и возврату 70% неиспользованной ёмкости!
                   </span>
                   <span className="mx-6">
-                    ★ PRO Level Features: More tags. More groups. Group administration. Access to Go Bell Exchange.
+                    ★ Start your journey from Point G! · PRO Level Features: More tags. More groups. Group administration. Access to G. Bell Exchange (Global · Galactic · Game · Google · Bell).
                   </span>
                 </div>
               )}
@@ -4284,20 +5287,70 @@ function HybridMapContent() {
               </button>
             </div>
 
-            {/* Кнопка со значком шестерёнки -> ведет на страницу Settings */}
-            <button
-              type="button"
-              onClick={() => setCabinetTab('SETTINGS')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
-                cabinetTab === 'SETTINGS'
-                  ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm'
-                  : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
-              }`}
-              title="Settings (Настройки)"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Settings</span>
-            </button>
+            {/* Справа: Геолокация (ГЕО: ВКЛ/ВЫКЛ), Game и Settings */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextGeo = !settingsAutoGeo;
+                  setSettingsAutoGeo(nextGeo);
+                  if (nextGeo) {
+                    const myPos = {
+                      lat: anchorClusterCenter.lat + myPositionOffset.lat,
+                      lng: anchorClusterCenter.lng + myPositionOffset.lng,
+                    };
+                    setUserPhysicalGeo(myPos);
+                    setSearchCenter(myPos);
+                    setActiveMarkerId('my-own-profile');
+                    map?.panTo(myPos);
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-all flex items-center gap-1.5 shrink-0 ${
+                  settingsAutoGeo
+                    ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.35)]'
+                    : 'bg-rose-950/80 border-rose-500/70 text-rose-300'
+                }`}
+                title={
+                  settingsAutoGeo
+                    ? 'Геолокация смартфона ВКЛЮЧЕНА: ваш профиль светится на реальной карте G. Bell и режим Game доступен'
+                    : 'Геолокация смартфона ВЫКЛЮЧЕНА: вы скрыты с карты G. Bell, для запуска Game необходимо включить геолокацию!'
+                }
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>{settingsAutoGeo ? 'ГЕО: ВКЛ' : 'ГЕО: ВЫКЛ'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsEliteGameOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-black hover:bg-slate-900 border-2 border-cyan-400 text-yellow-300 text-xs font-extrabold flex items-center gap-1.5 shrink-0 shadow-[0_0_12px_rgba(0,255,255,0.45)] transition-transform hover:scale-105"
+                title="Запустить игровой 3D-режим Game (требуется активная геолокация смартфона — игрок светится на реальной карте G. Bell)"
+              >
+                <Rocket className="w-4 h-4 text-cyan-400" />
+                <span>Game</span>
+                {settingsAutoGeo && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"
+                    title="Вы светитесь на реальной карте G. Bell"
+                  />
+                )}
+              </button>
+
+              {/* Кнопка со значком шестерёнки -> ведет на страницу Settings */}
+              <button
+                type="button"
+                onClick={() => setCabinetTab('SETTINGS')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-2 ${
+                  cabinetTab === 'SETTINGS'
+                    ? 'bg-sky-500 text-slate-950 border-sky-400 shadow-sm'
+                    : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                }`}
+                title="Settings (Настройки)"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
@@ -4342,7 +5395,7 @@ function HybridMapContent() {
                           ⛔ ПРОФИЛЬ ЗАБЛОКИРОВАН НА НЕДЕЛЮ (3 МИНУСА ПОДРЯД В КАРМУ)
                         </div>
                         <div className="text-xs text-rose-200">
-                          Ваш профиль временно скрыт с карты GoBell. До окончания бана осталось:{' '}
+                          Ваш профиль временно скрыт с карты G. Bell. До окончания бана осталось:{' '}
                           <strong className="font-mono text-white">
                             {formatBanDurationDaysHMS(Math.max(0, myBannedUntilMs - nowMs))}
                           </strong>
@@ -4862,7 +5915,7 @@ function HybridMapContent() {
                       <strong>Закрытая группа</strong> получает тег с префиксом{' '}
                       <code className="text-amber-300 font-mono">GC-...</code> (например,{' '}
                       <code className="text-amber-300 font-mono">GC-91Tech7</code>) — чтобы вступить
-                      в неё, нужно <strong>ввести её тег в Поиск GoBell</strong> (поиск выдаст админа
+                      в неё, нужно <strong>ввести её тег в Поиск G. Bell</strong> (поиск выдаст админа
                       вне зависимости от радиуса) и отправить запрос с автоматической формулировкой{' '}
                       <em>«Вступление в закрытую группу»</em>. Если админ в Chat нажмёт{' '}
                       <strong>«Принять»</strong>, группа появится в вашем списке доступных групп.
@@ -4907,9 +5960,23 @@ function HybridMapContent() {
                                 </span>
                                 {cg.isCreated ? (
                                   <>
-                                    <span className="px-3 py-1 rounded-lg bg-slate-950 border border-emerald-400/50 font-mono text-xs font-extrabold text-emerald-300">
-                                      #{cg.tag}
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyGroupTag(cg.tag)}
+                                      className={`px-3 py-1 rounded-lg border font-mono text-xs font-extrabold flex items-center gap-1.5 transition-colors ${
+                                        copiedGroupTag?.toLowerCase() === cg.tag.trim().toLowerCase()
+                                          ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                          : 'bg-slate-950 hover:bg-slate-800 border-emerald-400/50 text-emerald-300'
+                                      }`}
+                                      title="Скопировать номер группы для участников"
+                                    >
+                                      <span>#{cg.tag}</span>
+                                      {copiedGroupTag?.toLowerCase() === cg.tag.trim().toLowerCase() ? (
+                                        <Check className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
                                     <span
                                       className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md border ${
                                         cg.accessType === 'CLOSED'
@@ -5075,13 +6142,40 @@ function HybridMapContent() {
                                 </>
                               ) : (
                                 <>
-                                  <div className="text-xs text-slate-300">
-                                    Тег для участников:{' '}
-                                    <strong className="font-mono text-emerald-300">{cg.tag}</strong>{' '}
-                                    · Активных участников в радиусе:{' '}
-                                    <strong className="text-white">
-                                      {cgDetails?.activeMembersInRadius ?? 1}
-                                    </strong>
+                                  <div className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
+                                    <span>
+                                      Тег для участников:{' '}
+                                      <strong className="font-mono text-emerald-300">{cg.tag}</strong>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyGroupTag(cg.tag)}
+                                      className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 transition-colors ${
+                                        copiedGroupTag?.toLowerCase() === cg.tag.trim().toLowerCase()
+                                          ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                          : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border-slate-700'
+                                      }`}
+                                      title="Скопировать номер группы"
+                                    >
+                                      {copiedGroupTag?.toLowerCase() ===
+                                      cg.tag.trim().toLowerCase() ? (
+                                        <>
+                                          <Check className="w-3 h-3" />
+                                          <span>Скопировано</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="w-3 h-3" />
+                                          <span>Скопировать номер</span>
+                                        </>
+                                      )}
+                                    </button>
+                                    <span>
+                                      · Активных участников в радиусе:{' '}
+                                      <strong className="text-white">
+                                        {cgDetails?.activeMembersInRadius ?? 1}
+                                      </strong>
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <button
@@ -5091,6 +6185,17 @@ function HybridMapContent() {
                                           setActiveGroupMapTag(null);
                                         } else {
                                           setActiveGroupMapTag(cg.tag);
+                                          setSearchSystemMode('TAG_SYSTEM');
+                                          setIsCabinetOpen(false);
+                                          const myPos = {
+                                            lat: anchorClusterCenter.lat + myPositionOffset.lat,
+                                            lng: anchorClusterCenter.lng + myPositionOffset.lng,
+                                          };
+                                          setSearchCenter(myPos);
+                                          setActiveMarkerId(
+                                            `my-created-group-created-${cg.slotId}`
+                                          );
+                                          map?.panTo(myPos);
                                         }
                                       }}
                                       className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
@@ -5245,12 +6350,25 @@ function HybridMapContent() {
                               <input
                                 type="text"
                                 value={slot.isEditing ? slot.tagDraft : slot.tag}
-                                readOnly={!slot.isEditing}
+                                readOnly={!slot.isEditing && slot.tag.trim().length > 0}
+                                onFocus={() => {
+                                  if (!slot.isEditing && slot.tag.trim().length === 0) {
+                                    setGroupSlots((prev) =>
+                                      prev.map((item) =>
+                                        item.slotId === slot.slotId
+                                          ? {...item, isEditing: true, tagDraft: item.tag}
+                                          : item
+                                      )
+                                    );
+                                  }
+                                }}
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setGroupSlots((prev) =>
                                     prev.map((item) =>
-                                      item.slotId === slot.slotId ? {...item, tagDraft: val} : item
+                                      item.slotId === slot.slotId
+                                        ? {...item, isEditing: true, tagDraft: val}
+                                        : item
                                     )
                                   );
                                 }}
@@ -5270,7 +6388,7 @@ function HybridMapContent() {
                                     prev.map((item) => {
                                       if (item.slotId !== slot.slotId) return item;
                                       if (item.isEditing) {
-                                        const nextTag = item.tagDraft.trim();
+                                        const nextTag = item.tagDraft.trim().replace(/^#+/, '');
                                         const nextDetails = resolveGroupDetails(nextTag);
                                         const nextIsClosed =
                                           nextDetails?.info.accessType === 'CLOSED' ||
@@ -5323,7 +6441,7 @@ function HybridMapContent() {
                                     <strong className="font-mono text-white">
                                       {details.info.tag}
                                     </strong>
-                                    , введите её тег в <strong>Поиск GoBell</strong> (поиск выдаст
+                                    , введите её тег в <strong>Поиск G. Bell</strong> (поиск выдаст
                                     админа <strong>{details.info.adminName}</strong> вне зависимости от
                                     радиуса) и отправьте запрос с автоматической формулировкой{' '}
                                     <em>«Вступление в закрытую группу»</em>.
@@ -5349,11 +6467,27 @@ function HybridMapContent() {
                                       <div className="text-xs text-slate-400">
                                         Название группы · Администратор: {details.info.adminName}
                                       </div>
-                                      <div className="text-sm font-bold text-white">
-                                        {details.info.name}{' '}
-                                        <span className="font-mono text-xs text-emerald-300">
-                                          (#{details.info.tag})
-                                        </span>
+                                      <div className="text-sm font-bold text-white flex items-center gap-2 flex-wrap">
+                                        <span>{details.info.name}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyGroupTag(details.info.tag)}
+                                          className={`px-2 py-0.5 rounded-lg border font-mono text-xs font-extrabold flex items-center gap-1 transition-colors ${
+                                            copiedGroupTag?.toLowerCase() ===
+                                            details.info.tag.trim().toLowerCase()
+                                              ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                                              : 'bg-slate-900 hover:bg-slate-800 border-emerald-500/40 text-emerald-300'
+                                          }`}
+                                          title="Скопировать номер группы"
+                                        >
+                                          <span>#{details.info.tag}</span>
+                                          {copiedGroupTag?.toLowerCase() ===
+                                          details.info.tag.trim().toLowerCase() ? (
+                                            <Check className="w-3 h-3" />
+                                          ) : (
+                                            <Copy className="w-3 h-3" />
+                                          )}
+                                        </button>
                                       </div>
                                       <div className="text-xs font-mono text-emerald-400">
                                         Активных участников в радиусе ({formatDistance(radiusMeters)}):{' '}
@@ -5373,6 +6507,8 @@ function HybridMapContent() {
                                           setActiveGroupMapTag(null);
                                         } else {
                                           setActiveGroupMapTag(details.info.tag);
+                                          setSearchSystemMode('TAG_SYSTEM');
+                                          setIsCabinetOpen(false);
                                         }
                                       }}
                                       className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition-all shrink-0 flex items-center gap-1.5 ${
@@ -5526,7 +6662,7 @@ function HybridMapContent() {
                     )}
                   </div>
 
-                  {/* БЛОК БИРЖИ СЛОТОВ И СЧЁТЧИК ПОГАШЕНИЯ ПОДПИСКИ (ДЛЯ УРОВНЯ PRO / PRO+) */}
+                  {/* БЛОК БИРЖИ СЛОТОВ И СЧЁТЧИК ЕЖЕСУТОЧНОЙ ПРИБЫЛИ НА БАЛАНС АККАУНТА (ДЛЯ УРОВНЯ PRO / PRO+) */}
                   {currentAccountTier !== 'FREE' && (() => {
                     const activePoolSlots = myAdvertSlots
                       .slice(0, allowedAdvertSlotsCount)
@@ -5539,14 +6675,24 @@ function HybridMapContent() {
                     const subMonthlyCost =
                       currentAccountTier === 'PRO'
                         ? PRO_PACKAGE_META[myProPackage].monthlyPriceUsd
-                        : 29;
+                        : 60;
+                    const totalMonthlySlotDays = allowedAdvertSlotsCount * 30;
+                    const maxMonthlyPoolReturnUsd = Number((subMonthlyCost * 0.7).toFixed(2));
+                    const singleSlotDailyProfitUsd =
+                      totalMonthlySlotDays > 0 ? maxMonthlyPoolReturnUsd / totalMonthlySlotDays : 0;
+                    const currentDailyProfitUsd = Number(
+                      (activePoolSlots * singleSlotDailyProfitUsd).toFixed(2)
+                    );
+                    const currentDailyProfitPercent = Number(
+                      ((currentDailyProfitUsd / subMonthlyCost) * 100).toFixed(2)
+                    );
                     const payoffPercent = Math.min(
-                      100,
+                      70,
                       Math.round((mySubscriptionPayoffUsd / subMonthlyCost) * 100)
                     );
 
                     return (
-                      <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-5 space-y-3">
+                      <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-5 space-y-3.5">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -5554,18 +6700,25 @@ function HybridMapContent() {
                                 MONETIZE · БИРЖА СЛОТОВ
                               </span>
                               <span className="text-sm font-bold text-white">
-                                Счётчик погашения подписки (начисления по факту из общего пула)
+                                Счётчик ежесуточной прибыли на баланс аккаунта
                               </span>
                             </div>
                             <p className="text-xs text-slate-300 leading-relaxed">
-                              Выставленные через <strong>Monetize: ВКЛ</strong> слоты попадают в общий
-                              обезличенный пул Биржи (вместе с лимитом слов{' '}
-                              <strong>{maxAdvertWordsForCurrentTier} слов/слот</strong>). Выручка от
-                              фактических покупок <strong>BUSINESS</strong> делится на весь пул и
-                              погашает стоимость вашей подписки. При нажатии{' '}
-                              <strong>Monetize: ВЫКЛ</strong> действует{' '}
-                              <strong>24-часовой буфер возврата</strong>, чтобы биржа заместила
-                              уходящий слот.
+                              Ёмкость вашего пакета:{' '}
+                              <strong>
+                                {allowedAdvertSlotsCount} слот(а) × 30 дн. = {totalMonthlySlotDays}{' '}
+                                слото-дней
+                              </strong>
+                              . Каждые сутки (24ч) работы слота в пуле <strong>Monetize: ВКЛ</strong>{' '}
+                              начисляют на баланс аккаунта{' '}
+                              <strong className="text-emerald-300 font-mono">
+                                +${singleSlotDailyProfitUsd.toFixed(2)}/сутки за 1 слот
+                              </strong>{' '}
+                              (до <strong>70%</strong> возврата стоимости пакета —{' '}
+                              <strong className="text-emerald-300 font-mono">
+                                ${maxMonthlyPoolReturnUsd.toFixed(2)}
+                              </strong>{' '}
+                              из <strong>${subMonthlyCost}.00</strong>).
                             </p>
                           </div>
 
@@ -5575,12 +6728,11 @@ function HybridMapContent() {
                               disabled={activePoolSlots === 0}
                               onClick={() => {
                                 if (activePoolSlots === 0) return;
-                                const wordWeight = maxAdvertWordsForCurrentTier / 10;
-                                const factualPayout = Number(
-                                  (activePoolSlots * wordWeight * 0.75).toFixed(2)
-                                );
                                 setMySubscriptionPayoffUsd((prev) =>
-                                  Number((prev + factualPayout).toFixed(4))
+                                  Math.min(
+                                    maxMonthlyPoolReturnUsd,
+                                    Number((prev + currentDailyProfitUsd).toFixed(2))
+                                  )
                                 );
                               }}
                               className={`px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-all ${
@@ -5588,22 +6740,22 @@ function HybridMapContent() {
                                   ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-md'
                                   : 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
                               }`}
-                              title="Смоделировать фактическую покупку слотов бизнесом на бирже и начисление вашей доли"
+                              title="Начислить суточную прибыль (+24ч) от активных слотов в пуле на баланс аккаунта"
                             >
-                              + Начислить по факту с Биржи (тест)
+                              + Суточная прибыль (+${currentDailyProfitUsd.toFixed(2)})
                             </button>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                             <div className="text-[11px] text-slate-400 uppercase font-semibold">
-                              Ваших слотов в пуле Биржи
+                              Слотов в пуле (ёмкость)
                             </div>
                             <div className="text-base font-mono font-bold text-emerald-400 mt-0.5">
                               {activePoolSlots} из {allowedAdvertSlotsCount}{' '}
                               <span className="text-xs text-slate-400 font-normal">
-                                ({activePoolSlots * maxAdvertWordsForCurrentTier} слов в пуле)
+                                ({totalMonthlySlotDays} слото-дн.)
                               </span>
                             </div>
                             {withdrawingPoolSlots > 0 && (
@@ -5613,23 +6765,35 @@ function HybridMapContent() {
                             )}
                           </div>
 
+                          <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40">
+                            <div className="text-[11px] text-emerald-300 uppercase font-extrabold">
+                              Ежесуточная прибыль (24ч)
+                            </div>
+                            <div className="text-lg font-mono font-extrabold text-emerald-300 mt-0.5 flex items-baseline gap-1.5">
+                              <span>+${currentDailyProfitUsd.toFixed(2)} / сут.</span>
+                              <span className="text-xs text-emerald-400/90 font-bold">
+                                (+{currentDailyProfitPercent}%)
+                              </span>
+                            </div>
+                          </div>
+
                           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
                             <div className="text-[11px] text-slate-400 uppercase font-semibold">
-                              Накоплено в счёт подписки
+                              Баланс аккаунта (из пула)
                             </div>
                             <div className="text-lg font-mono font-extrabold text-emerald-300 mt-0.5">
                               ${mySubscriptionPayoffUsd.toFixed(2)}{' '}
                               <span className="text-xs text-slate-400 font-normal">
-                                / ${subMonthlyCost}.00 ({payoffPercent}%)
+                                / макс. ${maxMonthlyPoolReturnUsd.toFixed(2)} (70%)
                               </span>
                             </div>
                           </div>
 
                           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col justify-center space-y-1.5">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-slate-400">Погашение тарифа:</span>
+                              <span className="text-slate-400">Возврат пакета:</span>
                               <span className="font-mono font-bold text-amber-300">
-                                {payoffPercent}%
+                                {payoffPercent}% из 70%
                               </span>
                             </div>
                             <div className="w-full h-2.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden">
@@ -6186,6 +7350,110 @@ function HybridMapContent() {
                             </div>
                           )}
 
+                          {/* СТРОКА АДРЕСА ПЕРЕХОДА (URL) ДЛЯ ОБЪЯВЛЕНИЯ БИЗНЕС-ПРОФИЛЯ */}
+                          {currentAccountTier === 'BUSINESS' && (
+                            <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/40 space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <label className="block text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
+                                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                                  <span>
+                                    Адрес перехода (URL) для объявления #{slot.slotId}:
+                                  </span>
+                                </label>
+                                <span className="text-[11px] text-amber-200/90 font-semibold">
+                                  В объявлении вместо «Запрос на контакт» отображается кнопка «Перейти»
+                                </span>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                                <input
+                                  type="url"
+                                  readOnly={isLockedByExchange || !slot.isEditingRedirectUrl}
+                                  value={slot.redirectUrlDraft || ''}
+                                  onChange={(e) => {
+                                    const nextUrl = e.target.value;
+                                    setMyAdvertSlots((prev) =>
+                                      prev.map((s) =>
+                                        s.slotId === slot.slotId
+                                          ? {
+                                              ...s,
+                                              redirectUrlDraft: nextUrl,
+                                              published: s.published
+                                                ? {
+                                                    ...s.published,
+                                                    redirectUrl: nextUrl.trim()
+                                                      ? normalizeRedirectUrl(nextUrl)
+                                                      : undefined,
+                                                  }
+                                                : null,
+                                            }
+                                          : s
+                                      )
+                                    );
+                                  }}
+                                  placeholder="https://example.com — укажите адрес перехода (URL)"
+                                  className={`flex-1 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-mono transition-colors focus:outline-none border ${
+                                    isLockedByExchange
+                                      ? 'bg-slate-950/40 border-slate-800 text-slate-400 cursor-not-allowed'
+                                      : slot.isEditingRedirectUrl
+                                      ? 'bg-slate-950 border-amber-400 text-white ring-2 ring-amber-400/20'
+                                      : 'bg-slate-950/80 border-slate-800 text-amber-200'
+                                  }`}
+                                />
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={isLockedByExchange}
+                                    onClick={() =>
+                                      setMyAdvertSlots((prev) =>
+                                        prev.map((s) => {
+                                          if (s.slotId !== slot.slotId) return s;
+                                          const cleanUrl = (s.redirectUrlDraft || '').trim()
+                                            ? normalizeRedirectUrl(s.redirectUrlDraft)
+                                            : '';
+                                          return {
+                                            ...s,
+                                            redirectUrlDraft: cleanUrl,
+                                            isEditingRedirectUrl: !s.isEditingRedirectUrl,
+                                            published: s.published
+                                              ? {
+                                                  ...s.published,
+                                                  redirectUrl: cleanUrl || undefined,
+                                                }
+                                              : null,
+                                          };
+                                        })
+                                      )
+                                    }
+                                    className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition-all min-w-[135px] text-center ${
+                                      isLockedByExchange
+                                        ? 'bg-slate-900 text-slate-500 border-slate-800 cursor-not-allowed'
+                                        : slot.isEditingRedirectUrl
+                                        ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-400 shadow-md'
+                                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                                    }`}
+                                  >
+                                    {slot.isEditingRedirectUrl ? 'Применить URL' : 'Редактировать'}
+                                  </button>
+
+                                  {(slot.redirectUrlDraft || '').trim().length > 0 && (
+                                    <a
+                                      href={normalizeRedirectUrl(slot.redirectUrlDraft)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs transition-colors flex items-center gap-1.5 shadow-sm"
+                                      title="Проверить переход по указанному URL в новом окне"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      <span>Перейти</span>
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Кнопка Включить показ / Остановить показ */}
                           <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-4 flex-wrap">
                             <div className="text-xs text-slate-400">
@@ -6268,26 +7536,33 @@ function HybridMapContent() {
                                       : null;
 
                                   setMyAdvertSlots((prev) =>
-                                    prev.map((s) =>
-                                      s.slotId === slot.slotId
-                                        ? {
-                                            ...s,
-                                            draftText: cleanText,
-                                            isEditing: false,
-                                            published: {
-                                              text: cleanText,
-                                              publishedAtMs: now,
-                                              expiresAtMs: now + TWENTY_FOUR_HOURS_MS,
-                                              stoppedEarly: false,
-                                              position: pos,
-                                              status: slot.placementMode,
-                                              autoRenewMode: effectiveAutoRenew,
-                                              autoRenewDays: slot.autoRenewDays,
-                                              autoRenewUntilMs: autoUntil,
-                                            },
-                                          }
-                                        : s
-                                    )
+                                    prev.map((s) => {
+                                      if (s.slotId !== slot.slotId) return s;
+                                      const cleanRedirectUrl =
+                                        currentAccountTier === 'BUSINESS' &&
+                                        (s.redirectUrlDraft || '').trim()
+                                          ? normalizeRedirectUrl(s.redirectUrlDraft)
+                                          : undefined;
+                                      return {
+                                        ...s,
+                                        draftText: cleanText,
+                                        redirectUrlDraft: cleanRedirectUrl || s.redirectUrlDraft || '',
+                                        isEditing: false,
+                                        isEditingRedirectUrl: false,
+                                        published: {
+                                          text: cleanText,
+                                          redirectUrl: cleanRedirectUrl,
+                                          publishedAtMs: now,
+                                          expiresAtMs: now + TWENTY_FOUR_HOURS_MS,
+                                          stoppedEarly: false,
+                                          position: pos,
+                                          status: slot.placementMode,
+                                          autoRenewMode: effectiveAutoRenew,
+                                          autoRenewDays: slot.autoRenewDays,
+                                          autoRenewUntilMs: autoUntil,
+                                        },
+                                      };
+                                    })
                                   );
                                 }}
                                 className={`px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider border transition-all ${
@@ -6412,7 +7687,7 @@ function HybridMapContent() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider">
                         <ShieldCheck className="w-4 h-4" />
-                        <span>Защита контактов GoBell</span>
+                        <span>Защита контактов G. Bell</span>
                       </div>
                       <h3 className="text-base font-bold text-white">
                         Страница Chat · Запросы на контакт и защищённая связь
@@ -6925,17 +8200,17 @@ function HybridMapContent() {
                       <div>
                         <h3 className="text-base font-bold text-white">
                           {settingsAboutUsView === 'NONE'
-                            ? 'Страница Settings · Настройки приложения'
+                            ? 'Страница Settings · Настройки приложения G. Bell'
                             : settingsAboutUsView === 'LIST'
-                            ? 'Settings → О нас · Список документов проекта'
+                            ? 'Settings → О нас · Список документов проекта G. Bell'
                             : settingsAboutUsView === 'DOC_FINANCING'
-                            ? 'Settings → О нас → Документ №1: Схема финансирования стартапа'
-                            : 'Settings → О нас → Документ №2: Онтологическое ядро и архитектура GoBell'}
+                            ? 'Settings → О нас → Документ №1: Схема финансирования стартапа G. Bell'
+                            : 'Settings → О нас → Документ №2: Онтологическое ядро и архитектура G. Bell'}
                         </h3>
                         <p className="text-xs text-slate-400">
                           {settingsAboutUsView === 'NONE'
                             ? 'Управление параметрами геолокации, уведомлений, отображения на карте и раздел «О нас».'
-                            : 'Официальная документация, финансовая модель и архитектура стартапа GoBell.'}
+                            : 'Официальная документация, финансовая модель и архитектура стартапа G. Bell (Global · Game · Google · Bell).'}
                         </p>
                       </div>
                     </div>
@@ -7015,7 +8290,7 @@ function HybridMapContent() {
                             Показывать точное расстояние на маркерах
                           </div>
                           <div className="text-xs text-slate-400">
-                            Отображать дистанцию в метрах и километрах от центра поиска
+                            Отображать дистанцию в метрах и километрах от Точки G (центра поиска)
                           </div>
                         </div>
                         <button
@@ -7039,14 +8314,14 @@ function HybridMapContent() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 text-[10px] font-extrabold uppercase tracking-wider">
-                              GoBell · Документы
+                              G. Bell · Документы
                             </span>
                             <span className="text-sm font-extrabold text-white group-hover:text-amber-300 transition-colors">
-                              О нас
+                              О нас (Global · Game · Google · Bell)
                             </span>
                           </div>
                           <div className="text-xs text-slate-300">
-                            Список официальных документов проекта (1. Схема финансирования стартапа и др.)
+                            Список официальных документов проекта G. Bell (1. Схема финансирования стартапа и др.)
                           </div>
                         </div>
 
@@ -7102,7 +8377,7 @@ function HybridMapContent() {
                         </button>
                       </div>
 
-                      {/* Документ №2: Онтологическое ядро и архитектура GoBell */}
+                      {/* Документ №2: Онтологическое ядро и архитектура G. Bell */}
                       <div
                         onClick={() => setSettingsAboutUsView('DOC_ONTOLOGY')}
                         className="p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-amber-400/60 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -7113,7 +8388,7 @@ function HybridMapContent() {
                               Документ №2
                             </span>
                             <h4 className="text-sm sm:text-base font-extrabold text-white">
-                              Онтологическое ядро (Метамонизм) и паспорт системы GoBell
+                              Онтологическое ядро (Метамонизм) и паспорт системы G. Bell
                             </h4>
                           </div>
                           <p className="text-xs text-slate-300 leading-relaxed">
@@ -7142,14 +8417,14 @@ function HybridMapContent() {
                       <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-950 to-amber-950/50 border-2 border-emerald-500/60 space-y-2 shadow-xl">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="px-2.5 py-1 rounded-lg bg-emerald-500 text-slate-950 text-xs font-extrabold uppercase tracking-wider">
-                            Документ №1 · Финансовая архитектура GoBell
+                            Документ №1 · Финансовая архитектура G. Bell
                           </span>
                           <span className="text-xs font-mono text-emerald-300">
                             100% целевое сохранение капитала внутри проекта
                           </span>
                         </div>
                         <h4 className="text-lg sm:text-xl font-extrabold text-white">
-                          Схема финансирования стартапа GoBell
+                          Схема финансирования стартапа G. Bell (Global · Game · Google · Bell)
                         </h4>
                         <p className="text-xs text-slate-200 leading-relaxed">
                           Финансовая модель стартапа опирается на 4 столпа: <strong>1) Вирусный краудфандинг без оттока живых денег на реферальные выплаты</strong>, <strong>2) Бесплатный захват критической массы и пула Monetize через европейский плацдарм</strong>, <strong>3) Архитектура нулевых расходов на карты и геолокацию ($0)</strong> и <strong>4) Двухконтурная операционная монетизация (Подписки + Биржа 50/50)</strong>.
@@ -7162,7 +8437,7 @@ function HybridMapContent() {
                           1. Двухосевая матрица Краудфандинга (Взнос в $ = Срок в годах · Привлечение людей = Уровень PRO+)
                         </h5>
                         <p className="text-xs text-slate-300 leading-relaxed">
-                          В GoBell применена симметричная саморазгоняющаяся формула с шагом <strong>10</strong>: <strong className="text-white">сумма денежного взноса определяет СРОК подписки в годах</strong> (порог входа всего от $1!), а <strong className="text-emerald-300">количество привлечённых новых вкладчиков определяет УРОВЕНЬ мощности подписки (PRO + I / II / III)</strong>. Все 100% собранных денег остаются в бюджете стартапа:
+                          В G. Bell применена симметричная саморазгоняющаяся формула с шагом <strong>10</strong>: <strong className="text-white">сумма денежного взноса определяет СРОК подписки в годах</strong> (порог входа всего от $1!), а <strong className="text-emerald-300">количество привлечённых новых вкладчиков определяет УРОВЕНЬ мощности подписки (PRO + I / II / III)</strong>. Все 100% собранных денег остаются в бюджете стартапа:
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs pt-1">
@@ -7360,13 +8635,13 @@ function HybridMapContent() {
                                     Ваша персональная ссылка для приглашения (выдана при первом взносе и регистрации):
                                   </div>
                                   <div className="font-mono font-bold text-emerald-300 select-all">
-                                    https://gobell.app/join?ref={activeDemoProfileId}
+                                    https://gbell.app/join?ref={activeDemoProfileId}
                                   </div>
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const link = `https://gobell.app/join?ref=${activeDemoProfileId}`;
+                                    const link = `https://gbell.app/join?ref=${activeDemoProfileId}`;
                                     if (navigator.clipboard?.writeText) {
                                       navigator.clipboard.writeText(link).catch(() => {});
                                     }
@@ -7527,7 +8802,7 @@ function HybridMapContent() {
                                       3. Личный канал с руководством GB
                                     </div>
                                     <div className="text-[11px] text-slate-300 mt-0.5">
-                                      Закрытый прямой канал коммуникации напрямую с основателями и руководством GoBell.
+                                      Закрытый прямой канал коммуникации напрямую с основателями и руководством G. Bell.
                                     </div>
                                   </div>
                                 </div>
@@ -7643,7 +8918,7 @@ function HybridMapContent() {
                               <strong className="text-white">Не «размазываем» запуск по всему миру, а бьём в готовую спаянную сеть:</strong> миллионы украинцев в Европе уже сгруппированы в конкретных городских Telegram-чатах и Facebook-группах (см. реестр из 27 стран ниже).
                             </li>
                             <li>
-                              <strong className="text-white">Польза даже при 20–50 участниках в одном районе:</strong> в отличие от обычных соцсетей, где нужны миллионы блогеров, на карте GoBell даже первые <strong>30–50 своих мастеров, врачей, перевозчиков и соседей в радиусе 2–5 км</strong> уже решают бытовую задачу и проблему экстренной помощи (<code>SOS</code>), которая в ленте Telegram тонет за 10 минут.
+                              <strong className="text-white">Польза даже при 20–50 участниках в одном районе:</strong> в отличие от обычных соцсетей, где нужны миллионы блогеров, на карте G. Bell даже первые <strong>30–50 своих мастеров, врачей, перевозчиков и соседей в радиусе 2–5 км</strong> уже решают бытовую задачу и проблему экстренной помощи (<code>SOS</code>), которая в ленте Telegram тонет за 10 минут.
                             </li>
                             <li>
                               <strong className="text-white">Каждый вошедший обязан привести минимум 1–10 друзей для апгрейда:</strong> бесплатный вход (или взнос от $1) даёт базовый <code>PRO</code> (10 слов), но чтобы получить <strong>PRO + I (20 слов, 2 слота, 2 группы)</strong>, участнику нужно пригласить по своей личной ссылке хотя бы <strong>1–10 знакомых</strong> из того же городского чата.
@@ -7652,7 +8927,7 @@ function HybridMapContent() {
                               <strong className="text-white">Рекламная биржа Monetize работает уже от первых 500 точек в городе:</strong> локальному бизнесу (СТО, стоматологии, юристу, доставке в Варшаве или Берлине) не нужны миллионы пользователей по всей планете — ему достаточно арендовать слоты <code>Monetize</code> у первых <strong>300–500 активных земляков</strong> в своём городе!
                             </li>
                             <li>
-                              <strong className="text-emerald-300">Космосим GoBell: ELITE 3D с обязательной геолокацией смартфона:</strong> чтобы активировать игру, пользователь обязан включить геолокацию на смартфоне. Пока игрок проводит время в космосе (летает между планетами, добывает элементы в поясе астероидов, выполняет контракты правительств планет), <strong>его профиль в реальном времени светится на реальной карте GoBell</strong> со всеми его тегами и принимает запросы на контакт!
+                              <strong className="text-emerald-300">Космосим G. Bell: ELITE 3D с обязательной геолокацией смартфона:</strong> чтобы активировать игру, пользователь обязан включить геолокацию на смартфоне. Пока игрок проводит время в космосе (летает между планетами, добывает элементы в поясе астероидов, выполняет контракты правительств планет), <strong>его профиль в реальном времени светится на реальной карте G. Bell</strong> со всеми его тегами и принимает запросы на контакт!
                             </li>
                           </ol>
                         </div>
@@ -7897,7 +9172,7 @@ function HybridMapContent() {
                         </h5>
                         <ul className="space-y-2 text-xs text-slate-300 leading-relaxed list-disc pl-5">
                           <li>
-                            <strong className="text-white">Отключён платный поиск Google (Places API = $0):</strong> поиск работает исключительно по тегам внутри собственной базы GoBell.
+                            <strong className="text-white">Отключён платный поиск Google (Places API = $0):</strong> поиск работает исключительно по тегам внутри собственной базы G. Bell.
                           </li>
                           <li>
                             <strong className="text-white">Координаты со смартфона пользователя ($0):</strong> в боевом режиме точка профиля привязана к аппаратному GPS смартфона.
@@ -7911,14 +9186,14 @@ function HybridMapContent() {
                       {/* Блок 4: Постоянные потоки выручки после запуска */}
                       <div className="p-5 rounded-2xl bg-slate-950 border border-indigo-500/40 space-y-2.5">
                         <h5 className="text-sm font-extrabold uppercase tracking-wider text-indigo-300">
-                          4. Операционная выручка после запуска (Подписки + Биржа Monetize 50/50)
+                          4. Операционная выручка после запуска (Подписки + Справедливая Биржа Monetize 70/30 со счётчиком ежесуточной прибыли)
                         </h5>
                         <ul className="space-y-2 text-xs text-slate-300 leading-relaxed list-disc pl-5">
                           <li>
                             <strong className="text-white">Ежемесячные подписки PRO и PRO+:</strong> $5/мес за базовый PRO и +$5 за каждый шаг расширения (PRO + I = $10/мес, PRO + II = $15/мес, PRO + III = $20/мес).
                           </li>
                           <li>
-                            <strong className="text-white">Корпоративный тариф BUSINESS и Биржа Monetize (50 / 50):</strong> бизнес-аккаунты массово арендуют слоты Advert у пользователей PRO/PRO+. Выручка от аренды делится поровну: <strong>50% чистой прибыли забирает компания GoBell</strong>, а <strong>50% начисляется владельцам PRO-слотов</strong> (на оплату подписки или вывод на карту).
+                            <strong className="text-white">Справедливая формула Monetize (Коэффициент 30% / Возврат до 70%) и счётчик ежесуточной прибыли:</strong> если пользователь не занимает информационное пространство своим объявлением и передаёт слот в пул <strong>Monetize</strong>, система рассчитывает точную стоимость единицы ёмкости (слото-сутки = пакет / (число слотов × 30 дней)) и за минусом <strong>30% операционного коэффициента платформы G. Bell</strong> возвращает пользователю до <strong>70% стоимости пакета</strong> (например, при условном пакете $60 и 2 слотах на 30 дней = 60 слото-дней: <strong>$42 возвращается пользователю</strong> с наглядным ежесуточным счётчиком на баланс аккаунта, а <strong>$18 удерживает G. Bell</strong>). При этом освобождённые слоты сдаются корпоративному классу <strong>BUSINESS</strong>.
                           </li>
                         </ul>
                       </div>
@@ -7995,7 +9270,7 @@ function HybridMapContent() {
               <h2 className="text-base font-bold text-white">
                 {subscriptionPagePlan === 'PRO_PLUS'
                   ? 'Страница регистрации уровней PRO+ (PRO + I / PRO + II / PRO + III)'
-                  : `Страница подписки GoBell · Тариф ${subscriptionPagePlan}`}
+                  : `Страница подписки G. Bell · Тариф ${subscriptionPagePlan}`}
               </h2>
             </div>
 
@@ -8034,7 +9309,7 @@ function HybridMapContent() {
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 text-xs font-extrabold uppercase tracking-wider">
-                        Краудфандинг GoBell · Шаг 10
+                        Краудфандинг G. Bell · Шаг 10
                       </span>
                       <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold">
                         Вход от $1 = 1 год PRO!
@@ -8177,7 +9452,7 @@ function HybridMapContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="px-2.5 py-0.5 rounded bg-amber-400 text-slate-950 text-[11px] font-extrabold uppercase">
-                        Краудфандинг GoBell
+                        Краудфандинг G. Bell
                       </span>
                       <span className="text-xs font-bold text-emerald-300">
                         Взнос: $1–$10 = 1 год PRO, $10–$20 = 2 года... · Привлечение: 1–10 чел. = PRO+I, 10–20 чел. = PRO+II
@@ -8803,7 +10078,7 @@ function HybridMapContent() {
                 DOCS.md · Паспорт проекта
               </span>
               <h2 className="text-base sm:text-lg font-extrabold text-white">
-                GoBell — Архитектура, Инварианты и Экономика
+                G. Bell (Global · Game · Google · Bell) — Архитектура, Инварианты и Экономика
               </h2>
             </div>
             <button
@@ -8865,7 +10140,7 @@ function HybridMapContent() {
                 </h3>
                 <ul className="space-y-2 text-xs text-slate-200 leading-relaxed list-disc pl-5">
                   <li>
-                    <strong className="text-white">Отключён платный адресный поиск Google (Places API = $0):</strong> строка поиска работает на 100% в режиме <strong>GoBell</strong> (поиск по нашим словам-тегам и группам в нашей базе).
+                    <strong className="text-white">Отключён платный адресный поиск Google (Places API = $0):</strong> строка поиска работает на 100% в режиме <strong>G. Bell</strong> (поиск по нашим словам-тегам и группам в нашей базе).
                   </li>
                   <li>
                     <strong className="text-white">Привязка к GPS смартфона в боевом режиме ($0):</strong> в реальном приложении координаты пользователя берутся напрямую с GPS-датчика его смартфона. Фиксированная привязка к точке на карте используется только в демо-режиме для презентации комьюнити.
@@ -8914,14 +10189,14 @@ function HybridMapContent() {
               {/* Раздел 3: Monetize и Группы */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-amber-300">
-                  3. Биржа Monetize (50/50) и Группы (GO / GC)
+                  3. Справедливая Биржа Monetize (70/30 + ежесуточный счётчик) и Группы (GO / GC)
                 </h3>
                 <ul className="space-y-2 text-xs text-slate-200 leading-relaxed list-disc pl-5">
                   <li>
                     <strong className="text-white">NATIVE vs GUEST:</strong> собственные объявления PRO помечаются как <code>NATIVE</code>, а арендованные бизнесом через пул Monetize — как <code>GUEST</code> (на карте и в LIST).
                   </li>
                   <li>
-                    <strong className="text-white">Распределение дохода Monetize (50 / 50):</strong> 50% стоимости аренды забирает платформа GoBell, 50% зачисляется владельцу PRO-слота (вывод на карту от минимума или оплата подписки PRO / PRO+).
+                    <strong className="text-white">Справедливый возврат за неиспользованное информационное пространство (70% возврат / 30% коэффициент G. Bell):</strong> зная информационную ёмкость каждого уровня (например, 2 слота × 30 дней = 60 слото-дней), система считает стоимость 1 слото-дня в процентах от пакета. Если слот передан в пул <strong>Monetize</strong>, за минусом 30% коэффициента издержек платформы <strong>70% стоимости возвращается пользователю на баланс аккаунта через счётчик ежесуточной прибыли</strong> (например, из $60 условной стоимости возвращается $42, а $18 остаётся платформе G. Bell), освобождая место для адресного размещения из премиум-класса <strong>BUSINESS</strong>.
                   </li>
                   <li>
                     <strong className="text-white">Формат групп:</strong> <code>GO-XXXXXX (N)</code> — открытая группа; <code>GC-XXXXXX (N)</code> — закрытая группа (поиск по тегу GC-... находит админа вне зависимости от радиуса).
@@ -9270,7 +10545,7 @@ function HybridMapContent() {
               type="button"
               onClick={() => setIsDocsModalOpen(true)}
               className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold border border-amber-500/60 bg-amber-500/15 hover:bg-amber-400 hover:text-slate-950 text-amber-300 transition-all flex items-center gap-1.5 shadow-sm"
-              title="Открыть документацию проекта GoBell (DOCS.md)"
+              title="Открыть документацию проекта G. Bell (DOCS.md)"
             >
               <span>Доки</span>
             </button>
@@ -9416,7 +10691,7 @@ function HybridMapContent() {
           const replyMsg: ChatMessageItem = {
             id: `msg-planet-reply-${Date.now() + 1}`,
             sender: 'partner',
-            text: `Приветствуем с орбиты планеты ${payload.planetName}! Ваш запрос на контакт получен объектом «${payload.name}». Канал связи GoBell открыт.`,
+            text: `Приветствуем с орбиты планеты ${payload.planetName}! Ваш запрос на контакт получен объектом «${payload.name}». Канал связи G. Bell открыт.`,
             time: nowTime,
           };
 

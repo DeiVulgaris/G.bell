@@ -39,6 +39,17 @@ export interface ActiveProfileItem {
   updatedAt: string;
   contact?: string;
   advertStatus?: 'NATIVE' | 'GUEST';
+  advertRedirectUrl?: string;
   ownerProfileId?: string;
   slotId?: number;
+  groupTag?: string;
+  groupName?: string;
+  groupDescription?: string;
+  groupAccessType?: 'OPEN' | 'CLOSED';
+  createdGroupsInfo?: Array<{
+    tag: string;
+    name: string;
+    description: string;
+    accessType: 'OPEN' | 'CLOSED';
+  }>;
 }

@@ -24,10 +24,17 @@ import {
   getPilotExperienceRankByTons,
 } from './TonnageExperienceModal';
 import {FullGameConfigDocModal} from './FullGameConfigDocModal';
+import {DominatorSpacetimeModal} from './DominatorSpacetimeModal';
+import {CockpitHudMask} from './CockpitHudMask';
+import {
+  getStarRadiationProfile,
+  StellarRadiationProfile,
+} from '../data/stellarPhysicsEngine';
 import {
   SpaceObjectProfileModal,
   SpaceObjectProfileData,
   CustomObjectProfileOverride,
+  ConstellationStarJumpItem,
 } from './SpaceObjectProfileModal';
 import {
   LabHangarCraftingModal,
@@ -38,6 +45,40 @@ import {
   LAB_MODULE_PRICE_CR,
   HANGAR_MODULE_PRICE_CR,
 } from './LabHangarCraftingModal';
+import {
+  getStarSystemFullAssignment,
+  ALL_STANDARD_CONSTELLATION_PLANETS,
+  CapturedPlanetClanRecord,
+  ClanAffiliationKind,
+  calculatePlanetAuctionValuationCr,
+  formatCapturedPlanetFullTitle,
+  formatCapturedPlanetHudMarker,
+} from '../data/standardDictatorWorlds';
+import {
+  KUIPER_BELT_DEFINITIONS,
+  KuiperBeltBodyDef,
+  KuiperMoonDef,
+} from '../data/kuiperBeltData';
+import {StandardConstellationWorldsModal} from './StandardConstellationWorldsModal';
+import {AutonomousSentinelModal} from './AutonomousSentinelModal';
+import {SpaceObjectsGalleryModal} from './SpaceObjectsGalleryModal';
+import {ShipyardBuilderModal} from './ShipyardBuilderModal';
+import {
+  SentinelPlatformTelemetry,
+  createDefaultSentinelTelemetry,
+  createDefaultSentinelNetwork,
+  createSentinelAtLocation,
+  createSentinelSwarmCloud,
+  executeSwarmAmbushCrossfire,
+  updateSentinelSolarAccumulator,
+  executeSentinelStrike,
+  evaluateTargetIffStatus,
+  SENTINEL_STRIKE_MODES,
+  SentinelStrikePowerMode,
+  SentinelDeploymentLocationType,
+  SentinelEngagementDirective,
+  SENTINEL_DEPLOYMENT_LOCATIONS_META,
+} from '../data/autonomousSentinelEngine';
 
 export interface GoBellMissionSeed {
   id: string;
@@ -170,14 +211,14 @@ const GALAXY_SYSTEMS: StarSystem[] = [
   {
     id: 0,
     name: 'LAVE · ФЁДОРОВКА-ПРАЙМ',
-    gov: 'Совет Сообщества GoBell',
+    gov: 'Совет Сообщества G. Bell',
     econ: 'Agricultural',
     techLevel: 5,
     danger: 'Low',
     x: 24,
     y: 48,
     color: '#00ff00',
-    description: 'Центральный орбитальный хаб GoBell. Безопасная зона для старта торговли и местных контрактов.',
+    description: 'Центральный орбитальный хаб G. Bell. Безопасная зона для старта торговли и местных контрактов.',
     priceFactors: [0.7, 0.8, 1.1, 1.0, 1.35, 1.25, 1.15, 1.2],
   },
   {
@@ -203,7 +244,7 @@ const GALAXY_SYSTEMS: StarSystem[] = [
     x: 58,
     y: 52,
     color: '#ffff00',
-    description: 'Крупный промышленный узел с активной биржей объявлений GoBell и плотным трафиком.',
+    description: 'Крупный промышленный узел с активной биржей объявлений G. Bell и плотным трафиком.',
     priceFactors: [1.2, 1.15, 0.95, 1.1, 0.85, 0.8, 0.9, 1.1],
   },
   {
@@ -229,7 +270,7 @@ const GALAXY_SYSTEMS: StarSystem[] = [
     x: 34,
     y: 72,
     color: '#ff00ff',
-    description: 'Свободный космопорт на пересечении гипер-маршрутов. Отличные цены на сплавы и кристаллы GoBell.',
+    description: 'Свободный космопорт на пересечении гипер-маршрутов. Отличные цены на сплавы и кристаллы G. Bell.',
     priceFactors: [1.15, 0.9, 1.2, 1.25, 0.9, 0.85, 0.75, 1.3],
   },
   {
@@ -242,7 +283,7 @@ const GALAXY_SYSTEMS: StarSystem[] = [
     x: 82,
     y: 66,
     color: '#00ff88',
-    description: 'Богатые астероидные поля. Сверхдешёвые радиоактивные руды, сплавы и кристаллы GoBell.',
+    description: 'Богатые астероидные поля. Сверхдешёвые радиоактивные руды, сплавы и кристаллы G. Bell.',
     priceFactors: [1.3, 1.2, 0.55, 1.15, 1.25, 1.3, 0.6, 0.65],
   },
   {
@@ -296,7 +337,7 @@ const COMMODITIES: Commodity[] = [
   {id: 4, name: 'Титан (Ti · 4-я пл. Марс: 5 CR / в группе 1 CR → Планетам 10 CR)', unit: 't', basePrice: 5},
   {id: 5, name: 'Редкие элементы (Пояс Астероидов → Правительствам планет 15 CR)', unit: 't', basePrice: 15},
   {id: 6, name: 'Оборудование (Machinery)', unit: 't', basePrice: 12},
-  {id: 7, name: 'Кристаллы GoBell (GBT-Ore)', unit: 'g', basePrice: 24},
+  {id: 7, name: 'Кристаллы G. Bell (GBT-Ore)', unit: 'g', basePrice: 24},
 ];
 
 export interface GoBellSpaceMission {
@@ -363,26 +404,336 @@ const CORIOLIS_MESH: WireframeMesh = {
   ],
 };
 
-// 2. Классический корабль COBRA MK III (клиновидный многогранник)
+// 2. Стандартный космический корабль-ракетоплан «БУРАН / ШАТТЛ» (двойное дельта-крыло, фюзеляж, высокий киль, 3 сопла)
 const COBRA_MESH: WireframeMesh = {
   vertices: [
-    {x: 0, y: 0, z: 55}, // Нос
-    {x: -55, y: 0, z: -35}, // Левое крыло
-    {x: 55, y: 0, z: -35}, // Правое крыло
-    {x: 0, y: 18, z: -10}, // Верх кабины
-    {x: 0, y: -14, z: -15}, // Днище
-    {x: -25, y: 8, z: -40}, // Корма верх лево
-    {x: 25, y: 8, z: -40}, // Корма верх право
-    {x: -25, y: -8, z: -40}, // Корма низ лево
-    {x: 25, y: -8, z: -40}, // Корма низ право
+    {x: 0, y: -4, z: 68}, // 0: Острый носовой обтекатель
+    {x: -14, y: 8, z: 38}, // 1: Остекление кабины лево
+    {x: 14, y: 8, z: 38}, // 2: Остекление кабины право
+    {x: 0, y: 15, z: 28}, // 3: Верхний гребень кабины
+    {x: -22, y: -6, z: 22}, // 4: Наплыв крыла левый (передний)
+    {x: 22, y: -6, z: 22}, // 5: Наплыв крыла правый (передний)
+    {x: -64, y: -8, z: -34}, // 6: Законцовка левого дельта-крыла (передняя)
+    {x: 64, y: -8, z: -34}, // 7: Законцовка правого дельта-крыла (передняя)
+    {x: -60, y: -8, z: -52}, // 8: Законцовка левого крыла (задняя / элевон)
+    {x: 60, y: -8, z: -52}, // 9: Законцовка правого крыла (задняя / элевон)
+    {x: -16, y: 14, z: -46}, // 10: Верх кормы грузового отсека лево
+    {x: 16, y: 14, z: -46}, // 11: Верх кормы грузового отсека право
+    {x: -18, y: -10, z: -54}, // 12: Низ кормы лево
+    {x: 18, y: -10, z: -54}, // 13: Низ кормы право
+    {x: 0, y: 14, z: -28}, // 14: Основание киля (переднее)
+    {x: 0, y: 46, z: -48}, // 15: Вершина вертикального киля (передняя)
+    {x: 0, y: 44, z: -60}, // 16: Вершина вертикального киля (задняя / руль)
+    {x: 0, y: 12, z: -56}, // 17: Основание киля (заднее)
   ],
   edges: [
-    [0, 1], [0, 2], [0, 3], [0, 4],
-    [3, 1], [3, 2], [3, 5], [3, 6],
-    [4, 1], [4, 2], [4, 7], [4, 8],
-    [1, 5], [1, 7], [2, 6], [2, 8],
-    [5, 6], [7, 8], [5, 7], [6, 8],
+    // Нос и кабина
+    [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+    [1, 3], [2, 3], [1, 2], [1, 4], [2, 5],
+    // Двойное дельта-крыло (наплыв + консоль + элевоны)
+    [4, 6], [6, 8], [8, 12], [4, 12],
+    [5, 7], [7, 9], [9, 13], [5, 13],
+    // Фюзеляж и створки грузового отсека
+    [1, 10], [2, 11], [3, 14], [10, 11],
+    [10, 12], [11, 13], [12, 13], [4, 5],
+    // Высокий вертикальный киль «Бурана / Шаттла»
+    [14, 15], [15, 16], [16, 17], [14, 17],
+    [10, 17], [11, 17],
   ],
+};
+
+// Полноценная 3D-отрисовка модели стандартного корабля «БУРАН / ШАТТЛ»
+// (двойное дельтавидное крыло, теплозащитные плитки днища, остекление кабины,
+// цилиндрический грузовой отсек с меридианами-шпангоутами, высокий киль и 3 маршевых сопла ЖРД)
+const drawBuranShuttle3D = (
+  ctx: CanvasRenderingContext2D,
+  projectLocal3D: (lx: number, ly: number, lz: number) => {x: number; y: number; z: number},
+  apparentRadiusPx: number,
+  hullAccentColor: string,
+  frameCounter: number
+) => {
+  ctx.save();
+  const isDetailed = apparentRadiusPx >= 18;
+  const isHighDetail = apparentRadiusPx >= 42;
+
+  // Вспомогательная отрисовка замкнутого 3D-полигона
+  const drawPoly3D = (
+    pts: Array<[number, number, number]>,
+    fill: string | null,
+    stroke: string | null,
+    lineWidth = 1.2,
+    alpha = 1.0
+  ) => {
+    if (pts.length < 2) return;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const p = projectLocal3D(pts[i][0], pts[i][1], pts[i][2]);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.closePath();
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    if (stroke) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = lineWidth;
+      ctx.stroke();
+    }
+  };
+
+  // Вспомогательная отрисовка 3D-линии
+  const drawLine3D = (
+    p1: [number, number, number],
+    p2: [number, number, number],
+    stroke: string,
+    lineWidth = 1.1,
+    alpha = 0.9
+  ) => {
+    const a = projectLocal3D(p1[0], p1[1], p1[2]);
+    const b = projectLocal3D(p2[0], p2[1], p2[2]);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  };
+
+  // 1. ЧЁРНЫЙ ТЕПЛОЗАЩИТНЫЙ ЭКРАН ДНИЩА И ДВОЙНОЕ ДЕЛЬТАВИДНОЕ КРЫЛО «БУРАНА / ШАТТЛА»
+  // Контур двойного дельта-крыла в плоскости Y = -0.10..0.0 (носовой обтекатель -> передний наплыв 78° -> главная консоль 45° -> элевоны -> корма)
+  const wingBellyOutline: Array<[number, number, number]> = [
+    [0, -0.06, 0.98], // Остриё носа
+    [-0.14, -0.08, 0.80],
+    [-0.25, -0.10, 0.42], // Передний корневой наплыв левого крыла (strake)
+    [-0.42, -0.10, 0.14], // Излом двойной дельты левого крыла
+    [-0.92, -0.09, -0.44], // Передняя законцовка левого крыла
+    [-0.92, -0.09, -0.72], // Задняя законцовка левого крыла
+    [-0.28, -0.10, -0.82], // Внутренний край левого элевона
+    [0.28, -0.10, -0.82], // Внутренний край правого элевона
+    [0.92, -0.09, -0.72], // Задняя законцовка правого крыла
+    [0.92, -0.09, -0.44], // Передняя законцовка правого крыла
+    [0.42, -0.10, 0.14], // Излом двойной дельты правого крыла
+    [0.25, -0.10, 0.42], // Передний корневой наплыв правого крыла
+    [0.14, -0.08, 0.80],
+  ];
+
+  // Заливаем тёмную керамическую теплозащиту днища и светлую верхнюю обшивку крыльев
+  drawPoly3D(
+    wingBellyOutline,
+    '#050b16',
+    hullAccentColor,
+    apparentRadiusPx > 35 ? 2.0 : 1.3,
+    0.96
+  );
+
+  // Верхняя белая/серебристая плоскость левой и правой консоли двойного дельта-крыла
+  const leftWingTop: Array<[number, number, number]> = [
+    [-0.22, -0.04, 0.40],
+    [-0.41, -0.05, 0.13],
+    [-0.90, -0.06, -0.44],
+    [-0.90, -0.06, -0.70],
+    [-0.24, -0.05, -0.78],
+  ];
+  const rightWingTop: Array<[number, number, number]> = [
+    [0.22, -0.04, 0.40],
+    [0.41, -0.05, 0.13],
+    [0.90, -0.06, -0.44],
+    [0.90, -0.06, -0.70],
+    [0.24, -0.05, -0.78],
+  ];
+  drawPoly3D(leftWingTop, '#0f172a', '#e2e8f0', isDetailed ? 1.5 : 1.0, 0.94);
+  drawPoly3D(rightWingTop, '#0f172a', '#e2e8f0', isDetailed ? 1.5 : 1.0, 0.94);
+
+  // Чёрная теплозащитная окантовка передней кромки крыла (RCC Carbon-Carbon Leading Edge) и элевоны
+  if (isDetailed) {
+    // Элевоны (задние управляющие плоскости крыла Бурана)
+    const leftElevon: Array<[number, number, number]> = [
+      [-0.26, -0.06, -0.66],
+      [-0.88, -0.07, -0.58],
+      [-0.90, -0.07, -0.71],
+      [-0.26, -0.06, -0.79],
+    ];
+    const rightElevon: Array<[number, number, number]> = [
+      [0.26, -0.06, -0.66],
+      [0.88, -0.07, -0.58],
+      [0.90, -0.07, -0.71],
+      [0.26, -0.06, -0.79],
+    ];
+    drawPoly3D(leftElevon, '#1e293b', '#38bdf8', 1.15, 0.92);
+    drawPoly3D(rightElevon, '#1e293b', '#38bdf8', 1.15, 0.92);
+
+    // Силовые нервюры и лонжероны крыльев (в нашем каркасном стиле)
+    const wingSpars: Array<[[number, number, number], [number, number, number]]> = [
+      [[-0.23, -0.05, 0.18], [-0.56, -0.06, -0.58]],
+      [[-0.23, -0.05, -0.08], [-0.74, -0.06, -0.62]],
+      [[-0.23, -0.05, -0.34], [-0.88, -0.06, -0.48]],
+      [[0.23, -0.05, 0.18], [0.56, -0.06, -0.58]],
+      [[0.23, -0.05, -0.08], [0.74, -0.06, -0.62]],
+      [[0.23, -0.05, -0.34], [0.88, -0.06, -0.48]],
+    ];
+    for (const [s1, s2] of wingSpars) {
+      drawLine3D(s1, s2, hullAccentColor, 0.95, 0.72);
+    }
+  }
+
+  // 2. ЦИЛИНДРИЧЕСКИЙ ФЮЗЕЛЯЖ И ГРУЗОВОЙ ОТСЕК «БУРАНА / ШАТТЛА»
+  // (В нашем фирменном стиле: продольные стрингеры-параллели + арочные поперечные шпангоуты-меридианы!)
+  const fuselageTopOutline: Array<[number, number, number]> = [
+    [0, -0.05, 0.98],
+    [-0.14, 0.04, 0.72],
+    [-0.22, 0.12, 0.42],
+    [-0.23, 0.16, -0.74],
+    [0.23, 0.16, -0.74],
+    [0.22, 0.12, 0.42],
+    [0.14, 0.04, 0.72],
+  ];
+  drawPoly3D(fuselageTopOutline, '#0b1528', '#f8fafc', isDetailed ? 1.55 : 1.1, 0.96);
+
+  // Поперечные арочные шпангоуты (меридианы сечения фюзеляжа и створок грузового отсека)
+  const payloadFramesZ = isHighDetail
+    ? [0.40, 0.24, 0.08, -0.08, -0.24, -0.40, -0.56, -0.72]
+    : [0.38, 0.05, -0.28, -0.68];
+  const archAngles = [-Math.PI * 0.5, -Math.PI * 0.28, -Math.PI * 0.1, Math.PI * 0.1, Math.PI * 0.28, Math.PI * 0.5];
+
+  for (let fIdx = 0; fIdx < payloadFramesZ.length; fIdx++) {
+    const fz = payloadFramesZ[fIdx];
+    const isBulkhead = fIdx === 0 || fIdx === payloadFramesZ.length - 1;
+    ctx.strokeStyle = isBulkhead ? '#fbbf24' : '#7dd3fc';
+    ctx.lineWidth = isBulkhead ? 1.45 : 0.95;
+    ctx.globalAlpha = isBulkhead ? 0.92 : 0.68;
+    ctx.beginPath();
+    for (let aIdx = 0; aIdx < archAngles.length; aIdx++) {
+      const ang = archAngles[aIdx];
+      const lx = Math.sin(ang) * 0.225;
+      const ly = -0.04 + Math.cos(ang) * 0.24;
+      const pt = projectLocal3D(lx, ly, fz);
+      if (aIdx === 0) ctx.moveTo(pt.x, pt.y);
+      else ctx.lineTo(pt.x, pt.y);
+    }
+    ctx.stroke();
+  }
+
+  // Продольные линии створок грузового отсека (параллели фюзеляжа + центральный замок створок)
+  const spineAngles = [-Math.PI * 0.36, -Math.PI * 0.16, 0, Math.PI * 0.16, Math.PI * 0.36];
+  for (const ang of spineAngles) {
+    const isCenterSeam = ang === 0;
+    const lx = Math.sin(ang) * 0.225;
+    const ly = -0.04 + Math.cos(ang) * 0.24;
+    drawLine3D(
+      [lx, ly, 0.40],
+      [lx, ly, -0.72],
+      isCenterSeam ? '#fbbf24' : '#e2e8f0',
+      isCenterSeam ? 1.4 : 1.0,
+      isCenterSeam ? 0.95 : 0.75
+    );
+  }
+
+  // 3. ЧЁРНЫЙ ТЕРМОСТОЙКИЙ НОСОВОЙ ОБТЕКАТЕЛЬ И ОСТЕКЛЕНИЕ КАБИНЫ ПИЛОТОВ «БУРАНА»
+  const blackNoseCap: Array<[number, number, number]> = [
+    [0, -0.05, 0.98],
+    [-0.12, -0.06, 0.78],
+    [-0.09, 0.05, 0.76],
+    [0, 0.08, 0.80],
+    [0.09, 0.05, 0.76],
+    [0.12, -0.06, 0.78],
+  ];
+  drawPoly3D(blackNoseCap, '#020617', '#fbbf24', 1.35, 0.98);
+
+  // Знаменитое 6-секционное лобовое остекление кабины «Бурана / Шаттла»
+  const cockpitLeftWindow: Array<[number, number, number]> = [
+    [0, 0.13, 0.64],
+    [-0.14, 0.09, 0.61],
+    [-0.19, 0.14, 0.46],
+    [0, 0.20, 0.49],
+  ];
+  const cockpitRightWindow: Array<[number, number, number]> = [
+    [0, 0.13, 0.64],
+    [0.14, 0.09, 0.61],
+    [0.19, 0.14, 0.46],
+    [0, 0.20, 0.49],
+  ];
+  drawPoly3D(cockpitLeftWindow, 'rgba(34, 211, 238, 0.38)', '#22d3ee', 1.4, 0.98);
+  drawPoly3D(cockpitRightWindow, 'rgba(34, 211, 238, 0.38)', '#22d3ee', 1.4, 0.98);
+  if (isDetailed) {
+    // Переплёт лобовых окон кабины
+    drawLine3D([-0.08, 0.11, 0.62], [-0.11, 0.17, 0.47], '#e0f2fe', 1.1, 0.95);
+    drawLine3D([0.08, 0.11, 0.62], [0.11, 0.17, 0.47], '#e0f2fe', 1.1, 0.95);
+  }
+
+  // 4. ДВЕ БОКОВЫЕ КАПСУЛЫ ОРБИТАЛЬНОГО МАНЕВРИРОВАНИЯ (OMS PODS) И ВЫСОКИЙ СТРЕЛОВИДНЫЙ КИЛЬ
+  if (isDetailed) {
+    const leftOmsPod: Array<[number, number, number]> = [
+      [-0.14, 0.17, -0.50],
+      [-0.24, 0.13, -0.52],
+      [-0.24, 0.13, -0.78],
+      [-0.13, 0.20, -0.78],
+    ];
+    const rightOmsPod: Array<[number, number, number]> = [
+      [0.14, 0.17, -0.50],
+      [0.24, 0.13, -0.52],
+      [0.24, 0.13, -0.78],
+      [0.13, 0.20, -0.78],
+    ];
+    drawPoly3D(leftOmsPod, '#1e293b', '#94a3b8', 1.1, 0.92);
+    drawPoly3D(rightOmsPod, '#1e293b', '#94a3b8', 1.1, 0.92);
+  }
+
+  // Высокий стреловидный вертикальный киль «Бурана / Шаттла» с расщепляющимся рулём направления
+  const tailFinPoly: Array<[number, number, number]> = [
+    [0, 0.19, -0.34], // Переднее основание киля (форкиль)
+    [0, 0.68, -0.64], // Передняя вершина киля
+    [0, 0.66, -0.82], // Задняя вершина киля
+    [0, 0.18, -0.80], // Заднее основание киля
+  ];
+  drawPoly3D(tailFinPoly, '#0f172a', '#f8fafc', isDetailed ? 1.7 : 1.2, 0.97);
+
+  if (isDetailed) {
+    // Линия руля направления (Rudder / Speedbrake) и силовые нервюры киля
+    drawLine3D([0, 0.67, -0.74], [0, 0.19, -0.72], '#fbbf24', 1.3, 0.92);
+    drawLine3D([0, 0.35, -0.44], [0, 0.34, -0.79], hullAccentColor, 1.0, 0.8);
+    drawLine3D([0, 0.52, -0.54], [0, 0.50, -0.80], '#ef4444', 1.2, 0.9);
+  }
+
+  // 5. ТРИ МАРШЕВЫХ РАКЕТНЫХ СОПЛА В КОРМЕ + ПЛАЗМЕННОЕ СВЕЧЕНИЕ ДВИГАТЕЛЕЙ
+  const engineCenters: Array<[number, number, number]> = [
+    [0, 0.11, -0.82], // Верхнее центральное маршевое сопло
+    [-0.12, -0.03, -0.84], // Нижнее левое маршевое сопло
+    [0.12, -0.03, -0.84], // Нижнее правое маршевое сопло
+  ];
+  const pulseFlame = 0.85 + 0.15 * Math.sin(frameCounter * 0.22);
+
+  for (const [ex, ey, ez] of engineCenters) {
+    const eFront = projectLocal3D(ex, ey, ez + 0.06);
+    const eBack = projectLocal3D(ex, ey, ez - 0.08 * pulseFlame);
+    const nozzleR = Math.max(2.2, Math.min(11, apparentRadiusPx * 0.085));
+
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(eFront.x, eFront.y, nozzleR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Реактивный факел сопла
+    ctx.fillStyle = '#22d3ee';
+    ctx.globalAlpha = 0.88;
+    ctx.beginPath();
+    ctx.arc(eBack.x, eBack.y, nozzleR * 0.68 * pulseFlame, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(eBack.x, eBack.y, nozzleR * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
 };
 
 // 3. Корабль чужих THARGOID (восьмиугольная летающая тарелка)
@@ -440,50 +791,65 @@ export interface PlanetLogisticsMeta {
   resourceSymbol: AsteroidElementSymbol;
   resourceTitle: string;
   cycleOtherPlanets: [number, number, number]; // Индексы всех остальных планет для безостановочного цикла
+  orderRoman?: string;
+  groupTag?: string;
+  resourceLabel?: string;
 }
 
 export const PLANET_LOGISTICS_CONFIG: PlanetLogisticsMeta[] = [
   {
     planetIdx: 0,
     planetOrder: 1,
-    cleanName: 'Меркурий',
-    shortTag: 'I. МЕРКУРИЙ',
+    cleanName: 'Колония Вейланд-44 («Золотая Наковальня»)',
+    shortTag: 'I. КОЛОНИЯ ВЕЙЛАНД-44',
     color: '#fb923c',
     resourceSymbol: 'Fe',
     resourceTitle: 'Железо (Fe)',
-    cycleOtherPlanets: [1, 2, 3], // Венера (1) -> Земля (2) -> Марс (3) -> без остановки
+    cycleOtherPlanets: [1, 2, 3],
   },
   {
     planetIdx: 1,
     planetOrder: 2,
-    cleanName: 'Венера',
-    shortTag: 'II. ВЕНЕРА',
+    cleanName: 'Новая Земля-2 («Ржавчина»)',
+    shortTag: 'II. НОВАЯ ЗЕМЛЯ-2 («РЖАВЧИНА»)',
     color: '#a3e635',
     resourceSymbol: 'Al',
     resourceTitle: 'Алюминий (Al)',
-    cycleOtherPlanets: [0, 2, 3], // Меркурий (1) -> Земля (2) -> Марс (3) -> без остановки
+    cycleOtherPlanets: [0, 2, 3],
   },
   {
     planetIdx: 2,
     planetOrder: 3,
-    cleanName: 'Земля',
-    shortTag: 'III. ЗЕМЛЯ',
+    cleanName: 'Сектор Омега-7 («Слеза Неба»)',
+    shortTag: 'III. СЕКТОР ОМЕГА-7',
     color: '#38bdf8',
     resourceSymbol: 'H2O',
     resourceTitle: 'Еда и Вода (H₂O/O₂)',
-    cycleOtherPlanets: [0, 1, 3], // Меркурий (1) -> Венера (2) -> Марс (3) -> без остановки
+    cycleOtherPlanets: [0, 1, 3],
   },
   {
     planetIdx: 3,
     planetOrder: 4,
-    cleanName: 'Марс',
-    shortTag: 'IV. МАРС',
+    cleanName: 'Рудник Корпорации «Тардис» («Железный Гроб»)',
+    shortTag: 'IV. РУДНИК «ТАРДИС»',
     color: '#f43f5e',
     resourceSymbol: 'Ti',
     resourceTitle: 'Титан (Ti)',
-    cycleOtherPlanets: [0, 1, 2], // Меркурий (1) -> Венера (2) -> Земля (3) -> без остановки
+    cycleOtherPlanets: [0, 1, 2],
   },
 ];
+
+export const syncActiveSystemPlanetLogisticsConfig = (systemKey: string): void => {
+  const assign = getStarSystemFullAssignment(systemKey);
+  const romans = ['I', 'II', 'III', 'IV'] as const;
+  for (let i = 0; i < 4; i++) {
+    const p = assign.planets[i];
+    if (p && PLANET_LOGISTICS_CONFIG[i]) {
+      PLANET_LOGISTICS_CONFIG[i].cleanName = `${p.officialName} («${p.folkName}»)`;
+      PLANET_LOGISTICS_CONFIG[i].shortTag = `${romans[i]}. ${p.officialName.toUpperCase()} («${p.folkName.toUpperCase()}»)`;
+    }
+  }
+};
 
 export const getPlanetResourceInfo = (
   planetIdx: number,
@@ -506,10 +872,50 @@ export const getPlanetResourceInfo = (
   };
 };
 
+// ТИПЫ ДВИГАТЕЛЕЙ ДЛЯ ФИЛЬТРАЦИИ 3D-РАДАРА (клавиша «/» на Numpad):
+// «все , паруса, реактивные, импульсные, ионные, плазменные, фотонный, гравитационные, подпространственные»
+// Работает в паре с фильтром кораблей (клавиша «*» на Numpad).
+export type RadarEngineFilterType =
+  | 'ALL'
+  | 'SAILS'
+  | 'REACTIVE'
+  | 'IMPULSE'
+  | 'ION'
+  | 'PLASMA'
+  | 'PHOTON'
+  | 'GRAVITATIONAL'
+  | 'SUBSPACE';
+
+export interface RadarEngineFilterMeta {
+  id: RadarEngineFilterType;
+  labelRu: string;
+  shortLabelRu: string;
+  badgeRu: string;
+  badgeEn: string;
+  labelEn: string;
+  color: string;
+  icon: string;
+}
+
+export const RADAR_ENGINE_FILTERS: RadarEngineFilterMeta[] = [
+  { id: 'ALL', labelRu: 'Все типы двигателей', shortLabelRu: 'Все', badgeRu: 'ВСЕ ТИПЫ', badgeEn: 'ALL TYPES', labelEn: 'All Engine Types', color: '#38bdf8', icon: '🌌' },
+  { id: 'SAILS', labelRu: 'Солнечные и фотонные паруса', shortLabelRu: 'Паруса', badgeRu: 'ПАРУСА', badgeEn: 'SOLAR SAILS', labelEn: 'Solar & Photon Sails', color: '#67e8f9', icon: '⛵' },
+  { id: 'REACTIVE', labelRu: 'Реактивные химические двигатели', shortLabelRu: 'Реактивные', badgeRu: 'РЕАКТИВНЫЕ', badgeEn: 'CHEMICAL', labelEn: 'Chemical Reaction Drives', color: '#f97316', icon: '🚀' },
+  { id: 'IMPULSE', labelRu: 'Импульсные термоядерные двигатели', shortLabelRu: 'Импульсные', badgeRu: 'ИМПУЛЬСНЫЕ', badgeEn: 'IMPULSE', labelEn: 'Thermonuclear Impulse Drives', color: '#c084fc', icon: '⚡' },
+  { id: 'ION', labelRu: 'Ионные электрореактивные двигатели', shortLabelRu: 'Ионные', badgeRu: 'ИОННЫЕ', badgeEn: 'ION DRIVE', labelEn: 'Ion Electrostatic Thrusters', color: '#38bdf8', icon: '💠' },
+  { id: 'PLASMA', labelRu: 'Плазменные МГД-двигатели', shortLabelRu: 'Плазменные', badgeRu: 'ПЛАЗМЕННЫЕ', badgeEn: 'PLASMA', labelEn: 'Magnetohydrodynamic Plasma', color: '#34d399', icon: '🔥' },
+  { id: 'PHOTON', labelRu: 'Фотонный аннигиляционный привод', shortLabelRu: 'Фотонный', badgeRu: 'ФОТОННЫЙ', badgeEn: 'PHOTONIC', labelEn: 'Photon Annihilation Drive', color: '#fde047', icon: '✨' },
+  { id: 'GRAVITATIONAL', labelRu: 'Гравитационные варп-двигатели', shortLabelRu: 'Гравитационные', badgeRu: 'ГРАВИТАЦИОННЫЕ', badgeEn: 'GRAV-WARP', labelEn: 'Gravitational Warp Drives', color: '#f472b6', icon: '🌀' },
+  { id: 'SUBSPACE', labelRu: 'Подпространственные тахионные двигатели', shortLabelRu: 'Подпространственные', badgeRu: 'ПОДПРОСТРАНСТВЕННЫЕ', badgeEn: 'SUBSPACE', labelEn: 'Subspace Tachyon Drives', color: '#a78bfa', icon: '🪐' },
+];
+
 interface SpaceEntity {
   id: string;
   kind: 'STATION' | 'PIRATE' | 'THARGOID' | 'TRADER' | 'CARGO' | 'SOS_POD' | 'SPACE_DEBRIS';
   label: string;
+  clanName?: string;
+  clanNumber?: string;
+  karma?: number;
   pos: Vec3;
   vel: Vec3;
   rot: Vec3;
@@ -526,6 +932,8 @@ interface SpaceEntity {
   lootOrigin?: 'PLAYER_DESTROYED_SHIP' | 'AFTER_BATTLE';
   lootElement?: AsteroidElementSymbol;
   destroyedShipName?: string;
+  // Тип маршевой двигательной установки корабля:
+  engineType?: RadarEngineFilterType;
   // Строгое детерминированное движение в системе по траекториям между планетами (без хаотических движений):
   isLogisticsModule?: boolean; // Автоматический логистический стандартный модуль планеты
   homePlanetIdx?: number; // Индекс своей планеты (0 = Меркурий, 1 = Венера, 2 = Земля, 3 = Марс)
@@ -537,6 +945,20 @@ interface SpaceEntity {
   trajDurationSec?: number; // Длительность перелёта по траектории (60 сек)
   orbitWaitRemainingSec?: number; // Остаток задержки на стационарной орбите (60 сек = 1 минута)
   isFollowingKilledShipTrajectory?: boolean; // Для груза (CARGO) и мусора (SPACE_DEBRIS): при гибели продолжает двигаться по траектории убитого корабля и исчезает в планете назначения
+  // 4 стандартных корабля «Буран / Шаттл» в Поясе Астероидов (равномерно распределённые, V = 1/2 скорости, стреляют по астероидам и собирают металлы, без контактов):
+  isBuranMiner?: boolean;
+  minerIndex?: number; // 0..3 (равномерно через 90° по кольцу Пояса Астероидов)
+  beltOrbitRadius?: number; // ~27 000 ед.
+  beltOrbitAngle?: number; // Угол в плоскости эклиптики Пояса Астероидов
+  beltOrbitLinearSpeed?: number; // 50 ед/с (половина максимальной скорости 100 ед/с)
+  beltYOffset?: number;
+  miningLaserTimer?: number; // Таймер визуализации луча лазера по астероиду
+  miningTargetAstPos?: Vec3; // Координаты обстреливаемого астероида в системе камеры
+  miningCooldownSec?: number; // Таймер между выстрелами по астероидам
+  minedMetalsTons?: number; // Количество собранных тонн металла в грузовом отсеке (остаётся в контейнере после уничтожения корабля!)
+  isBeltOrbitDrop?: boolean; // Груз/обломки, оставшиеся на орбите в Поясе Астероидов после уничтожения корабля «Буран / Шаттл»
+  noContactsAllowed?: boolean; // На этих кораблях нет никаких контактов
+  currentCargoLabel?: string;
 }
 
 export const buildLogisticsModuleLabel = (ent: SpaceEntity, isOldGalaxy: boolean): string => {
@@ -609,6 +1031,13 @@ export const createPlanetaryLogisticsModuleEntity = (
       ? Math.max(1, Math.min(60, initialProgressOrWait))
       : 60;
 
+  const PLANET_ENGINE_TYPES: RadarEngineFilterType[] = [
+    'SAILS',    // 0: Меркурий (I) — паруса (фотонные/солнечные)
+    'PLASMA',   // 1: Венера (II) — плазменные двигатели
+    'ION',      // 2: Земля (III) — ионные электрореактивные двигатели
+    'REACTIVE', // 3: Марс (IV) — реактивные химические двигатели
+  ];
+
   const entity: SpaceEntity = {
     id: `logistics-module-${sysId}-p${homePlanetIdx}-${Date.now()}-${Math.floor(prog * 100)}`,
     kind: 'TRADER',
@@ -627,6 +1056,7 @@ export const createPlanetaryLogisticsModuleEntity = (
     color: homeRes.color,
     bounty: isOldGalaxy ? 550 : 200,
     lootElement: activeLootSym,
+    engineType: PLANET_ENGINE_TYPES[homePlanetIdx % 4],
     isLogisticsModule: true,
     homePlanetIdx,
     cycleTargetListIdx: targetListIdx,
@@ -641,11 +1071,142 @@ export const createPlanetaryLogisticsModuleEntity = (
   return entity;
 };
 
+const BURAN_MINER_METALS_POOL: AsteroidElementSymbol[] = [
+  'Fe',
+  'Ti',
+  'Al',
+  'Cu',
+  'Ni',
+  'Co',
+  'Ag',
+  'Pt',
+  'Au',
+];
+
+export const buildBuranMinerLabel = (ent: SpaceEntity): string => {
+  const idx = (ent.minerIndex ?? 0) + 1;
+  const sym = ent.lootElement || 'Ti';
+  const meta = ASTEROID_PERIODIC_ELEMENTS[sym] || ASTEROID_PERIODIC_ELEMENTS.Ti;
+  const tons = Math.max(1, ent.minedMetalsTons ?? 1);
+  return `🚀 БУРАН / ШАТТЛ #${idx} [ПОЯС АСТЕРОИДОВ · V=½ СКОРОСТИ (50 ЕД/С) · ДОБЫТО МЕТАЛЛОВ: ${tons}т ${meta.displaySymbol} · БЕЗ КОНТАКТОВ]`;
+};
+
+export const createAsteroidBeltBuranMinerEntity = (
+  minerIndex: number, // 0, 1, 2, 3 — равномерно по 90° в Поясе Астероидов
+  sysId: number,
+  isOldGalaxy: boolean
+): SpaceEntity => {
+  // Равномерное распределение 4 кораблей в Поясе Астероидов (через каждые π/2 = 90°):
+  const baseAngle = -Math.PI / 2 + minerIndex * (Math.PI / 2);
+  const initialSym: AsteroidElementSymbol = isOldGalaxy
+    ? 'Omega'
+    : BURAN_MINER_METALS_POOL[minerIndex % BURAN_MINER_METALS_POOL.length];
+  const initialTons = 1 + (minerIndex % 2);
+
+  const BURAN_ENGINE_TYPES: RadarEngineFilterType[] = [
+    'IMPULSE',       // miner 0: Буран #1 — импульсные термоядерные двигатели
+    'PHOTON',        // miner 1: Буран #2 — фотонный аннигиляционный привод
+    'GRAVITATIONAL', // miner 2: Буран #3 — гравитационные варп-двигатели
+    'SUBSPACE',      // miner 3: Буран #4 — подпространственные тахионные двигатели
+  ];
+
+  const entity: SpaceEntity = {
+    id: `buran-miner-${sysId}-${minerIndex + 1}`,
+    kind: 'TRADER',
+    label: '',
+    pos: {x: 0, y: 0, z: 1200},
+    vel: {x: 0, y: 0, z: 0},
+    rot: {x: 0, y: 0, z: 0},
+    rotSpeed: {x: 0, y: 0, z: 0},
+    hp: 100,
+    maxHp: 100,
+    massKg: 50000, // Стандартный корабль «Буран / Шаттл» 50 т
+    maxMassKg: 50000,
+    playerHitMassKg: 0,
+    teamHitMassKg: 0,
+    playerShotsHitCount: 0,
+    color: '#38bdf8',
+    bounty: isOldGalaxy ? 600 : 250,
+    lootElement: initialSym,
+    engineType: BURAN_ENGINE_TYPES[minerIndex % 4],
+    isBuranMiner: true,
+    minerIndex,
+    beltOrbitRadius: 27000 + (minerIndex - 1.5) * 90,
+    beltOrbitAngle: baseAngle,
+    beltOrbitLinearSpeed: 50, // Ровно половина (1/2) от максимальной скорости 100 ед/с!
+    beltYOffset: (minerIndex % 2 === 0 ? 1 : -1) * 14,
+    miningLaserTimer: 0,
+    miningCooldownSec: 1.2 + minerIndex * 0.45,
+    minedMetalsTons: initialTons,
+    noContactsAllowed: true,
+  };
+  entity.label = buildBuranMinerLabel(entity);
+  return entity;
+};
+
 export const createKilledShipTrajectoryDrops = (
   killedEntity: SpaceEntity,
   currentSystemId: number,
   isOldGalaxy: boolean
 ): SpaceEntity[] => {
+  // Если уничтожен корабль «Буран / Шаттл» в Поясе Астероидов — после него, как и после челноков, остаётся его груз собранных металлов, который можно забрать!
+  if (killedEntity.isBuranMiner) {
+    const droppedSym: AsteroidElementSymbol =
+      killedEntity.lootElement || (isOldGalaxy ? 'Omega' : 'Ti');
+    const droppedMeta = ASTEROID_PERIODIC_ELEMENTS[droppedSym] || ASTEROID_PERIODIC_ELEMENTS.Ti;
+    const droppedTons = Math.max(1, killedEntity.minedMetalsTons ?? 2);
+    const shipCleanName = `Буран / Шаттл #${(killedEntity.minerIndex ?? 0) + 1}`;
+    const beltR = killedEntity.beltOrbitRadius ?? 27000;
+    const beltA = killedEntity.beltOrbitAngle ?? -Math.PI / 2;
+    const beltY = killedEntity.beltYOffset ?? 0;
+
+    const cargoEntity: SpaceEntity = {
+      id: `belt-cargo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      kind: 'CARGO',
+      label: `📦 ГРУЗ МЕТАЛЛОВ СБИТОГО «БУРАНА #${(killedEntity.minerIndex ?? 0) + 1}» [${droppedTons}т ${droppedMeta.displaySymbol} (${droppedMeta.nameRu}) · СКМ=ЗАБРАТЬ В ОТСЕК!]`,
+      pos: {...killedEntity.pos},
+      vel: {x: 0, y: 0, z: 0},
+      rot: {x: 0, y: 0, z: 0},
+      rotSpeed: {x: 0, y: 0, z: 0},
+      hp: 40,
+      maxHp: 40,
+      color: '#f59e0b',
+      bounty: 0,
+      lootOrigin: 'PLAYER_DESTROYED_SHIP',
+      lootElement: droppedSym,
+      minedMetalsTons: droppedTons,
+      destroyedShipName: shipCleanName,
+      isBeltOrbitDrop: true,
+      beltOrbitRadius: beltR,
+      beltOrbitAngle: beltA,
+      beltOrbitLinearSpeed: 25, // Медленный дрейф по орбите пояса для удобного захвата
+      beltYOffset: beltY,
+      noContactsAllowed: true,
+    };
+
+    const debrisEntity: SpaceEntity = {
+      id: `belt-debris-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      kind: 'SPACE_DEBRIS',
+      label: `🪨 ОБЛОМКИ «БУРАНА #${(killedEntity.minerIndex ?? 0) + 1}» В ПОЯСЕ АСТЕРОИДОВ [ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]`,
+      pos: {...killedEntity.pos},
+      vel: {x: 0, y: 0, z: 0},
+      rot: {x: 0, y: 0, z: 0},
+      rotSpeed: {x: 0, y: 0, z: 0},
+      hp: 35,
+      maxHp: 35,
+      color: '#94a3b8',
+      bounty: 0,
+      destroyedShipName: shipCleanName,
+      isBeltOrbitDrop: true,
+      beltOrbitRadius: beltR,
+      beltOrbitAngle: beltA + 0.0025,
+      beltOrbitLinearSpeed: 25,
+      beltYOffset: beltY - 12,
+      noContactsAllowed: true,
+    };
+
+    return [cargoEntity, debrisEntity];
+  }
   const fromIdx = killedEntity.trajFromPlanetIdx ?? killedEntity.homePlanetIdx ?? 0;
   const toIdx =
     killedEntity.trajToPlanetIdx !== undefined && killedEntity.trajToPlanetIdx !== fromIdx
@@ -659,13 +1220,15 @@ export const createKilledShipTrajectoryDrops = (
   const droppedMeta = ASTEROID_PERIODIC_ELEMENTS[droppedSym];
   const shipCleanName = killedEntity.label.split('[')[0].trim();
 
-  // 1) Груз убитого корабля: продолжает двигаться строго по траектории убитого корабля в планету назначения.
+  // 1) Груз убитого корабля: продолжает двигаться строго по траектории убитого корабля в планету назначения
+  // со скоростью в ПОЛОВИНУ (1/2) скорости автоматического модуля (120 сек вместо 60 сек),
+  // чтобы его мог догнать и подобрать пират или мародёр!
   // Если не подобрали — исчезает в планете назначения, чтобы мусора не было!
   // Если уничтожить выстрелом — считается уничтожением астероида и вознаграждается соответственно!
   const cargoEntity: SpaceEntity = {
     id: `traj-cargo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     kind: 'CARGO',
-    label: `📦 ГРУЗ ПО ТРАЕКТОРИИ [1т ${droppedMeta.displaySymbol} → ИСЧЕЗНЕТ В ПЛ. «${destCfg.cleanName.toUpperCase()}» | СКМ=ВЗЯТЬ / ЛКМ=КАК АСТЕРОИД]`,
+    label: `📦 ГРУЗ ПО ТРАЕКТОРИИ [1т ${droppedMeta.displaySymbol} · V=½ МОДУЛЯ → ИСЧЕЗНЕТ В ПЛ. «${destCfg.cleanName.toUpperCase()}» | СКМ=ВЗЯТЬ / ЛКМ=КАК АСТЕРОИД]`,
     pos: {...killedEntity.pos},
     vel: {x: 0, y: 0, z: 0},
     rot: {x: 0, y: 0, z: 0},
@@ -680,16 +1243,16 @@ export const createKilledShipTrajectoryDrops = (
     trajFromPlanetIdx: fromIdx,
     trajToPlanetIdx: toIdx,
     trajProgress: currentProg,
-    trajDurationSec: 60,
+    trajDurationSec: 120, // Половина (1/2) скорости модуля (120с вместо 60с), чтобы пират или мародёр мог догнать и подобрать груз!
     isFollowingKilledShipTrajectory: true,
   };
 
-  // 2) Мусор (обломки убитого корабля): также движется строго по траектории убитого корабля и исчезает в планете назначения,
+  // 2) Мусор (обломки убитого корабля): также движется строго по траектории убитого корабля с половиной скорости модуля (120с) и исчезает в планете назначения,
   // а его уничтожение считается уничтожением астероида и вознаграждается соответственно!
   const debrisEntity: SpaceEntity = {
     id: `traj-debris-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     kind: 'SPACE_DEBRIS',
-    label: `🪨 МУСОР ОБЛОМКОВ ПО ТРАЕКТОРИИ [→ ИСЧЕЗНЕТ В ПЛ. «${destCfg.cleanName.toUpperCase()}» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]`,
+    label: `🪨 МУСОР ОБЛОМКОВ ПО ТРАЕКТОРИИ [V=½ МОДУЛЯ → ИСЧЕЗНЕТ В ПЛ. «${destCfg.cleanName.toUpperCase()}» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]`,
     pos: {...killedEntity.pos},
     vel: {x: 0, y: 0, z: 0},
     rot: {x: 0, y: 0, z: 0},
@@ -702,7 +1265,7 @@ export const createKilledShipTrajectoryDrops = (
     trajFromPlanetIdx: fromIdx,
     trajToPlanetIdx: toIdx,
     trajProgress: Math.min(0.98, currentProg + 0.025),
-    trajDurationSec: 60,
+    trajDurationSec: 120, // Половина (1/2) скорости модуля
     isFollowingKilledShipTrajectory: true,
   };
 
@@ -730,9 +1293,63 @@ export const stepSystemTrajectories = (
   entities: SpaceEntity[],
   dtSec: number,
   isOldGalaxy: boolean,
-  onCargoOrDebrisAbsorbed?: (label: string, destPlanetName: string) => void
+  onCargoOrDebrisAbsorbed?: (label: string, destPlanetName: string) => void,
+  planets?: Array<{orbitRadius: number; orbitAngle: number; radius3D: number}>
 ): SpaceEntity[] => {
   const nextEntities: SpaceEntity[] = [];
+  // Линейная скорость челнока (автоматического модуля) строго равна базовой скорости корабля игрока (100 ед/с),
+  // груз/обломки разрушенного модуля движутся со скоростью 1/2 от скорости модуля (50 ед/с),
+  // а планеты на орбитах — со скоростью 1/4 от скорости модуля (25 ед/с).
+  const MODULE_LINEAR_SPEED = 100;
+  const CARGO_LINEAR_SPEED = MODULE_LINEAR_SPEED * 0.5;
+  const PLANET_ORBIT_SPEED = MODULE_LINEAR_SPEED * 0.25;
+  const defaultOrbitAngles = [-Math.PI / 2, 0.15, Math.PI * 0.52, Math.PI * 1.08];
+
+  const getRouteKinematics = (
+    fromPlanetIdx: number,
+    toPlanetIdx: number,
+    currentProg: number
+  ): {routeDist: number; vEndpointAlongRoute: number} => {
+    if (fromPlanetIdx === toPlanetIdx) {
+      return {routeDist: 6000, vEndpointAlongRoute: 0};
+    }
+    const pFrom = planets?.[fromPlanetIdx];
+    const pTo = planets?.[toPlanetIdx];
+    const rFrom = pFrom ? pFrom.orbitRadius : 6000 * (fromPlanetIdx + 1);
+    const rTo = pTo ? pTo.orbitRadius : 6000 * (toPlanetIdx + 1);
+    const aFrom = pFrom ? pFrom.orbitAngle : defaultOrbitAngles[fromPlanetIdx % 4];
+    const aTo = pTo ? pTo.orbitAngle : defaultOrbitAngles[toPlanetIdx % 4];
+    const rad3dFrom = pFrom ? pFrom.radius3D : 110;
+    const rad3dTo = pTo ? pTo.radius3D : 110;
+
+    const xFrom = rFrom * Math.cos(aFrom);
+    const yFrom = rFrom * Math.sin(aFrom);
+    const xTo = rTo * Math.cos(aTo);
+    const yTo = rTo * Math.sin(aTo);
+
+    const dx = xTo - xFrom;
+    const dy = yTo - yFrom;
+    const centerDist = Math.max(1, Math.hypot(dx, dy));
+    const ux = dx / centerDist;
+    const uy = dy / centerDist;
+
+    // Реальная 3D-дистанция маршрута между стационарными орбитами двух планет
+    const routeDist = Math.max(600, centerDist - (rad3dFrom + rad3dTo) * 1.55);
+
+    // Проекция орбитального движения планет-концов маршрута на вектор курса челнока,
+    // чтобы полная скорость челнока в 3D-пространстве системы была строго равна 100 ед/с (как у корабля игрока)
+    const vFromX = -PLANET_ORBIT_SPEED * Math.sin(aFrom);
+    const vFromY = PLANET_ORBIT_SPEED * Math.cos(aFrom);
+    const vToX = -PLANET_ORBIT_SPEED * Math.sin(aTo);
+    const vToY = PLANET_ORBIT_SPEED * Math.cos(aTo);
+
+    const clampedProg = Math.max(0, Math.min(1, currentProg));
+    const vEndpX = (1 - clampedProg) * vFromX + clampedProg * vToX;
+    const vEndpY = (1 - clampedProg) * vFromY + clampedProg * vToY;
+    const vEndpointAlongRoute = vEndpX * ux + vEndpY * uy;
+
+    return {routeDist, vEndpointAlongRoute};
+  };
 
   for (const ent of entities) {
     if (ent.isLogisticsModule && ent.homePlanetIdx !== undefined) {
@@ -743,10 +1360,12 @@ export const stepSystemTrajectories = (
       let phase: LogisticsCyclePhase = ent.logisticsPhase || 'OUTBOUND_FLIGHT';
       let prog = ent.trajProgress ?? 0;
       let waitSec = ent.orbitWaitRemainingSec ?? 60;
-      const flightDuration = ent.trajDurationSec || 60;
 
       if (phase === 'OUTBOUND_FLIGHT') {
-        prog += dtSec / flightDuration;
+        const {routeDist, vEndpointAlongRoute} = getRouteKinematics(homeIdx, otherIdx, prog);
+        const effectiveAlongRouteSpeed = Math.max(20, MODULE_LINEAR_SPEED - vEndpointAlongRoute);
+        ent.trajDurationSec = Math.max(10, Math.round(routeDist / MODULE_LINEAR_SPEED));
+        prog += (effectiveAlongRouteSpeed * dtSec) / routeDist;
         ent.trajFromPlanetIdx = homeIdx;
         ent.trajToPlanetIdx = otherIdx;
         ent.lootElement = getPlanetResourceInfo(homeIdx, isOldGalaxy).symbol; // Груз со своей планеты — её ресурсы!
@@ -767,9 +1386,14 @@ export const stepSystemTrajectories = (
           prog = 0;
           ent.trajFromPlanetIdx = otherIdx;
           ent.trajToPlanetIdx = homeIdx;
+          const {routeDist} = getRouteKinematics(otherIdx, homeIdx, 0);
+          ent.trajDurationSec = Math.max(10, Math.round(routeDist / MODULE_LINEAR_SPEED));
         }
       } else if (phase === 'RETURN_FLIGHT') {
-        prog += dtSec / flightDuration;
+        const {routeDist, vEndpointAlongRoute} = getRouteKinematics(otherIdx, homeIdx, prog);
+        const effectiveAlongRouteSpeed = Math.max(20, MODULE_LINEAR_SPEED - vEndpointAlongRoute);
+        ent.trajDurationSec = Math.max(10, Math.round(routeDist / MODULE_LINEAR_SPEED));
+        prog += (effectiveAlongRouteSpeed * dtSec) / routeDist;
         ent.trajFromPlanetIdx = otherIdx;
         ent.trajToPlanetIdx = homeIdx;
         ent.lootElement = getPlanetResourceInfo(otherIdx, isOldGalaxy).symbol; // Груз с чужой планеты — её ресурсы!
@@ -793,6 +1417,8 @@ export const stepSystemTrajectories = (
           waitSec = 60;
           ent.trajFromPlanetIdx = homeIdx;
           ent.trajToPlanetIdx = otherIdx;
+          const {routeDist} = getRouteKinematics(homeIdx, otherIdx, 0);
+          ent.trajDurationSec = Math.max(10, Math.round(routeDist / MODULE_LINEAR_SPEED));
         }
       }
 
@@ -802,12 +1428,32 @@ export const stepSystemTrajectories = (
       ent.orbitWaitRemainingSec = waitSec;
       ent.label = buildLogisticsModuleLabel(ent, isOldGalaxy);
       nextEntities.push(ent);
+    } else if (ent.isBuranMiner) {
+      // Движение каждого из 4 кораблей «Буран / Шаттл» равномерно вдоль Пояса Астероидов (R ≈ 27 000)
+      // со скоростью ровно в ПОЛОВИНУ (1/2) от максимальной скорости корабля (50 ед/с):
+      const beltR = ent.beltOrbitRadius || 27000;
+      const linearSpd = ent.beltOrbitLinearSpeed || MODULE_LINEAR_SPEED * 0.5; // 50 ед/с
+      ent.beltOrbitAngle = (ent.beltOrbitAngle ?? -Math.PI / 2) + (linearSpd / beltR) * dtSec;
+      ent.label = buildBuranMinerLabel(ent);
+      nextEntities.push(ent);
+    } else if (ent.isBeltOrbitDrop) {
+      // Груз металлов и обломки, оставшиеся после уничтожения «Бурана / Шаттла» в Поясе Астероидов
+      const beltR = ent.beltOrbitRadius || 27000;
+      const linearSpd = ent.beltOrbitLinearSpeed || 25;
+      ent.beltOrbitAngle = (ent.beltOrbitAngle ?? -Math.PI / 2) + (linearSpd / beltR) * dtSec;
+      nextEntities.push(ent);
     } else if (ent.isFollowingKilledShipTrajectory) {
-      // Движение груза (CARGO) и мусора (SPACE_DEBRIS) по траектории убитого корабля:
-      // если его не подобрали (и не расстреляли как астероид) — он исчезает в планете назначения, чтобы мусора не было!
-      const flightDuration = ent.trajDurationSec || 60;
-      const nextProg = (ent.trajProgress ?? 0) + dtSec / flightDuration;
-      const toIdx = ent.trajToPlanetIdx ?? 0;
+      // Движение груза (CARGO) и мусора (SPACE_DEBRIS) по траектории разрушенного модуля:
+      // • Движется ровно с ПОЛОВИНОЙ скорости модуля (50 ед/с = 1/2 от 100 ед/с),
+      //   чтобы его мог догнать и подобрать пират или мародёр!
+      // • Если его не подобрали (и не расстреляли как астероид) — он исчезает в планете назначения, чтобы мусора не было!
+      const fromIdx = ent.trajFromPlanetIdx ?? 0;
+      const toIdx = ent.trajToPlanetIdx ?? ((fromIdx + 1) % 4);
+      const curProg = ent.trajProgress ?? 0;
+      const {routeDist, vEndpointAlongRoute} = getRouteKinematics(fromIdx, toIdx, curProg);
+      const effectiveCargoSpeed = Math.max(12, CARGO_LINEAR_SPEED - vEndpointAlongRoute);
+      ent.trajDurationSec = Math.max(20, Math.round(routeDist / CARGO_LINEAR_SPEED));
+      const nextProg = curProg + (effectiveCargoSpeed * dtSec) / routeDist;
       const destCfg = PLANET_LOGISTICS_CONFIG[toIdx] || PLANET_LOGISTICS_CONFIG[0];
 
       if (nextProg >= 1) {
@@ -823,9 +1469,9 @@ export const stepSystemTrajectories = (
         const meta = ASTEROID_PERIODIC_ELEMENTS[sym];
         const originTag =
           ent.lootOrigin === 'PLAYER_DESTROYED_SHIP' ? 'СКМ=ПИРАТ' : 'СКМ=МАРОДЁР';
-        ent.label = `📦 ГРУЗ НА ТРАЕКТОРИИ [1т ${meta.displaySymbol} · ${pct}% → ИСЧЕЗНЕТ В «${destCfg.cleanName.toUpperCase()}» | ${originTag} / ЛКМ=АСТЕРОИД]`;
+        ent.label = `📦 ГРУЗ НА ТРАЕКТОРИИ [1т ${meta.displaySymbol} · V=½ МОДУЛЯ · ${pct}% → ИСЧЕЗНЕТ В «${destCfg.cleanName.toUpperCase()}» | ${originTag} / ЛКМ=АСТЕРОИД]`;
       } else if (ent.kind === 'SPACE_DEBRIS') {
-        ent.label = `🪨 МУСОР НА ТРАЕКТОРИИ [${pct}% → ИСЧЕЗНЕТ В «${destCfg.cleanName.toUpperCase()}» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]`;
+        ent.label = `🪨 МУСОР НА ТРАЕКТОРИИ [V=½ МОДУЛЯ · ${pct}% → ИСЧЕЗНЕТ В «${destCfg.cleanName.toUpperCase()}» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]`;
       }
       nextEntities.push(ent);
     } else {
@@ -900,6 +1546,45 @@ export const buildLogisticsUiSnapshot = (
         isCargoOrDebris: false,
         isWaitingOrbit: isWait,
       });
+    } else if (ent.isBuranMiner) {
+      const idx = (ent.minerIndex ?? 0) + 1;
+      const sym = ent.lootElement || 'Ti';
+      const meta = ASTEROID_PERIODIC_ELEMENTS[sym] || ASTEROID_PERIODIC_ELEMENTS.Ti;
+      const tons = Math.max(1, ent.minedMetalsTons ?? 1);
+      const deg = Math.round((((ent.beltOrbitAngle ?? 0) * 180) / Math.PI + 360) % 360);
+      result.push({
+        id: ent.id,
+        planetName: `🚀 Буран / Шаттл #${idx} (Пояс Астероидов · 50т)`,
+        phaseLabel: `Полёт на ½ скорости (50 ед/с) · Сектор ${deg}° · Обстрел астероидов`,
+        routeLabel: `Пояс Астероидов (R=${ent.beltOrbitRadius || 27000} · #${idx}/4)`,
+        cargoLabel: `Собрано металлов: ${tons}т [${meta.displaySymbol}] ${meta.nameRu} (Без контактов)`,
+        timerSec: Math.max(1, Math.ceil(ent.miningCooldownSec ?? 2)),
+        progressPct: ((idx * 25 + Math.round(deg / 4)) % 100),
+        color: ent.color,
+        isCargoOrDebris: false,
+        isWaitingOrbit: false,
+      });
+    } else if (ent.isBeltOrbitDrop) {
+      const isDebris = ent.kind === 'SPACE_DEBRIS';
+      const sym = ent.lootElement || 'Ti';
+      const meta = ASTEROID_PERIODIC_ELEMENTS[sym] || ASTEROID_PERIODIC_ELEMENTS.Ti;
+      const tons = Math.max(1, ent.minedMetalsTons ?? 1);
+      result.push({
+        id: ent.id,
+        planetName: isDebris
+          ? '🪨 Обломки «Бурана» в Поясе Астероидов'
+          : `📦 Груз металлов «Бурана» (${tons}т ${meta.displaySymbol})`,
+        phaseLabel: 'Дрейф на орбите Пояса Астероидов после уничтожения корабля',
+        routeLabel: `Пояс Астероидов (R=${ent.beltOrbitRadius || 27000})`,
+        cargoLabel: isDebris
+          ? 'Космический мусор (ЛКМ/ПКМ = уничтожить как астероид)'
+          : `${tons}т [${meta.displaySymbol}] ${meta.nameRu} (СКМ = Забрать груз)`,
+        timerSec: 60,
+        progressPct: 50,
+        color: ent.color,
+        isCargoOrDebris: true,
+        isWaitingOrbit: false,
+      });
     } else if (
       ent.isFollowingKilledShipTrajectory ||
       ent.kind === 'CARGO' ||
@@ -910,7 +1595,8 @@ export const buildLogisticsUiSnapshot = (
       const fromCfg = PLANET_LOGISTICS_CONFIG[fromIdx] || PLANET_LOGISTICS_CONFIG[3];
       const toCfg = PLANET_LOGISTICS_CONFIG[toIdx] || PLANET_LOGISTICS_CONFIG[2];
       const progRatio = Math.max(0, Math.min(1, ent.trajProgress ?? 0));
-      const flightDuration = ent.trajDurationSec || 60;
+      const flightDuration =
+        ent.trajDurationSec && ent.trajDurationSec >= 120 ? ent.trajDurationSec : 120;
       const timerSec = Math.ceil(Math.max(0, (1 - progRatio) * flightDuration));
       const progressPct = Math.round(progRatio * 100);
       const isDebris = ent.kind === 'SPACE_DEBRIS';
@@ -920,9 +1606,9 @@ export const buildLogisticsUiSnapshot = (
       result.push({
         id: ent.id,
         planetName: isDebris
-          ? '🪨 Мусор на траектории убитого корабля'
-          : '📦 Груз на траектории убитого корабля',
-        phaseLabel: `По траектории ${fromCfg.cleanName} → ${toCfg.cleanName} (исчезнет в «${toCfg.cleanName}»)`,
+          ? '🪨 Мусор на траектории (V = ½ скорости модуля)'
+          : '📦 Груз на траектории (V = ½ скорости модуля)',
+        phaseLabel: `По траектории ${fromCfg.cleanName} → ${toCfg.cleanName} (V=½ модуля · исчезнет в «${toCfg.cleanName}»)`,
         routeLabel: `${fromCfg.cleanName} → ${toCfg.cleanName}`,
         cargoLabel: isDebris
           ? 'Космический мусор (ЛКМ/ПКМ = уничтожить как астероид)'
@@ -973,6 +1659,1158 @@ interface ProjectedPlanetObjectHit {
   hitRadius: number;
 }
 
+interface CelestialConstellationStar {
+  name: string;
+  lonDeg: number;
+  latDeg: number;
+  radius: number;
+  color: string;
+  isAlpha?: boolean;
+  spectralNote: string;
+  distanceLightYears: string;
+  targetSystemId: number;
+}
+
+interface CelestialConstellationDef {
+  id: string;
+  nameRu: string;
+  nameLat: string;
+  alphaStar: string;
+  description: string;
+  lineColor: string;
+  stars: CelestialConstellationStar[];
+}
+
+interface NeighboringGalaxyDef {
+  id: string;
+  nameRu: string;
+  code: string;
+  distanceLabel: string;
+  description: string;
+  lonDeg: number;
+  latDeg: number;
+  majorRadiusPx: number;
+  minorRadiusPx: number;
+  tiltRad: number;
+  coreColor: string;
+  armColor: string;
+  kind: 'SPIRAL' | 'DWARF_CLOUD';
+}
+
+// =========================================================================
+// ОТРИСОВКА КАЖДОЙ ЗВЕЗДЫ МАЛЕНЬКОЙ ТОЧКОЙ С АККУРАТНЫМИ ЛУЧИКАМИ,
+// ЧТОБЫ ОТЛИЧАТЬ ЗВЁЗДЫ ОТ КРУГЛЫХ ПЛАНЕТ СВОЕЙ СИСТЕМЫ
+// =========================================================================
+const drawCelestialStarShape = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  baseRadius: number,
+  color: string,
+  isAlpha?: boolean
+) => {
+  ctx.save();
+  const dotR = isAlpha ? 1.65 : Math.max(1.1, Math.min(1.45, baseRadius * 0.48));
+  const mainRayLen = isAlpha ? 4.8 : Math.max(2.9, Math.min(3.8, baseRadius * 1.25));
+  const diagRayLen = mainRayLen * 0.52;
+
+  // 1. Четыре тонких диагональных лучика (×)
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = isAlpha ? 0.55 : 0.42;
+  ctx.lineWidth = 0.65;
+  ctx.beginPath();
+  ctx.moveTo(x - diagRayLen, y - diagRayLen);
+  ctx.lineTo(x + diagRayLen, y + diagRayLen);
+  ctx.moveTo(x - diagRayLen, y + diagRayLen);
+  ctx.lineTo(x + diagRayLen, y - diagRayLen);
+  ctx.stroke();
+
+  // 2. Четыре основных тонких лучика (+)
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = isAlpha ? 0.92 : 0.78;
+  ctx.lineWidth = isAlpha ? 0.95 : 0.75;
+  ctx.beginPath();
+  ctx.moveTo(x - mainRayLen, y);
+  ctx.lineTo(x + mainRayLen, y);
+  ctx.moveTo(x, y - mainRayLen);
+  ctx.lineTo(x, y + mainRayLen);
+  ctx.stroke();
+
+  // 3. Аккуратная маленькая яркая точка в центре
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.98;
+  ctx.beginPath();
+  ctx.arc(x, y, dotR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.globalAlpha = 0.95;
+  ctx.fillRect(x - 0.55, y - 0.55, 1.1, 1.1);
+  ctx.restore();
+};
+
+// =========================================================================
+// МЛЕЧНЫЙ ПУТЬ И РОССЫПЬ МИКРО-ЗВЁЗД («БИТЫЕ ПИКСЕЛИ» ПО ЭСКИЗУ КОКПИТА):
+// • Млечный Путь: наклонная космическая река звёздной пыли, тёмные расщелины пыли
+//   и золотисто-янтарный галактический центр.
+// • Микро-звёзды: 1450 резких 1-пиксельных точек глубокого космоса с лёгким мерцанием.
+// =========================================================================
+interface CelestialMicroStar {
+  lonDeg: number;
+  latDeg: number;
+  baseBrightness: number;
+  size: number;
+  color: string;
+  twinkleSpeed: number;
+  twinklePhase: number;
+}
+
+interface MilkyWayCloudDef {
+  lonDeg: number;
+  latDeg: number;
+  radiusPx: number;
+  coreColor: string;
+  midColor: string;
+  outerColor?: string;
+  scaleX?: number;
+  scaleY?: number;
+  tiltRad: number;
+  isDustLane?: boolean;
+}
+
+const buildCelestialCosmicElements = (): {
+  microStars: CelestialMicroStar[];
+  milkyWayClouds: MilkyWayCloudDef[];
+} => {
+  // Детерминированный LCG-генератор
+  let seed = 123456789;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
+  // 1. Построение плоскости Млечного Пути:
+  // Нормаль к плоскости Галактики наклонена на ~62° относительно эклиптики
+  const incRad = (62 * Math.PI) / 180;
+  const nodeRad = (45 * Math.PI) / 180;
+
+  // Базисные векторы плоскости Галактики в эклиптических координатах
+  const uX = Math.cos(nodeRad);
+  const uY = Math.sin(nodeRad);
+  const uZ = 0;
+
+  const vX = -Math.sin(nodeRad) * Math.cos(incRad);
+  const vY = Math.cos(nodeRad) * Math.cos(incRad);
+  const vZ = Math.sin(incRad);
+
+  const nX = Math.sin(nodeRad) * Math.sin(incRad);
+  const nY = -Math.cos(nodeRad) * Math.sin(incRad);
+  const nZ = Math.cos(incRad);
+
+  const getGalacticLonLat = (lRad: number, bRad: number): { lonDeg: number; latDeg: number } => {
+    const cosB = Math.cos(bRad);
+    const sinB = Math.sin(bRad);
+    const cosL = Math.cos(lRad);
+    const sinL = Math.sin(lRad);
+
+    const dX = cosB * (cosL * uX + sinL * vX) + sinB * nX;
+    const dY = cosB * (cosL * uY + sinL * vY) + sinB * nY;
+    const dZ = cosB * (cosL * uZ + sinL * vZ) + sinB * nZ;
+
+    const lonRad = Math.atan2(dY, dX);
+    const latRad = Math.asin(Math.max(-1, Math.min(1, dZ)));
+
+    let lonDeg = (lonRad * 180) / Math.PI;
+    if (lonDeg < 0) lonDeg += 360;
+    const latDeg = (latRad * 180) / Math.PI;
+
+    return { lonDeg, latDeg };
+  };
+
+  // 2. Генерация облаков Млечного Пути: единый лёгкий космический туман по всей полосе
+  // Без центральной яркой части — нежная, прозрачная, заблюренная дымка по всей длине
+  const clouds: MilkyWayCloudDef[] = [];
+  const totalStreamClouds = 108; // Плотное равномерное перекрытие по всему кольцу 360°
+  for (let i = 0; i < totalStreamClouds; i++) {
+    const lFrac = i / totalStreamClouds;
+    const lRad = lFrac * Math.PI * 2;
+    // Очень мягкие плавные волновые покачивания по галактической широте
+    const bRad = (Math.sin(lRad * 3) * 1.8 + (rand() - 0.5) * 2.2) * (Math.PI / 180);
+
+    const { lonDeg, latDeg } = getGalacticLonLat(lRad, bRad);
+
+    // Равномерный лёгкий туман (серебристо-голубая и нежно-жемчужная звёздная пыль)
+    // Одинаковая прозрачность и фактура по всей длине Млечного Пути без ярких пятен в центре
+    const warmArm = rand() > 0.55;
+    const coreColor = warmArm
+      ? `rgba(254, 240, 138, ${(0.055 + rand() * 0.025).toFixed(3)})`
+      : `rgba(207, 222, 255, ${(0.060 + rand() * 0.025).toFixed(3)})`;
+    const midColor = warmArm
+      ? 'rgba(251, 191, 36, 0.022)'
+      : 'rgba(147, 197, 253, 0.020)';
+    const outerColor = 'rgba(129, 140, 248, 0.005)';
+
+    clouds.push({
+      lonDeg,
+      latDeg,
+      radiusPx: 72 + rand() * 26,
+      coreColor,
+      midColor,
+      outerColor,
+      scaleX: 1.65,
+      scaleY: 0.60,
+      tiltRad: (rand() - 0.5) * 0.12,
+      isDustLane: false,
+    });
+
+    // Очень деликатные, полупрозрачные волокна космической пыли
+    if (i % 5 === 0 && rand() > 0.4) {
+      const dustB = bRad + ((rand() - 0.5) * 2.2 * Math.PI) / 180;
+      const dustCoord = getGalacticLonLat(lRad + 0.015, dustB);
+      clouds.push({
+        lonDeg: dustCoord.lonDeg,
+        latDeg: dustCoord.latDeg,
+        radiusPx: 45 + rand() * 20,
+        coreColor: 'rgba(3, 7, 18, 0.10)',
+        midColor: 'rgba(3, 7, 18, 0.04)',
+        outerColor: 'rgba(0, 0, 0, 0.0)',
+        scaleX: 1.8,
+        scaleY: 0.35,
+        tiltRad: (rand() - 0.5) * 0.15,
+        isDustLane: true,
+      });
+    }
+  }
+
+  // 3. Генерация микро-звёзд (1800 штук: как битые пиксели на экране)
+  // Равномерная россыпь вдоль полосы Млечного Пути и по всему небу
+  const stars: CelestialMicroStar[] = [];
+  const totalMicroStars = 1800;
+  const spectralPalette = [
+    '#ffffff', // 40% чистый белый
+    '#ffffff',
+    '#ffffff',
+    '#ffffff',
+    '#bae6fd', // 20% ледяной бело-голубой (класс O/B)
+    '#bae6fd',
+    '#fef08a', // 20% солнечный тёплый (класс G)
+    '#fef08a',
+    '#fed7aa', // 15% золотисто-янтарный (класс K)
+    '#f472b6', // 5% лёгкий космический розовый/рубиновый
+  ];
+
+  for (let i = 0; i < totalMicroStars; i++) {
+    let lonDeg: number;
+    let latDeg: number;
+
+    if (i < 950) {
+      // 950 звёзд концентрируются вдоль всей полосы Млечного Пути
+      const lRad = rand() * Math.PI * 2;
+      // Нормальное распределение около галактической плоскости: +/- 8 градусов
+      const bRad = (Math.pow(rand() - 0.5, 3) * 32 * Math.PI) / 180;
+      const res = getGalacticLonLat(lRad, bRad);
+      lonDeg = res.lonDeg;
+      latDeg = res.latDeg;
+    } else {
+      // 850 звёзд равномерно распределены по всей небесной сфере (по закону равной площади)
+      const u = rand();
+      const v = rand();
+      lonDeg = u * 360;
+      latDeg = (Math.asin(v * 2 - 1) * 180) / Math.PI;
+    }
+
+    const color = spectralPalette[Math.floor(rand() * spectralPalette.length)];
+    // Размер: 75% ровно 1px (битый пиксель!), 20% 1.5px, 5% 2px
+    const sizeRoll = rand();
+    const size = sizeRoll > 0.95 ? 2.0 : sizeRoll > 0.75 ? 1.5 : 1.0;
+    const baseBrightness = 0.35 + rand() * 0.65;
+    const twinkleSpeed = 0.8 + rand() * 2.8;
+    const twinklePhase = rand() * Math.PI * 2;
+
+    stars.push({
+      lonDeg,
+      latDeg,
+      baseBrightness,
+      size,
+      color,
+      twinkleSpeed,
+      twinklePhase,
+    });
+  }
+
+  return { microStars: stars, milkyWayClouds: clouds };
+};
+
+const { microStars: CELESTIAL_MICRO_STARS, milkyWayClouds: CELESTIAL_MILKY_WAY_CLOUDS } =
+  buildCelestialCosmicElements();
+
+// 10 САМЫХ ЗНАМЕНИТЫХ СОЗВЕЗДИЙ (БЕЗ ТРАССИРОВКИ ЛИНИЙ, РАВНОМЕРНО РАЗМЕЩЁННЫХ ПО 3D-СЦЕНЕ)
+// Каждая звезда созвездия отображается звёздочкой (★) и доступна в карточке созвездия для Гиперпрыжка!
+const FAMOUS_CELESTIAL_CONSTELLATIONS: CelestialConstellationDef[] = [
+  {
+    id: 'constellation-orion',
+    nameRu: 'Орион',
+    nameLat: 'Orion',
+    alphaStar: 'Бетельгейзе / Ригель',
+    description:
+      'Центральное созвездие экваториального сектора: красный сверхгигант Бетельгейзе, бело-голубой Ригель и три звезды Пояса Ориона.',
+    lineColor: 'rgba(125, 211, 252, 0.45)',
+    stars: [
+      {
+        name: 'Бетельгейзе (α Ori)',
+        lonDeg: -14,
+        latDeg: 14,
+        radius: 3.4,
+        color: '#fb923c',
+        isAlpha: true,
+        spectralNote: 'Красный сверхгигант M1-2 · Сектор LAVE',
+        distanceLightYears: '548 св. лет',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Беллатрикс (γ Ori)',
+        lonDeg: 12,
+        latDeg: 11,
+        radius: 2.8,
+        color: '#7dd3fc',
+        spectralNote: 'Голубой гигант B2 III · Сектор ZAONCE',
+        distanceLightYears: '250 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Альнитак (ζ Ori)',
+        lonDeg: -9,
+        latDeg: 0,
+        radius: 2.7,
+        color: '#bae6fd',
+        spectralNote: 'Тройная голубая система O9 · Сектор DISO',
+        distanceLightYears: '1260 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Альнилам (ε Ori)',
+        lonDeg: 0,
+        latDeg: -2,
+        radius: 2.9,
+        color: '#e0f2fe',
+        spectralNote: 'Сверхгигант B0 Ia · Центр Пояса Ориона',
+        distanceLightYears: '1340 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Минтака (δ Ori)',
+        lonDeg: 9,
+        latDeg: -4,
+        radius: 2.7,
+        color: '#bae6fd',
+        spectralNote: 'Кратная система B0 III · Сектор ORERVE',
+        distanceLightYears: '1200 св. лет',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Саиф (κ Ori)',
+        lonDeg: -12,
+        latDeg: -16,
+        radius: 2.6,
+        color: '#93c5fd',
+        spectralNote: 'Голубой сверхгигант B0.5 · Сектор RIEDQUAT',
+        distanceLightYears: '650 св. лет',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Ригель (β Ori)',
+        lonDeg: 14,
+        latDeg: -17,
+        radius: 3.5,
+        color: '#38bdf8',
+        isAlpha: true,
+        spectralNote: 'Бело-голубой сверхгигант B8 Ia · Сектор LEESTI',
+        distanceLightYears: '860 св. лет',
+        targetSystemId: 4,
+      },
+    ],
+  },
+  {
+    id: 'constellation-taurus',
+    nameRu: 'Телец и Плеяды',
+    nameLat: 'Taurus & Pleiades (M45)',
+    alphaStar: 'Альдебаран (α Tau)',
+    description:
+      'Зодиакальная система с оранжевым гигантом Альдебараном, скоплением Гиады и яркими голубыми звёздами Плеяд.',
+    lineColor: 'rgba(251, 146, 60, 0.42)',
+    stars: [
+      {
+        name: 'Альдебаран (α Tau)',
+        lonDeg: 34,
+        latDeg: 18,
+        radius: 3.4,
+        color: '#fb923c',
+        isAlpha: true,
+        spectralNote: 'Оранжевый гигант K5 III · Сектор ZAONCE',
+        distanceLightYears: '65 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Нат (β Tau)',
+        lonDeg: 26,
+        latDeg: 34,
+        radius: 2.9,
+        color: '#7dd3fc',
+        spectralNote: 'Бело-голубой гигант B7 III · Сектор DISO',
+        distanceLightYears: '134 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Дзета Тельца (ζ Tau)',
+        lonDeg: 24,
+        latDeg: 22,
+        radius: 2.5,
+        color: '#bae6fd',
+        spectralNote: 'Спектрально-двойная B2 · Сектор RIEDQUAT',
+        distanceLightYears: '440 св. лет',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Эпсилон Тельца (Айн)',
+        lonDeg: 41,
+        latDeg: 26,
+        radius: 2.5,
+        color: '#fde047',
+        spectralNote: 'Оранжевый гигант K0 III (Гиады) · Сектор LAVE',
+        distanceLightYears: '146 св. лет',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Альциона (η Tau · Плеяды)',
+        lonDeg: 52,
+        latDeg: 30,
+        radius: 3.0,
+        color: '#38bdf8',
+        spectralNote: 'Главная звезда скопления Плеяды · Сектор LEESTI',
+        distanceLightYears: '440 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Атлас (27 Tau · Плеяды)',
+        lonDeg: 59,
+        latDeg: 35,
+        radius: 2.4,
+        color: '#7dd3fc',
+        spectralNote: 'Тройная звезда B8 III · Сектор ORERVE',
+        distanceLightYears: '435 св. лет',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Электра (17 Tau · Плеяды)',
+        lonDeg: 47,
+        latDeg: 38,
+        radius: 2.4,
+        color: '#93c5fd',
+        spectralNote: 'Голубой гигант B6 III · Сектор OMEGA',
+        distanceLightYears: '400 св. лет',
+        targetSystemId: 6,
+      },
+    ],
+  },
+  {
+    id: 'constellation-crux',
+    nameRu: 'Южный Крест',
+    nameLat: 'Crux',
+    alphaStar: 'Акрукс (α Cru)',
+    description:
+      'Знаменитое созвездие Южного неба из ярких навигационных звёзд, указывающих на Южный полюс небесной сферы.',
+    lineColor: 'rgba(52, 211, 153, 0.45)',
+    stars: [
+      {
+        name: 'Акрукс (α Cru)',
+        lonDeg: 44,
+        latDeg: -42,
+        radius: 3.4,
+        color: '#38bdf8',
+        isAlpha: true,
+        spectralNote: 'Кратная бело-голубая звезда B0.5 · Сектор DISO',
+        distanceLightYears: '321 св. год',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Гакрукс (γ Cru)',
+        lonDeg: 44,
+        latDeg: -20,
+        radius: 3.1,
+        color: '#fb923c',
+        spectralNote: 'Красный гигант M3.5 III · Сектор ORERVE',
+        distanceLightYears: '88.6 св. лет',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Мимоза (β Cru)',
+        lonDeg: 32,
+        latDeg: -31,
+        radius: 3.2,
+        color: '#7dd3fc',
+        spectralNote: 'Голубой субгигант B0.5 IV · Сектор ZAONCE',
+        distanceLightYears: '280 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Имай (δ Cru)',
+        lonDeg: 56,
+        latDeg: -31,
+        radius: 2.6,
+        color: '#e0f2fe',
+        spectralNote: 'Переменная B2 IV · Сектор LEESTI',
+        distanceLightYears: '345 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Джина (ε Cru)',
+        lonDeg: 51,
+        latDeg: -36,
+        radius: 2.5,
+        color: '#fdba74',
+        spectralNote: 'Оранжевый гигант K3 III · Сектор LAVE',
+        distanceLightYears: '228 св. лет',
+        targetSystemId: 0,
+      },
+    ],
+  },
+  {
+    id: 'constellation-ursa-major',
+    nameRu: 'Большая Медведица',
+    nameLat: 'Ursa Major',
+    alphaStar: 'Дубхе / Алиот',
+    description:
+      'Знаменитый Большой Ковш из семи ярких звёзд Северного неба. Крайние звёзды ковша (Мерак и Дубхе) указывают курс на Полярную звезду.',
+    lineColor: 'rgba(56, 189, 248, 0.42)',
+    stars: [
+      {
+        name: 'Дубхе (α UMa)',
+        lonDeg: 74,
+        latDeg: 40,
+        radius: 3.3,
+        color: '#fde047',
+        isAlpha: true,
+        spectralNote: 'Оранжевый гигант K0 III · Сектор LAVE',
+        distanceLightYears: '123 св. года',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Мерак (β UMa)',
+        lonDeg: 72,
+        latDeg: 26,
+        radius: 2.7,
+        color: '#e0f2fe',
+        spectralNote: 'Белая звезда A1 V · Сектор ZAONCE',
+        distanceLightYears: '79.7 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Фекда (γ UMa)',
+        lonDeg: 86,
+        latDeg: 24,
+        radius: 2.6,
+        color: '#e0f2fe',
+        spectralNote: 'Белый карлик главной посл. A0 · Сектор DISO',
+        distanceLightYears: '83.2 св. года',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Мегрец (δ UMa)',
+        lonDeg: 88,
+        latDeg: 35,
+        radius: 2.4,
+        color: '#f8fafc',
+        spectralNote: 'Узловая звезда Ковша A3 V · Сектор RIEDQUAT',
+        distanceLightYears: '80.5 св. лет',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Алиот (ε UMa)',
+        lonDeg: 98,
+        latDeg: 38,
+        radius: 3.2,
+        color: '#f8fafc',
+        spectralNote: 'Ярчайшая звезда Ковша A1p · Сектор LEESTI',
+        distanceLightYears: '82.6 св. года',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Мицар и Алькор (ζ UMa)',
+        lonDeg: 108,
+        latDeg: 42,
+        radius: 2.9,
+        color: '#bae6fd',
+        spectralNote: 'Шестикратная навигационная система · Сектор ORERVE',
+        distanceLightYears: '82.9 св. года',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Алькаид (η UMa)',
+        lonDeg: 118,
+        latDeg: 34,
+        radius: 2.9,
+        color: '#7dd3fc',
+        spectralNote: 'Голубая звезда B3 V · Сектор OMEGA',
+        distanceLightYears: '103.9 св. года',
+        targetSystemId: 6,
+      },
+    ],
+  },
+  {
+    id: 'constellation-scorpius',
+    nameRu: 'Скорпион',
+    nameLat: 'Scorpius',
+    alphaStar: 'Антарес (α Sco)',
+    description:
+      'Южное зодиакальное созвездие с пламенеющим красным сверхгигантом Антаресом («Сердце Скорпиона») и ярким жалом Шаула.',
+    lineColor: 'rgba(251, 113, 133, 0.42)',
+    stars: [
+      {
+        name: 'Акраб (β Sco)',
+        lonDeg: 88,
+        latDeg: -10,
+        radius: 2.6,
+        color: '#bae6fd',
+        spectralNote: 'Кратная голубая система B1 V · Сектор ZAONCE',
+        distanceLightYears: '400 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Дшубба (δ Sco)',
+        lonDeg: 92,
+        latDeg: -18,
+        radius: 2.7,
+        color: '#e0f2fe',
+        spectralNote: 'Голубой субгигант B0.3 IV · Сектор DISO',
+        distanceLightYears: '440 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Антарес (α Sco)',
+        lonDeg: 102,
+        latDeg: -22,
+        radius: 3.6,
+        color: '#f87171',
+        isAlpha: true,
+        spectralNote: 'Красный сверхгигант M1.5 Iab · Сектор RIEDQUAT',
+        distanceLightYears: '550 св. лет',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Альният (τ Sco)',
+        lonDeg: 110,
+        latDeg: -28,
+        radius: 2.5,
+        color: '#e0f2fe',
+        spectralNote: 'Магнитная голубая звезда B0 V · Сектор LEESTI',
+        distanceLightYears: '470 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Лараваг (ε Sco)',
+        lonDeg: 116,
+        latDeg: -36,
+        radius: 2.7,
+        color: '#fdba74',
+        spectralNote: 'Оранжевый гигант K1 III · Сектор ORERVE',
+        distanceLightYears: '63.7 св. года',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Саргас (θ Sco)',
+        lonDeg: 124,
+        latDeg: -44,
+        radius: 2.8,
+        color: '#fef08a',
+        spectralNote: 'Жёлто-белый яркий гигант F1 II · Сектор LAVE',
+        distanceLightYears: '300 св. лет',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Шаула (λ Sco)',
+        lonDeg: 132,
+        latDeg: -35,
+        radius: 3.1,
+        color: '#38bdf8',
+        spectralNote: 'Тройная бело-голубая звезда B1.5 · Сектор CHRONOS',
+        distanceLightYears: '570 св. лет',
+        targetSystemId: 7,
+      },
+    ],
+  },
+  {
+    id: 'constellation-leo',
+    nameRu: 'Лев',
+    nameLat: 'Leo',
+    alphaStar: 'Регул (α Leo)',
+    description:
+      'Зодиакальное созвездие с астеризмом «Серп Льва» и бело-голубым гигантом Регул («Сердце Льва»).',
+    lineColor: 'rgba(250, 204, 21, 0.40)',
+    stars: [
+      {
+        name: 'Регул (α Leo)',
+        lonDeg: 142,
+        latDeg: 4,
+        radius: 3.4,
+        color: '#93c5fd',
+        isAlpha: true,
+        spectralNote: 'Четырёхкратная система B8 IV · Сектор LAVE',
+        distanceLightYears: '79.3 св. года',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Аль-Джабхах (η Leo)',
+        lonDeg: 140,
+        latDeg: 14,
+        radius: 2.4,
+        color: '#e2e8f0',
+        spectralNote: 'Белый сверхгигант A0 Ib · Сектор ZAONCE',
+        distanceLightYears: '1270 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Альгиеба (γ Leo)',
+        lonDeg: 148,
+        latDeg: 22,
+        radius: 3.0,
+        color: '#fbbf24',
+        spectralNote: 'Двойной золотистый гигант K0 III · Сектор DISO',
+        distanceLightYears: '130 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Адхафера (ζ Leo)',
+        lonDeg: 145,
+        latDeg: 31,
+        radius: 2.4,
+        color: '#f8fafc',
+        spectralNote: 'Гигант класса F0 III · Сектор RIEDQUAT',
+        distanceLightYears: '274 св. года',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Расалас (μ Leo)',
+        lonDeg: 136,
+        latDeg: 34,
+        radius: 2.5,
+        color: '#fdba74',
+        spectralNote: 'Оранжевый гигант K2 III · Сектор LEESTI',
+        distanceLightYears: '124 св. года',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Зосма (δ Leo)',
+        lonDeg: 162,
+        latDeg: 20,
+        radius: 2.7,
+        color: '#e0f2fe',
+        spectralNote: 'Белая звезда A4 V · Сектор ORERVE',
+        distanceLightYears: '58.4 св. года',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Денебола (β Leo)',
+        lonDeg: 174,
+        latDeg: 10,
+        radius: 3.1,
+        color: '#bae6fd',
+        spectralNote: 'Яркая звезда A3 V · Сектор OMEGA',
+        distanceLightYears: '35.9 св. года',
+        targetSystemId: 6,
+      },
+    ],
+  },
+  {
+    id: 'constellation-ursa-minor',
+    nameRu: 'Малая Медведица',
+    nameLat: 'Ursa Minor',
+    alphaStar: 'Полярная звезда (Polaris)',
+    description:
+      'Навигационное созвездие Малого Ковша, на острие которого сияет Полярная звезда — главный маяк Северного полюса мира.',
+    lineColor: 'rgba(167, 243, 208, 0.42)',
+    stars: [
+      {
+        name: 'Полярная звезда (α UMi)',
+        lonDeg: 184,
+        latDeg: 52,
+        radius: 3.5,
+        color: '#fef08a',
+        isAlpha: true,
+        spectralNote: 'Жёлтый сверхгигант F7 Ib · Полярный маяк LAVE',
+        distanceLightYears: '433 св. года',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Йильдун (δ UMi)',
+        lonDeg: 192,
+        latDeg: 45,
+        radius: 2.3,
+        color: '#e2e8f0',
+        spectralNote: 'Белая звезда главной посл. A1 V · Сектор ZAONCE',
+        distanceLightYears: '172 св. года',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Уродел (ε UMi)',
+        lonDeg: 200,
+        latDeg: 38,
+        radius: 2.3,
+        color: '#e2e8f0',
+        spectralNote: 'Затменно-двойная G5 III · Сектор DISO',
+        distanceLightYears: '300 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Ахфа аль Фаркадайн (ζ UMi)',
+        lonDeg: 208,
+        latDeg: 32,
+        radius: 2.5,
+        color: '#f8fafc',
+        spectralNote: 'Белая звезда A3 V · Сектор RIEDQUAT',
+        distanceLightYears: '369 св. лет',
+        targetSystemId: 3,
+      },
+      {
+        name: 'Анвар аль Фаркадайн (η UMi)',
+        lonDeg: 218,
+        latDeg: 28,
+        radius: 2.3,
+        color: '#f8fafc',
+        spectralNote: 'Жёлто-белый карлик F5 V · Сектор LEESTI',
+        distanceLightYears: '97.3 св. года',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Феркад (γ UMi)',
+        lonDeg: 218,
+        latDeg: 39,
+        radius: 2.7,
+        color: '#e0f2fe',
+        spectralNote: 'Яркий белый гигант A2 III · Сектор ORERVE',
+        distanceLightYears: '487 св. лет',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Кохаб (β UMi)',
+        lonDeg: 208,
+        latDeg: 43,
+        radius: 3.1,
+        color: '#fdba74',
+        spectralNote: 'Оранжевый гигант K4 III («Страж Полюса») · Сектор CHRONOS',
+        distanceLightYears: '130.9 св. года',
+        targetSystemId: 7,
+      },
+    ],
+  },
+  {
+    id: 'constellation-cassiopeia',
+    nameRu: 'Кассиопея',
+    nameLat: 'Cassiopeia',
+    alphaStar: 'Шедар (α Cas)',
+    description:
+      'Знаменитая яркая фигура из пяти звёзд в форме буквы «W» на фоне звёздного рукава галактики.',
+    lineColor: 'rgba(244, 114, 182, 0.42)',
+    stars: [
+      {
+        name: 'Каф (β Cas)',
+        lonDeg: 186,
+        latDeg: -16,
+        radius: 2.8,
+        color: '#fef9c3',
+        spectralNote: 'Жёлто-белый гигант F2 III · Сектор ZAONCE',
+        distanceLightYears: '54.7 св. года',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Шедар (α Cas)',
+        lonDeg: 196,
+        latDeg: -26,
+        radius: 3.3,
+        color: '#fdba74',
+        isAlpha: true,
+        spectralNote: 'Оранжевый гигант K0 IIIa · Сектор DISO',
+        distanceLightYears: '228 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Нави (γ Cas)',
+        lonDeg: 206,
+        latDeg: -17,
+        radius: 3.0,
+        color: '#7dd3fc',
+        spectralNote: 'Голубой субгигант B0.5 IVe · Сектор LEESTI',
+        distanceLightYears: '550 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Рукбах (δ Cas)',
+        lonDeg: 216,
+        latDeg: -28,
+        radius: 2.7,
+        color: '#e0f2fe',
+        spectralNote: 'Затменная переменная A5 III · Сектор ORERVE',
+        distanceLightYears: '99.4 св. года',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Сегин (ε Cas)',
+        lonDeg: 226,
+        latDeg: -18,
+        radius: 2.6,
+        color: '#bae6fd',
+        spectralNote: 'Голубой гигант B3 III · Сектор OMEGA',
+        distanceLightYears: '410 св. лет',
+        targetSystemId: 6,
+      },
+      {
+        name: 'Ахирд (η Cas)',
+        lonDeg: 191,
+        latDeg: -22,
+        radius: 2.4,
+        color: '#fde047',
+        spectralNote: 'Солнцеподобная двойная G0 V · Сектор LAVE',
+        distanceLightYears: '19.4 св. года',
+        targetSystemId: 0,
+      },
+    ],
+  },
+  {
+    id: 'constellation-cygnus',
+    nameRu: 'Лебедь (Северный Крест)',
+    nameLat: 'Cygnus',
+    alphaStar: 'Денеб (α Cyg)',
+    description:
+      'Величественный «Северный Крест», раскинувший крылья вдоль галактического экватора и увенчанный сверхгигантом Денеб.',
+    lineColor: 'rgba(103, 232, 249, 0.40)',
+    stars: [
+      {
+        name: 'Денеб (α Cyg)',
+        lonDeg: 266,
+        latDeg: 28,
+        radius: 3.5,
+        color: '#e0f2fe',
+        isAlpha: true,
+        spectralNote: 'Белый сверхгигант A2 Ia · Сектор DISO',
+        distanceLightYears: '2615 св. лет',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Садр (γ Cyg)',
+        lonDeg: 266,
+        latDeg: 14,
+        radius: 3.0,
+        color: '#fef08a',
+        spectralNote: 'Жёлтый сверхгигант F8 Ib · Центр Креста ZAONCE',
+        distanceLightYears: '1800 св. лет',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Альбирео (β Cyg)',
+        lonDeg: 266,
+        latDeg: -6,
+        radius: 2.8,
+        color: '#fbbf24',
+        spectralNote: 'Контрастная золотисто-голубая двойная · Сектор LAVE',
+        distanceLightYears: '430 св. лет',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Гиенах (ε Cyg)',
+        lonDeg: 250,
+        latDeg: 11,
+        radius: 2.7,
+        color: '#fdba74',
+        spectralNote: 'Оранжевый гигант K0 III · Сектор LEESTI',
+        distanceLightYears: '72.7 св. года',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Фаварес (δ Cyg)',
+        lonDeg: 282,
+        latDeg: 15,
+        radius: 2.7,
+        color: '#bae6fd',
+        spectralNote: 'Тройная бело-голубая B9.5 III · Сектор ORERVE',
+        distanceLightYears: '165 св. лет',
+        targetSystemId: 5,
+      },
+      {
+        name: 'Азадифар (ζ Cyg)',
+        lonDeg: 242,
+        latDeg: 4,
+        radius: 2.4,
+        color: '#fde047',
+        spectralNote: 'Бариевый жёлтый гигант G8 III · Сектор RIEDQUAT',
+        distanceLightYears: '143 св. года',
+        targetSystemId: 3,
+      },
+    ],
+  },
+  {
+    id: 'constellation-lyra',
+    nameRu: 'Лира',
+    nameLat: 'Lyra',
+    alphaStar: 'Вега (α Lyr)',
+    description:
+      'Созвездие с ослепительно-голубой Вегой — эталоном звёздной величины и одной из вершин навигационного треугольника.',
+    lineColor: 'rgba(192, 132, 252, 0.42)',
+    stars: [
+      {
+        name: 'Вега (α Lyr)',
+        lonDeg: 312,
+        latDeg: 32,
+        radius: 3.6,
+        color: '#60a5fa',
+        isAlpha: true,
+        spectralNote: 'Эталонная бело-голубая звезда A0 V · Сектор ZAONCE',
+        distanceLightYears: '25.04 св. года',
+        targetSystemId: 1,
+      },
+      {
+        name: 'Эпсилон Лиры (ε Lyr)',
+        lonDeg: 318,
+        latDeg: 37,
+        radius: 2.4,
+        color: '#e0f2fe',
+        spectralNote: 'Четырёхкратная «Двойная двойная» · Сектор LAVE',
+        distanceLightYears: '162 св. года',
+        targetSystemId: 0,
+      },
+      {
+        name: 'Дзета Лиры (ζ Lyr)',
+        lonDeg: 320,
+        latDeg: 24,
+        radius: 2.5,
+        color: '#e0f2fe',
+        spectralNote: 'Тесная двойная система Am · Сектор DISO',
+        distanceLightYears: '154 св. года',
+        targetSystemId: 2,
+      },
+      {
+        name: 'Шелиак (β Lyr)',
+        lonDeg: 328,
+        latDeg: 14,
+        radius: 2.7,
+        color: '#bae6fd',
+        spectralNote: 'Прототип контактно-двойных B8 II · Сектор OMEGA',
+        distanceLightYears: '960 св. лет',
+        targetSystemId: 6,
+      },
+      {
+        name: 'Сулафат (γ Lyr)',
+        lonDeg: 334,
+        latDeg: 11,
+        radius: 2.8,
+        color: '#7dd3fc',
+        spectralNote: 'Голубой гигант B9 III · Сектор LEESTI',
+        distanceLightYears: '620 св. лет',
+        targetSystemId: 4,
+      },
+      {
+        name: 'Аладфар (η Lyr)',
+        lonDeg: 304,
+        latDeg: 20,
+        radius: 2.4,
+        color: '#93c5fd',
+        spectralNote: 'Субгигант B2.5 IV · Сектор ORERVE',
+        distanceLightYears: '1390 св. лет',
+        targetSystemId: 5,
+      },
+    ],
+  },
+];
+
+const buildConstellationStarsJumpList = (
+  con: CelestialConstellationDef,
+  hoveredStarIdx?: number
+): ConstellationStarJumpItem[] =>
+  con.stars.map((stDef, idx) => {
+    const sysKey = `${con.id}:${idx}`;
+    const assign = getStarSystemFullAssignment(sysKey);
+    const planetsBrief = assign.planets
+      .map((p) => `${p.orbitRoman}: «${p.officialName}» (в народе: «${p.folkName}»)`)
+      .join(' · ');
+    const starRad = getStarRadiationProfile(`${stDef.spectralNote} ${stDef.name}`);
+    return {
+      starId: `${con.id}-star-${idx}`,
+      starName: stDef.name,
+      spectralColor: stDef.color,
+      spectralNote: `${stDef.spectralNote} | Планеты: ${planetsBrief} | 💀 Звезда Смерти: «${assign.deathStar.officialName}» («${assign.deathStar.folkName}») | 🍩 Станция: «${assign.spaceStation.officialName}» («${assign.spaceStation.folkName}»)`,
+      distanceLightYears: stDef.distanceLightYears,
+      targetSystemId: stDef.targetSystemId,
+      isHoveredStar: hoveredStarIdx === idx,
+      starRad,
+    };
+  });
+
+// ГАЛАКТИКА АНДРОМЕДЫ (M31) И СОСЕДНИЕ МАЛЫЕ ГАЛАКТИКИ НА 3D-КУПОЛЕ (РАВНОМЕРНО ПО СЕКТОРАМ)
+const NEIGHBORING_CELESTIAL_GALAXIES: NeighboringGalaxyDef[] = [
+  {
+    id: 'galaxy-andromeda-m31',
+    nameRu: 'Галактика Андромеды',
+    code: 'M31 · NGC 224',
+    distanceLabel: '2.52 млн св. лет',
+    description:
+      'Крупнейшая спиральная галактика Местной группы (содержит около 1 триллиона звёзд) со спутниками M32 и M110.',
+    lonDeg: 62,
+    latDeg: 10,
+    majorRadiusPx: 38,
+    minorRadiusPx: 13,
+    tiltRad: -0.48,
+    coreColor: '#fef08a',
+    armColor: '#c084fc',
+    kind: 'SPIRAL',
+  },
+  {
+    id: 'galaxy-lmc',
+    nameRu: 'Большое Магелланово Облако',
+    code: 'LMC · ESO 56-115',
+    distanceLabel: '163 тыс. св. лет',
+    description:
+      'Крупнейшая яркая карликовая галактика-спутник Млечного Пути с центральной звёздной перемычкой и туманностью Тарантул.',
+    lonDeg: 152,
+    latDeg: -26,
+    majorRadiusPx: 30,
+    minorRadiusPx: 18,
+    tiltRad: 0.32,
+    coreColor: '#67e8f9',
+    armColor: '#38bdf8',
+    kind: 'DWARF_CLOUD',
+  },
+  {
+    id: 'galaxy-smc',
+    nameRu: 'Малое Магелланово Облако',
+    code: 'SMC · NGC 292',
+    distanceLabel: '200 тыс. св. лет',
+    description:
+      'Соседняя карликовая неправильная галактика-спутник, содержащая сотни миллионов молодых голубых звёзд.',
+    lonDeg: 242,
+    latDeg: -30,
+    majorRadiusPx: 21,
+    minorRadiusPx: 12,
+    tiltRad: -0.35,
+    coreColor: '#a5f3fc',
+    armColor: '#818cf8',
+    kind: 'DWARF_CLOUD',
+  },
+  {
+    id: 'galaxy-triangulum-m33',
+    nameRu: 'Галактика Треугольника',
+    code: 'M33 · NGC 598',
+    distanceLabel: '2.73 млн св. лет',
+    description:
+      'Третья по величине спиральная галактика Местной группы после галактики Андромеды и Млечного Пути.',
+    lonDeg: 332,
+    latDeg: -14,
+    majorRadiusPx: 24,
+    minorRadiusPx: 11,
+    tiltRad: 0.42,
+    coreColor: '#fde68a',
+    armColor: '#38bdf8',
+    kind: 'SPIRAL',
+  },
+];
+
 interface SystemPlanet {
   id: string;
   name: string;
@@ -989,6 +2827,21 @@ interface SystemPlanet {
   color: string;
   labelOffsetY: number;
   isMainWorld?: boolean;
+  isDeathStar?: boolean;
+  isTorusShip?: boolean;
+  isStargate?: boolean;
+  isBuranShuttle?: boolean;
+  isKuiperBelt?: boolean;
+  kuiperMeta?: KuiperBeltBodyDef;
+  shapeType?: 'SPHERE' | 'ELLIPSOID' | 'CONTACT_BINARY';
+  ellipsoidScale?: {x: number; y: number; z: number};
+  hasRings?: boolean;
+  ringRadiusRatio?: number;
+  ringColor?: string;
+  isRocheLimitAnomaly?: boolean;
+  hasHeartFeature?: boolean;
+  isSnowmanContactBinary?: boolean;
+  kuiperMoons?: KuiperMoonDef[];
   gobellObjects: PlanetGoBellObject[];
 }
 
@@ -1213,15 +3066,57 @@ interface SystemAsteroid {
   isValuable: boolean; // false = простой булыжник (исчезает бесследно со взрывом), true = имеет ценность (элемент периодической системы или вода H₂O)
   revealed: boolean; // false до огневого контакта (все булыжники неразличимы!), true после выстрела — помечается как Fe, Al, Ti, H₂O...
   elementSymbol?: AsteroidElementSymbol;
+  isKuiperBelt?: boolean;
+  respawnAtMs?: number; // Время восстановления (Date.now() + 5 мин) на том же месте после уничтожения или захвата в отсек
 }
+
+const ASTEROID_RESPAWN_DELAY_MS = 5 * 60 * 1000; // 5 минут (300 сек) до восстановления астероида на месте уничтожения/сбора
+
+// КАРА ДИКТАТОРА ЗА АТАКУ ЧЕЛНОКА НА ПОГРУЗКЕ/РАЗГРУЗКЕ У ПЛАНЕТЫ:
+// С планеты вылетает рой из 5 дронов, движущихся хаотически независимо друг от друга
+// со скоростью вдвое выше скорости атаковавшего корабля (2x = 200 ед/с),
+// а сила выстрела каждого дрона в 20 раз меньше, чем нужно для разрушения корабля нарушителя (100% / 20 = 5% за выстрел).
+interface DictatorPunitiveDrone {
+  id: string;
+  droneNumber: number; // 1..5
+  originPlanetIdx: number;
+  originPlanetName: string;
+  sysOffsetU: number;
+  sysOffsetN: number;
+  sysOffsetV: number;
+  dirU: number;
+  dirN: number;
+  dirV: number;
+  chaosTimerSec: number;
+  chaosPhase: number;
+  chaosFreqX: number;
+  chaosFreqY: number;
+  chaosFreqZ: number;
+  speedUnitsPerSec: number;
+  hp: number;
+  maxHp: number;
+  fireCooldownSec: number;
+  laserVisualTimer: number;
+  color: string;
+  camPos: Vec3;
+  engineType?: RadarEngineFilterType;
+}
+
+const DICTATOR_SWARM_DRONE_COUNT = 5;
+const DICTATOR_DRONE_SHOT_DAMAGE_PCT = 100 / 20; // 5% (ровно в 20 раз меньше, чем нужно для разрушения корабля нарушителя)
 
 // МАСШТАБ ЗВЁЗДНОЙ СИСТЕМЫ И СФЕРЫ ГРАНИЦЫ:
 // Максимальная скорость корабля = 100 ед./сек.
 // 1 минута полёта на макс. скорости (60 сек) = 6 000 ед. (шаг между орбитами планет!).
-// 5 минут полёта на макс. скорости (300 сек) = 30 000 ед. (радиус Сферы Системы от окраины до Звезды!).
-const SYSTEM_SPHERE_RADIUS = 30000;
+// Расширенная сцена Системы: R = 100 000 ед. Все планеты, орбиты и объекты остаются на своих исходных местах!
+const SYSTEM_SPHERE_RADIUS = 100000;
 const PLANET_ORBIT_STEP = 6000; // 1 минута (60с) между планетами при Vmax = 100 ед/с
-const MAX_SYSTEM_SPEED = 100; // 100 ед/с = 6000 ед/мин = 30000 ед за 5 минут
+const MAX_SYSTEM_SPEED = 100; // 100 ед/с
+// Линейная скорость движения планет по своим орбитам = ровно 1/4 (четверть) скорости автоматического модуля (100 ед/с * 0.25 = 25 ед/с):
+// так как радиусы орбит планет разные (6000, 12000, 18000, 24000 ед.), их угловые скорости ω = V_orbit / R различаются,
+// и расстояние между планетами постоянно меняется!
+const PLANET_ORBIT_LINEAR_SPEED = MAX_SYSTEM_SPEED * 0.25; // 25 ед./с (четверть скорости автоматического модуля)
+const DESTROYED_MODULE_CARGO_DURATION_SEC = 120; // Половина (1/2) скорости модуля (120с вместо 60с) для груза разрушенного модуля
 
 const formatFlightEta = (distUnits: number, speedUnitsPerSec: number): string => {
   const effectiveSpd = Math.max(1, speedUnitsPerSec);
@@ -1249,6 +3144,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportContainerRef = useRef<HTMLDivElement | null>(null);
   const [isGeoBeaconModalOpen, setIsGeoBeaconModalOpen] = useState<boolean>(false);
+  // Два режима показа игрового экрана:
+  // 'FULL' — полный режим со всеми информационными блоками, кнопками и правой боковой панелью
+  // 'CLEAN_COCKPIT' — чистый кокпит (только 3D-экран космоса и нижняя приборная панель Cobra Mk III без боковой панели и загромождающих блоков)
+  const [cockpitDisplayMode, setCockpitDisplayMode] = useState<'FULL' | 'CLEAN_COCKPIT'>('FULL');
+  // Масштаб 3D-радара, проекции и навигации (по умолчанию 10 000 ед., регулируется клавишами + и - с шагом 2 000 до 2 000)
+  const [radarScaleUnits, setRadarScaleUnits] = useState<number>(10000);
+  // Фильтр 3D-радара: клавиша * на Numpad отключает все объекты кроме объектов с двигателем (кораблей)
+  const [radarShipsOnlyFilter, setRadarShipsOnlyFilter] = useState<boolean>(false);
+  // Фильтр 3D-радара по типам двигателей (клавиша «/» на Numpad / NumpadDivide):
+  // «все , паруса, реактивные, импульсные, ионные, плазменные, фотонный, гравитационные, подпространственные».
+  // Работает только в паре с фильтром кораблей (клавиша * на Numpad)!
+  const [radarEngineFilter, setRadarEngineFilter] = useState<RadarEngineFilterType>('ALL');
 
   // Состояние наведённого/выбранного объекта GoBell на поверхности 3D-сферы планеты (Группа / Бизнес / 4 Объявления бизнеса)
   const [hoveredPlanetObjUi, setHoveredPlanetObjUi] = useState<{
@@ -1262,6 +3169,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const isHoveringPopupRef = useRef<boolean>(false);
   const hoveredPlanetObjRef = useRef<PlanetGoBellObject | null>(null);
   const projectedPlanetObjectsRef = useRef<ProjectedPlanetObjectHit[]>([]);
+  const kuiperCycleIndexRef = useRef<number>(0);
 
   // Модальное окно «Форма запроса на контакт» (точно как на карте GoBell)
   const [planetContactTarget, setPlanetContactTarget] = useState<{
@@ -1345,6 +3253,135 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     },
     [soundEnabled]
   );
+
+  const asteroidCaptureAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const audio = new Audio('/sounds/asteroid_captured.mp3');
+      audio.preload = 'auto';
+      asteroidCaptureAudioRef.current = audio;
+    } catch {
+      // Игнорируем
+    }
+  }, []);
+
+  const speakDynamicPhrase = useCallback((phrase: string) => {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(phrase);
+      utter.lang = 'ru-RU';
+      utter.rate = 1.05;
+      utter.pitch = 0.98;
+      utter.volume = 1.0;
+
+      const voices = window.speechSynthesis.getVoices();
+      const ruVoice = voices.find((v) => v.lang.startsWith('ru') || v.lang.includes('RU'));
+      if (ruVoice) {
+        utter.voice = ruVoice;
+      }
+
+      utter.onend = () => {
+        // Завершающий щелчок рации
+        try {
+          if (audioCtxRef.current) {
+            const ctx = audioCtxRef.current;
+            const now = ctx.currentTime;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1050, now);
+            gain.gain.setValueAtTime(0.04, now);
+            gain.gain.linearRampToValueAtTime(0.001, now + 0.04);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.04);
+          }
+        } catch {
+          // Игнорируем
+        }
+      };
+
+      window.speechSynthesis.speak(utter);
+    } catch {
+      // Игнорируем ошибки синтезатора
+    }
+  }, []);
+
+  // Озвучивание названия ЛЮБОГО захваченного объекта (астероид, капсула, контейнер, груз, зонд...)
+  const playCaptureVoiceNotification = useCallback(
+    (objectName: string, isAsteroid: boolean = false) => {
+      if (!soundEnabled) return;
+
+      // 1. Воспроизводим гармонический тон луча захвата (ZX DOCK beep)
+      playZxBeep('DOCK');
+
+      // 2. Радио-щелчок рации перед фразой бортового компьютера
+      try {
+        if (!audioCtxRef.current) {
+          const AudioContextClass =
+            window.AudioContext || (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext;
+          audioCtxRef.current = new AudioContextClass();
+        }
+        const ctx = audioCtxRef.current;
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1400, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.05);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.05);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.05);
+      } catch {
+        // Игнорируем ошибки Web Audio
+      }
+
+      const cleanName = (objectName || 'Объект').trim();
+      const isPlainAsteroid = isAsteroid && (cleanName === 'Астероид' || cleanName.toLowerCase() === 'астероид');
+
+      // Если это чистый общий «Астероид» без указания элемента — воспроизводим готовый аудиосэмпл
+      if (isPlainAsteroid && asteroidCaptureAudioRef.current) {
+        try {
+          asteroidCaptureAudioRef.current.currentTime = 0;
+          asteroidCaptureAudioRef.current.play().catch(() => {
+            speakDynamicPhrase('Астероид захвачен');
+          });
+          return;
+        } catch {
+          // Fallback to speech below
+        }
+      }
+
+      // Формируем грамотную русскую фразу бортового компьютера с учётом рода слова
+      let phrase = '';
+      const lower = cleanName.toLowerCase();
+      if (lower.startsWith('астероид')) {
+        phrase = `${cleanName} захвачен`;
+      } else if (lower.includes('капсула') || lower.endsWith('а') || lower.endsWith('я')) {
+        phrase = `${cleanName} захвачена`;
+      } else if (lower.endsWith('о') || lower.endsWith('е')) {
+        phrase = `${cleanName} захвачено`;
+      } else {
+        phrase = `${cleanName} захвачен`;
+      }
+
+      speakDynamicPhrase(phrase);
+    },
+    [soundEnabled, playZxBeep, speakDynamicPhrase]
+  );
+
+  const playAsteroidCapturedSound = useCallback(() => {
+    playCaptureVoiceNotification('Астероид', true);
+  }, [playCaptureVoiceNotification]);
 
   // Состояние командира корабля Cobra Mk III
   const [credits, setCredits] = useState<number>(1000);
@@ -1470,19 +3507,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const pirateSellDivisor = isPirateStatus ? 10 : 1; // При продаже уценка ÷10 (-) для Пирата
 
   // Универсальное размещение подобранного в космосе предмета (элемента) в грузовом отсеке
-  const addLootElementToCargoHold = useCallback((sym: AsteroidElementSymbol) => {
+  const addLootElementToCargoHold = useCallback((sym: AsteroidElementSymbol, tons = 1) => {
+    const qty = Math.max(1, Math.round(tons));
     if (sym === 'Fe') {
-      setIronStock((s) => s + 1);
+      setIronStock((s) => s + qty);
     } else if (sym === 'Al') {
-      setAluminumStock((s) => s + 1);
+      setAluminumStock((s) => s + qty);
     } else if (sym === 'Ti') {
-      setTitaniumStock((s) => s + 1);
+      setTitaniumStock((s) => s + qty);
     } else if (sym === 'H2O') {
       setWaterOxygenStockPct(100);
-      setMinedElementsHold((prev) => ({...prev, H2O: (prev.H2O || 0) + 1}));
+      setMinedElementsHold((prev) => ({...prev, H2O: (prev.H2O || 0) + qty}));
     } else {
-      setMinedElementsHold((prev) => ({...prev, [sym]: (prev[sym] || 0) + 1}));
-      setRareElementsStock((r) => r + 1);
+      setMinedElementsHold((prev) => ({...prev, [sym]: (prev[sym] || 0) + qty}));
+      setRareElementsStock((r) => r + qty);
     }
   }, []);
 
@@ -1493,10 +3531,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     (
       origin: 'PLAYER_DESTROYED_SHIP' | 'AFTER_BATTLE',
       sym: AsteroidElementSymbol = 'Pt',
-      sourceLabel?: string
+      sourceLabel?: string,
+      tonsCount = 1
     ) => {
-      const elMeta = ASTEROID_PERIODIC_ELEMENTS[sym];
-      addLootElementToCargoHold(sym);
+      const elMeta = ASTEROID_PERIODIC_ELEMENTS[sym] || ASTEROID_PERIODIC_ELEMENTS.Pt;
+      const qty = Math.max(1, Math.round(tonsCount));
+      addLootElementToCargoHold(sym, qty);
 
       if (origin === 'PLAYER_DESTROYED_SHIP') {
         playZxBeep('HIT');
@@ -1507,25 +3547,26 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           setFlightMessage(
             `🏴‍☠️ СТАТУС «ПИРАТ» ПРИСВОЕН! ВЫ РАЗБИЛИ ЧУЖОЙ КОРАБЛЬ${
               sourceLabel ? ` («${sourceLabel}»)` : ''
-            } И ЗАБРАЛИ С НЕГО ПРЕДМЕТ (+1т [${elMeta.displaySymbol}] ${
+            } И ЗАБРАЛИ ЕГО ГРУЗ (+${qty}т [${elMeta.displaySymbol}] ${
               elMeta.nameRu
             })! КАРМА В МИНУСЕ (${nextKarma}), НАЦЕНКА НА ВСЁ ×10 (ПОКУПКА ×10 +, ПРОДАЖА ÷10 -)!`
           );
           return nextKarma;
         });
+        playCaptureVoiceNotification(`Груз: ${elMeta.nameRu}`);
         onEarnKarmaAndBonus?.(
           -15,
           0,
-          `Пиратство: разбил чужой корабль и забрал с него предмет [${elMeta.displaySymbol}]`
+          `Пиратство: разбил чужой корабль и забрал с него груз (+${qty}т [${elMeta.displaySymbol}])`
         );
       } else {
-        playZxBeep('DOCK');
+        playCaptureVoiceNotification(`Контейнер: ${elMeta.nameRu}`);
         setMarauderLootedItemsCount((c) => c + 1);
         setPilotLegalStatus((prev) => (prev === 'PIRATE' ? 'PIRATE' : 'MARAUDER'));
         setEarnedGoBellKarma((prev) => {
           const nextKarma = prev - 5;
           setFlightMessage(
-            `🦅 СТАТУС «МАРОДЁР»! ВЫ ПРОСТО ПОДОБРАЛИ ПРЕДМЕТ ПОСЛЕ ДРАКИ (+1т [${
+            `🦅 СТАТУС «МАРОДЁР»! ВЫ ПРОСТО ПОДОБРАЛИ ГРУЗ ПОСЛЕ БОЯ (+${qty}т [${
               elMeta.displaySymbol
             }] ${elMeta.nameRu}) — ПРОСТО ИСПОРТИЛАСЬ КАРМА (-5 → ${
               nextKarma > 0 ? `+${nextKarma}` : nextKarma
@@ -1536,11 +3577,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         onEarnKarmaAndBonus?.(
           -5,
           0,
-          `Мародёрство: просто подобрал предмет [${elMeta.displaySymbol}] после драки (портится карма)`
+          `Мародёрство: просто подобрал груз (+${qty}т [${elMeta.displaySymbol}]) после драки (портится карма)`
         );
       }
     },
-    [addLootElementToCargoHold, onEarnKarmaAndBonus, playZxBeep]
+    [addLootElementToCargoHold, onEarnKarmaAndBonus, playCaptureVoiceNotification, playZxBeep]
   );
 
   // Быстрое действие 1: Симуляция/выполнение «Разбил чужой корабль и забрал с него предмет» -> Статус ПИРАТ
@@ -1864,7 +3905,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       } else if (preset === 'MERCURY' || preset === 'VENUS' || preset === 'EARTH' || preset === 'MARS') {
         const pIdx =
           preset === 'MERCURY' ? 0 : preset === 'VENUS' ? 1 : preset === 'EARTH' ? 2 : 3;
-        const p = st.planets[pIdx];
+        const p = st.planets.find((pl) => !pl.isDeathStar && pl.orbitOrder === pIdx + 1) || st.planets[pIdx];
         if (p) {
           fixedVec = {
             x: Math.round(Math.cos(p.orbitAngle) * p.orbitRadius + 160),
@@ -1960,7 +4001,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       setShowTariffUpgradePrompt(false);
       onChangeGoBellTariff?.(nextTariff, nextGroups);
       setFlightMessage(
-        `★ ТАРИФ GOBELL ИЗМЕНЁН НА «${GOBELL_SPACE_TARIFF_META[nextTariff].badge}»: ДОСТУПНО ГРУПП ПЛАНЕТ — ${nextMax}! СКИДКА ДО 1 CR ВО ВСЕХ ВАШИХ ГРУППАХ ★`
+        `★ ТАРИФ G. BELL ИЗМЕНЁН НА «${GOBELL_SPACE_TARIFF_META[nextTariff].badge}»: ДОСТУПНО ГРУПП ПЛАНЕТ — ${nextMax}! СКИДКА ДО 1 CR ВО ВСЕХ ВАШИХ ГРУППАХ ★`
       );
     },
     [joinedPlanetGroups, onChangeGoBellTariff, playZxBeep]
@@ -1984,7 +4025,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     // Добавляем или обновляем маркер Бизнеса пилота на выбранной планете 3D-сцены
     const st = flightStateRef.current;
     const pIdx = updatedBiz.planetOrder - 1;
-    const targetP = st.planets[pIdx];
+    const targetP =
+      st.planets.find((pl) => !pl.isDeathStar && pl.orbitOrder === updatedBiz.planetOrder) ||
+      st.planets[pIdx];
     if (targetP) {
       const pilotBizObjId = `pilot-custom-biz-${updatedBiz.planetOrder}`;
       const existingFiltered = targetP.gobellObjects.filter((o) => o.id !== pilotBizObjId);
@@ -2060,7 +4103,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         playZxBeep('HIT');
         setShowTariffUpgradePrompt(true);
         setFlightMessage(
-          `⚠️ ЛИМИТ ГРУПП ПО ТАРИФУ ${GOBELL_SPACE_TARIFF_META[gobellTariff].badge} ИСЧЕРПАН (${joinedPlanetGroups.length}/${maxAllowedPlanetGroups})! СМЕНИТЕ ТАРИФ GOBELL, ЧТОБЫ ВСТУПИТЬ В #${normTag} И ПОКУПАТЬ РЕСУРС ПО 1 CR ВМЕСТО 5 CR!`
+          `⚠️ ЛИМИТ ГРУПП ПО ТАРИФУ ${GOBELL_SPACE_TARIFF_META[gobellTariff].badge} ИСЧЕРПАН (${joinedPlanetGroups.length}/${maxAllowedPlanetGroups})! СМЕНИТЕ ТАРИФ G. BELL, ЧТОБЫ ВСТУПИТЬ В #${normTag} И ПОКУПАТЬ РЕСУРС ПО 1 CR ВМЕСТО 5 CR!`
         );
         return;
       }
@@ -2084,16 +4127,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
   // Лог бортового компьютера ZX Spectrum
   const [flightMessage, setFlightMessage] = useState<string>(
-    'COMMANDER READY · GOBELL ORBITAL LINK ESTABLISHED'
+    'COMMANDER READY · G. BELL ORBITAL LINK ESTABLISHED'
   );
 
-  // Список миссий GoBell (генерируется из реальных объявлений/SOS/профилей GoBell + космических контрактов)
+  // Список миссий G. Bell (генерируется из реальных объявлений/SOS/профилей G. Bell + космических контрактов)
   const [missions, setMissions] = useState<GoBellSpaceMission[]>([]);
 
   useEffect(() => {
     const generated: GoBellSpaceMission[] = [];
 
-    // 1. Генерируем миссии напрямую из живых объектов карты GoBell
+    // 1. Генерируем миссии напрямую из живых объектов карты G. Bell
     missionSeeds.slice(0, 5).forEach((seed, idx) => {
       const destSys = GALAXY_SYSTEMS[(idx + 1) % GALAXY_SYSTEMS.length];
       if (seed.category === 'SOS') {
@@ -2102,7 +4145,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           type: 'SOS',
           title: `🆘 ПЕРЕХВАТ СИГНАЛА SOS · ${destSys.name}`,
           clientName: seed.authorName,
-          briefing: `Экстренный вызов GoBell SOS: «${seed.text}». Прыгайте в систему ${destSys.name}, уничтожьте пиратов-перехватчиков и спасите капсулу!`,
+          briefing: `Экстренный вызов G. Bell SOS: «${seed.text}». Прыгайте в систему ${destSys.name}, уничтожьте пиратов-перехватчиков и спасите капсулу!`,
           targetSystemId: destSys.id,
           rewardCredits: 650 + idx * 120,
           rewardKarma: 3,
@@ -2114,9 +4157,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         generated.push({
           id: `gobell-adv-${seed.id}`,
           type: 'ADVERT',
-          title: `📦 КОНТРАКТ ОБЪЯВЛЕНИЯ GOBELL · ${destSys.name}`,
+          title: `📦 КОНТРАКТ ОБЪЯВЛЕНИЯ G. BELL · ${destSys.name}`,
           clientName: seed.authorName,
-          briefing: `Заказ по объявлению GoBell: «${seed.text}». Доставьте спецконтейнер на орбитальную станцию системы ${destSys.name} (клавиша H — прыжок, T — стыковка).`,
+          briefing: `Заказ по объявлению G. Bell: «${seed.text}». Доставьте спецконтейнер на орбитальную станцию системы ${destSys.name} (клавиша H — прыжок, T — стыковка).`,
           targetSystemId: destSys.id,
           rewardCredits: 450 + idx * 90,
           rewardKarma: 2,
@@ -2127,13 +4170,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       }
     });
 
-    // 2. Всегда добавляем боевые и спасательные миссии GoBell, чтобы выбор был богатым
+    // 2. Всегда добавляем боевые и спасательные миссии G. Bell, чтобы выбор был богатым
     generated.push(
       {
         id: 'gobell-bounty-riedquat',
         type: 'BOUNTY',
         title: '⚔️ ЗАЧИСТКА СЕКТОРА RIEDQUAT ОТ ПИРАТОВ КАРМЫ',
-        clientName: 'Патруль Безопасности GoBell',
+        clientName: 'Патруль Безопасности G. Bell',
         briefing:
           'В секторе RIEDQUAT действуют пираты Cobra Mk III и корабли Thargoid, грабящие торговцев сообщества. Уничтожьте 3 вражеских корабля лазером (F).',
         targetSystemId: 3,
@@ -2147,7 +4190,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         id: 'gobell-sos-deep',
         type: 'SOS',
         title: '🆘 СПАСЕНИЕ КАПСУЛЫ В СЕКТОРЕ ZAONCE',
-        clientName: 'Служба GoBell SOS 112',
+        clientName: 'Служба G. Bell SOS 112',
         briefing:
           'Торговый корабль подал сигнал SOS на подлёте к станции ZAONCE. Сбейте пирата прикрытия и подберите спасательную капсулу в открытом космосе.',
         targetSystemId: 1,
@@ -2160,10 +4203,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       {
         id: 'gobell-courier-leesti',
         type: 'ADVERT',
-        title: '💎 СРОЧНЫЙ ЧАРТЕР КРИСТАЛЛОВ GOBELL В LEESTI',
-        clientName: 'Биржа Слотов GoBell PRO+',
+        title: '💎 СРОЧНЫЙ ЧАРТЕР КРИСТАЛЛОВ G. BELL В LEESTI',
+        clientName: 'Биржа Слотов G. Bell PRO+',
         briefing:
-          'Экспресс-доставка зашифрованного пакета сделок Биржи GoBell на станцию LEESTI · ОДЕССА-ПОРТ. Достаточно совершить гиперпрыжок (H) и пристыковаться (T).',
+          'Экспресс-доставка зашифрованного пакета сделок Биржи G. Bell на станцию LEESTI · ОДЕССА-ПОРТ. Достаточно совершить гиперпрыжок (H) и пристыковаться (T).',
         targetSystemId: 4,
         rewardCredits: 520,
         rewardKarma: 2,
@@ -2176,8 +4219,178 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     setMissions(generated);
   }, [missionSeeds]);
 
+  // =========================================================================
+  // ГЛАВНАЯ ЭНЕРГЕТИЧЕСКАЯ УСТАНОВКА (ГЭУ) И ИСТОЧНИКИ ЭНЕРГИИ:
+  // 1. Возобновляемый (Безмассовый) — фотонный и квантовый ветер звезды:
+  //    • Аккумулятор ветра: максимальный запас строго равен полной массе корабля (totalShipMassTons).
+  //    • Скорость зарядки: 100% в мин рядом со звездой (d=0) до 0% на границе системы (R_MAX=30 000 ед.).
+  // 2. Реактор на топливе — критическое/граничное вещество:
+  //    • Урановый, плутониевый, граничный и высший вакуумный реактор (нужен катализатор).
+  // 3. Прямой конвертор массы трюма — примитивный вещественный источник:
+  //    • Превращает любую массу трюма (золото, кремний, оборудование) в чистую энергию (КПД на порядок ниже).
+  // Автоматическое переключение ГЭУ: Аккумулятор ветра -> Реактор -> Масса трюма.
+  // =========================================================================
+  const [geuActiveSource, setGeuActiveSource] = useState<'WIND_ACCUMULATOR' | 'REACTOR' | 'CARGO_MASS_CONVERTER' | 'VACUUM_DOMINATOR'>('WIND_ACCUMULATOR');
+  const [windAccumulatorEnergy, setWindAccumulatorEnergy] = useState<number>(50); // единиц (макс = totalShipMassTons)
+  const [reactorFuelType, setReactorFuelType] = useState<'URANIUM' | 'PLUTONIUM' | 'BOUNDARY_MATTER' | 'VACUUM_CATALYZED'>('URANIUM');
+  const [uraniumFuelStockKg, setUraniumFuelStockKg] = useState<number>(100); // 100 кг уранового топлива
+  const [plutoniumFuelStockKg, setPlutoniumFuelStockKg] = useState<number>(0);
+  const [boundaryMatterFuelStockKg, setBoundaryMatterFuelStockKg] = useState<number>(25); // 25 кг граничного вещества
+  const [vacuumCatalystOmegaKg, setVacuumCatalystOmegaKg] = useState<number>(0);
+  const [cargoMassConvertedKg, setCargoMassConvertedKg] = useState<number>(0);
+
+  // =========================================================================
+  // ЭЛИТНЫЙ КЛАСС — «ДОМИНАТОРЫ»:
+  // 1. Установка вакуумной конвертации:
+  //    • Катализатор: Граничное вещество (boundaryMatterFuelStockKg).
+  //    • 1 кг граничного вещества / 1 эквивалент энергии в минуту из физического вакуума.
+  // 2. Технология пространства-времени (Spacetime Singularity Engine):
+  //    • Создание любой конечной точки назначения в гиперпрыжке (произвольный расчёт точки выхода).
+  //    • Развёртывание Звёздных Врат (Установщики Звёздных Врат).
+  // =========================================================================
+  const [isDominatorClassActive, setIsDominatorClassActive] = useState<boolean>(true);
+  const [isVacuumConversionActive, setIsVacuumConversionActive] = useState<boolean>(false);
+  const [deployedStargatesCount, setDeployedStargatesCount] = useState<number>(1);
+  const [isSpacetimeJumpModalOpen, setIsSpacetimeJumpModalOpen] = useState<boolean>(false);
+
+  // =========================================================================
+  // АВТОНОМНЫЙ ЧАСОВОЙ (SENTINEL SENTRY PLATFORM):
+  // • Бездвигательная боевая платформа (0 кН тяги, пассивная фиксация Лагранжа)
+  // • Фотонно-квантовый солнечный конвертор звёздного излучения
+  // • Сверхпроводящий аккумулятор 5 000 ГЭУ
+  // • Орудийный комплекс с 4 режимами силы удара (35 кг, 125 кг, 380 кг, 1 100 кг)
+  // =========================================================================
+  const [isSentinelModalOpen, setIsSentinelModalOpen] = useState<boolean>(false);
+  const [isObjectsGalleryOpen, setIsObjectsGalleryOpen] = useState<boolean>(false);
+  const [isShipyardBuilderOpen, setIsShipyardBuilderOpen] = useState<boolean>(false);
+  const [objectsGalleryTargetId, setObjectsGalleryTargetId] = useState<string | undefined>(undefined);
+  const [sentinelNetwork, setSentinelNetwork] = useState<SentinelPlatformTelemetry[]>(() =>
+    createDefaultSentinelNetwork('Солнце (G2 V)', pilotName)
+  );
+  const sentinelNetworkRef = useRef<SentinelPlatformTelemetry[]>(sentinelNetwork);
+  sentinelNetworkRef.current = sentinelNetwork;
+  const [activeSentinelId, setActiveSentinelId] = useState<string>('SENTINEL-S9-#1');
+
+  const handleUpdateSentinel = useCallback((updated: SentinelPlatformTelemetry) => {
+    setSentinelNetwork((prev) =>
+      prev.map((s) => (s.id === updated.id ? updated : s))
+    );
+  }, []);
+
+  const handleDeployNewSentinel = useCallback(
+    (loc: SentinelDeploymentLocationType, customCoords?: { x: number; y: number; z: number }) => {
+      const curSys = activeSystemKeyRef.current || 'Солнце (G2 V)';
+      const nextIdx = sentinelNetworkRef.current.length + 1;
+      const coords =
+        loc === 'CURRENT_SHIP_POSITION'
+          ? customCoords || {
+              x: Math.round(-flightStateRef.current.starPos.x),
+              y: Math.round(-flightStateRef.current.starPos.y),
+              z: Math.round(SYSTEM_SPHERE_RADIUS - flightStateRef.current.starPos.z),
+            }
+          : customCoords;
+      const newSentry = createSentinelAtLocation(loc, curSys, coords, nextIdx, pilotName);
+      setSentinelNetwork((prev) => [...prev, newSentry]);
+      setActiveSentinelId(newSentry.id);
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🛰️ РАЗВЁРНУТ НОВЫЙ ЧАСОВОЙ #${nextIdx} [${newSentry.locationLabelRu.toUpperCase()}]! СЕТЬ ОБОРОНЫ: ${nextIdx} ПЛАТФОРМ.`
+      );
+    },
+    [pilotName, playZxBeep]
+  );
+
+  const handleDeploySwarmCloud = useCallback(
+    (
+      loc: SentinelDeploymentLocationType,
+      nodesCount = 5,
+      clusterName = '«Смертельный мешок корсаров»',
+      directive: SentinelEngagementDirective = 'DESTROY_ONLY',
+      customCoords?: { x: number; y: number; z: number }
+    ) => {
+      const curSys = activeSystemKeyRef.current || 'Солнце (G2 V)';
+      const nextIdx = sentinelNetworkRef.current.length + 1;
+      const coords =
+        loc === 'CURRENT_SHIP_POSITION'
+          ? customCoords || {
+              x: Math.round(-flightStateRef.current.starPos.x),
+              y: Math.round(-flightStateRef.current.starPos.y),
+              z: Math.round(SYSTEM_SPHERE_RADIUS - flightStateRef.current.starPos.z),
+            }
+          : customCoords;
+      const swarmNodes = createSentinelSwarmCloud(
+        loc,
+        curSys,
+        coords,
+        nodesCount,
+        clusterName,
+        directive,
+        pilotName,
+        nextIdx
+      );
+      setSentinelNetwork((prev) => [...prev, ...swarmNodes]);
+      if (swarmNodes.length > 0) {
+        setActiveSentinelId(swarmNodes[0].id);
+      }
+      playZxBeep('HYPERSPACE');
+      setFlightMessage(
+        `🌪️ РАЗВЁРНУТО ОБЛАКО ЧАСОВЫХ «${clusterName.toUpperCase()}» (${nodesCount} ПЛАТФОРМ, ЗАСАДА 360°)! ДИРЕКТИВА: [${
+          directive === 'DESTROY_ONLY' ? 'ТОЛЬКО УНИЧТОЖИТЬ' : 'ОТПУГНУТЬ И УНИЧТОЖИТЬ'
+        }]`
+      );
+    },
+    [pilotName, playZxBeep]
+  );
+
+  const handleBatchUpdateDirectives = useCallback(
+    (directive: SentinelEngagementDirective, clusterId?: string) => {
+      setSentinelNetwork((prev) =>
+        prev.map((s) => {
+          if (!clusterId || s.swarmClusterId === clusterId) {
+            return {
+              ...s,
+              engagementDirective: directive,
+              statusRu: s.swarmClusterId
+                ? directive === 'DESTROY_ONLY'
+                  ? `ЗАСАДА 360° · ОБЛАКО «${s.swarmClusterName || 'ЛОВУШКА'}»`
+                  : `ОБЛАКО ДОЗОРА · ${s.swarmClusterName || 'ДОЗОР'}`
+                : s.statusRu,
+            };
+          }
+          return s;
+        })
+      );
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🛰️ БОЕВАЯ ДИРЕКТИВА ИЗМЕНЕНА: [${
+          directive === 'DESTROY_ONLY'
+            ? '⚡ ТОЛЬКО УНИЧТОЖИТЬ (ЗАСАДА)'
+            : '🛡️ СТАНДАРТ: ОТПУГНУТЬ И УНИЧТОЖИТЬ'
+        }]`
+      );
+    },
+    [playZxBeep]
+  );
+
   // Рефы физического 3D-мира для 60 FPS цикла (Самолётное управление + Огневая рубка мыши + Физика Массы/Брони)
-  const [throttleUi, setThrottleUi] = useState<number>(100); // По умолчанию 100% (макс. скорость: 5 мин от окраины до звезды, 1 мин между планетами)
+  const [throttleUi, setThrottleUi] = useState<number>(100); // По умолчанию 100% (100 ед./с: равномерный баланс 50/50 массы между тягой и щитом)
+  // =========================================================================
+  // КЛАСС ПРИБОРОВ «КОНВЕРТОР БАЛАНСА ЭНЕРГОУСТАНОВКИ» (МАССА КОРАБЛЯ → ТЯГА/СКОРОСТЬ ↔ СИЛА ЩИТА):
+  // • При нормальных условиях (Конвертор ВЫКЛ): масса корабля (напр. 50 т) распределена равномерно (50% / 50% = 25 т / 25 т)
+  //   между Тягой (макс. скорость обычного режима = 100 ед./с) и Щитом (штатная сила щита = 100%).
+  // • Клавиша NumLock включает режим Конвертора, нарушая баланс 50/50:
+  //   - Колёсико мыши ВВЕРХ (или «+») выше 100 ед./с накручивает ФОРСАЖ СКОРОСТИ до +100% (200 ед./с) за счёт снижения щита до 0% (-100% щита).
+  //   - Колёсико мыши ВНИЗ (или «-») при снижении скорости НИЖЕ 100 ед./с накручивает СИЛУ ЩИТА за счёт освободившейся тяги.
+  //   - При полной остановке (0 ед./с) СИЛА ЩИТА получает +100% (итого 200% — вся мощность энергоустановки в щите)!
+  // =========================================================================
+  const [isShieldConverterActive, setIsShieldConverterActive] = useState<boolean>(false);
+  const isShieldConverterActiveRef = useRef<boolean>(false);
+  // Смещение баланса Конвертора относительно точки равновесия (100 ед./с):
+  // от -100% (полная остановка 0 ед./с → Сила Щита +100% = 200%)
+  // через 0% (равновесие 50/50: Скорость 100 ед./с, Сила Щита 100%)
+  // до +100% (полный Форсаж 200 ед./с → Скорость +100%, Сила Щита 0%)
+  const [shieldConverterPct, setShieldConverterPct] = useState<number>(0);
+  const shieldConverterPctRef = useRef<number>(0);
   // Дополнительные бронеплиты корпуса: 0 = Стандарт 50t (+0t), 1 = Средний (+15t), 2 = Тяжёлый дредноут (+35t)
   const [armorBallastLevel, setArmorBallastLevel] = useState<0 | 1 | 2>(0);
 
@@ -2214,6 +4427,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const [isTonnageXpModalOpen, setIsTonnageXpModalOpen] = useState<boolean>(false);
   const [isFullConfigDocOpen, setIsFullConfigDocOpen] = useState<boolean>(false);
   const [isLabHangarModalOpen, setIsLabHangarModalOpen] = useState<boolean>(false);
+  const [isStandardWorldsModalOpen, setIsStandardWorldsModalOpen] = useState<boolean>(false);
+  const [activeSystemKey, setActiveSystemKey] = useState<string>('sys:0');
+  const activeSystemKeyRef = useRef<string>('sys:0');
+  const pendingConstellationSystemKeyRef = useRef<string | null>(null);
+  const pendingFocusAfterJumpRef = useRef<
+    'PLANET_1' | 'PLANET_2' | 'PLANET_3' | 'PLANET_4' | 'DEATH_STAR' | 'TORUS_SHIP' | 'STARGATE' | null
+  >(null);
   const [autopilotCardCorner, setAutopilotCardCorner] = useState<
     'TOP_RIGHT' | 'TOP_LEFT' | 'BOTTOM_RIGHT' | 'BOTTOM_LEFT'
   >('TOP_RIGHT');
@@ -2273,6 +4493,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     (baseStandardShipMassTons + armorExtraTons) * 1000 * (1 + extraAmmoCapacityBonusPct / 100)
   );
   const [remainingAmmoCapacityKg, setRemainingAmmoCapacityKg] = useState<number>(55000);
+
+  // Гравитационный Конвертор (Capacitor): рабочая ёмкость строго равна массе корабля (напр. 60 т).
+  // Удар по щиту в 1 т снижает емкость на 1 т (становится 59 т). При 0 т корабль распадается на блоки!
+  const [gravConverterTons, setGravConverterTons] = useState<number>(() => totalShipMassTons);
 
   // Обработчики конструктора брони (как веса), ёмкости боезапаса, комбинаций оружия и начисления опыта в тоннах
   const handleReloadFullAmmoCapacity = useCallback(() => {
@@ -2435,15 +4659,17 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       ? 92
       : Math.round(Math.max(10, Math.min(75, 10 + ((totalShipMassTons - 25) / 75) * 62)));
 
-  // Состояние солнечной зарядки от близости к звезде и выбранного ракурса в звёздной системе
+  // Состояние солнечной зарядки от близости к звезде, спектрального класса и ракурса
   const [solarChargeUi, setSolarChargeUi] = useState<{
     fluxPct: number;
     starDist: number;
     etaToStar: string;
+    starRad?: StellarRadiationProfile;
   }>({
     fluxPct: 4,
     starDist: SYSTEM_SPHERE_RADIUS,
     etaToStar: '5м 00с',
+    starRad: getStarRadiationProfile('G2 V Солнце (Жёлтый карлик)'),
   });
 
   // Состояние закрепления корабля на стационарной орбите планеты (клавиша X)
@@ -2453,6 +4679,29 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     cleanName: string;
     color: string;
   } | null>(null);
+  const [nearestPlanetOrbitUi, setNearestPlanetOrbitUi] = useState<{
+    planetId: string;
+    cleanName: string;
+    distanceUnits: number;
+    canLock: boolean;
+  } | null>(null);
+  const [dictatorSwarmUi, setDictatorSwarmUi] = useState<{
+    activeCount: number;
+    originPlanetName: string;
+    droneSpeed: number;
+  } | null>(null);
+
+  // Режим отображения проекции 10 знаменитых созвездий и соседних галактик (Андромеда M31, LMC, SMC, M33)
+  const [constellationDisplayMode, setConstellationDisplayMode] = useState<
+    'LINES_AND_STARS' | 'LABELS_AND_LINES' | 'STARS_ONLY'
+  >('LABELS_AND_LINES');
+  const constellationDisplayModeRef = useRef<
+    'LINES_AND_STARS' | 'LABELS_AND_LINES' | 'STARS_ONLY'
+  >('LABELS_AND_LINES');
+  const activeConstellationStarJumpLabelRef = useRef<string | null>(null);
+  useEffect(() => {
+    constellationDisplayModeRef.current = constellationDisplayMode;
+  }, [constellationDisplayMode]);
 
   // =========================================================================
   // СОСТОЯНИЕ АВТОМАТИЧЕСКОЙ ПЛАНЕТАРНОЙ ЛОГИСТИКИ И СТРОГИХ ТРАЕКТОРИЙ (БЕЗ ХАОСА):
@@ -2481,6 +4730,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const [activeObjectProfile, setActiveObjectProfile] =
     useState<SpaceObjectProfileData | null>(null);
   const activeObjectProfileRef = useRef<SpaceObjectProfileData | null>(null);
+  const [isObjectProfileFullPlacard, setIsObjectProfileFullPlacard] = useState<boolean>(false);
   const [customObjectOverrides, setCustomObjectOverrides] = useState<
     Record<string, CustomObjectProfileOverride>
   >({});
@@ -2526,6 +4776,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const hoveredScreenTargetRef = useRef<ProjectedScreenTargetHit | null>(null);
   const isKeyIDownRef = useRef<boolean>(false);
   const isHoveringObjectCardRef = useRef<boolean>(false);
+  const isHoveringAutopilotCardRef = useRef<boolean>(false);
   const autopilotTargetRef = useRef<AutopilotLockState | null>(null);
   const [autopilotTargetUi, setAutopilotTargetUi] = useState<AutopilotLockState | null>(null);
 
@@ -2538,6 +4789,504 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           ...patch,
         },
       }));
+    },
+    []
+  );
+
+  // =========================================================================
+  // СИСТЕМА ЗАХВАТА ПЛАНЕТ И ЗВЁЗДНЫХ СИСТЕМ, ПЕРЕИМЕНОВАНИЯ,
+  // ПРИСОЕДИНЕНИЯ К КЛАНУ / СОЮЗУ («Метадонг - бывший Шлак-9 · клан Розовой бабочки»),
+  // ПОЛУЧЕНИЯ ДОХОДА С ПЛАНЕТЫ И ПРОДАЖИ НА ГАЛАКТИЧЕСКОМ АУКЦИОНЕ:
+  // =========================================================================
+  const [capturedPlanetsMap, setCapturedPlanetsMap] = useState<
+    Record<number, CapturedPlanetClanRecord>
+  >(() => {
+    try {
+      const raw = localStorage.getItem('gobell_captured_planets_clan_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return {};
+  });
+
+  const capturedPlanetsMapRef = useRef<Record<number, CapturedPlanetClanRecord>>(
+    capturedPlanetsMap
+  );
+
+  useEffect(() => {
+    capturedPlanetsMapRef.current = capturedPlanetsMap;
+    try {
+      localStorage.setItem(
+        'gobell_captured_planets_clan_v1',
+        JSON.stringify(capturedPlanetsMap)
+      );
+    } catch {
+      // ignore storage errors
+    }
+
+    // Синхронизируем 3D-маркеры и имена планет активной звёздной системы при изменении статуса захвата
+    const sysAssign = getStarSystemFullAssignment(activeSystemKeyRef.current || 'sys:0');
+    const st = flightStateRef.current;
+    if (st.planets && st.planets.length >= 4) {
+      const resShortByOrder: Record<number, string> = {
+        1: 'Fe',
+        2: 'Al',
+        3: 'H₂O/O₂',
+        4: 'Ti',
+      };
+      for (let i = 0; i < 4; i++) {
+        const dictPl = sysAssign.planets[i];
+        const stPl = st.planets[i];
+        if (!dictPl || !stPl) continue;
+        const cap = capturedPlanetsMap[dictPl.index];
+        if (cap?.isCaptured) {
+          const fullTitle = formatCapturedPlanetFullTitle(cap);
+          stPl.cleanName = fullTitle;
+          stPl.name = `${dictPl.orbitRoman}. ${cap.clanIcon} ${fullTitle.toUpperCase()} (+${cap.incomePerCycleCr} CR/ЦИКЛ · ${resShortByOrder[dictPl.orbitOrder]})`;
+          stPl.shortMarker = formatCapturedPlanetHudMarker(
+            dictPl.orbitRoman,
+            cap,
+            resShortByOrder[dictPl.orbitOrder]
+          );
+          stPl.color = cap.clanColor || stPl.color;
+        }
+      }
+    }
+  }, [capturedPlanetsMap]);
+
+  // Автоматическое начисление дохода со всех захваченных планет в кланах и союзах (каждые 12 секунд полёта)
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => {
+      const currentMap = capturedPlanetsMapRef.current;
+      const activeCaptured = (Object.values(currentMap) as CapturedPlanetClanRecord[]).filter(
+        (r) => r.isCaptured && r.incomePerCycleCr > 0
+      );
+      if (activeCaptured.length === 0) return;
+
+      const totalIncomeCr = activeCaptured.reduce(
+        (sum, r) => sum + (r.incomePerCycleCr || 0),
+        0
+      );
+      if (totalIncomeCr <= 0) return;
+
+      setCredits((c) => Number((c + totalIncomeCr).toFixed(1)));
+      setCapturedPlanetsMap((prev) => {
+        const next = {...prev};
+        for (const r of activeCaptured) {
+          if (next[r.planetIndex]) {
+            next[r.planetIndex] = {
+              ...next[r.planetIndex],
+              totalEarnedCr: (next[r.planetIndex].totalEarnedCr || 0) + r.incomePerCycleCr,
+            };
+          }
+        }
+        return next;
+      });
+    }, 12000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
+
+  // Захват и переименование любой из 284 планет (или всей звёздной системы из 4 планет) по глобальному индексу 1..284
+  const handleCaptureAndRenamePlanetByIndex = useCallback(
+    (payload: {
+      planetIndex: number;
+      customName: string;
+      formerName: string;
+      affiliationKind: ClanAffiliationKind;
+      clanOrUnionName: string;
+      clanIcon: string;
+      clanColor: string;
+      applyToEntireSystem?: boolean;
+    }) => {
+      const targetPl =
+        ALL_STANDARD_CONSTELLATION_PLANETS[
+          Math.max(0, Math.min(ALL_STANDARD_CONSTELLATION_PLANETS.length - 1, payload.planetIndex - 1))
+        ];
+      if (!targetPl) return;
+
+      playZxBeep('MISSION');
+
+      setCapturedPlanetsMap((prev) => {
+        const next = {...prev};
+        if (payload.applyToEntireSystem) {
+          const baseIdx = targetPl.starSlotIndex * 4;
+          for (let offset = 0; offset < 4; offset++) {
+            const sysPl = ALL_STANDARD_CONSTELLATION_PLANETS[baseIdx + offset];
+            if (!sysPl) continue;
+            const prevRec = next[sysPl.index];
+            const isTargetOrbit = sysPl.index === targetPl.index;
+            const newCustomName = isTargetOrbit
+              ? payload.customName.trim() || 'Метадонг'
+              : prevRec?.customName || `${payload.customName.trim() || 'Метадонг'}-${sysPl.orbitRoman}`;
+            const newFormerName = isTargetOrbit
+              ? payload.formerName.trim() || sysPl.folkName
+              : sysPl.folkName;
+            const infraLvl = prevRec?.infrastructureLevel || 1;
+            const baseIncome = Math.round((35 + (infraLvl - 1) * 20) * 1.25); // +25% бонус за захват всей системы
+            next[sysPl.index] = {
+              planetIndex: sysPl.index,
+              starSlotIndex: sysPl.starSlotIndex,
+              orbitOrder: sysPl.orbitOrder,
+              isCaptured: true,
+              capturedAtMs: Date.now(),
+              customName: newCustomName,
+              formerName: newFormerName,
+              formerOfficialName: sysPl.officialName,
+              affiliationKind: payload.affiliationKind,
+              clanOrUnionName: payload.clanOrUnionName.trim() || 'клан Розовой бабочки',
+              clanIcon: payload.clanIcon || '🦋',
+              clanColor: payload.clanColor || '#f472b6',
+              incomePerCycleCr: baseIncome,
+              infrastructureLevel: infraLvl,
+              totalEarnedCr: (prevRec?.totalEarnedCr || 0) + baseIncome,
+              isSystemFullyAnnexed: true,
+              auctionBiddingRound: prevRec?.auctionBiddingRound || 0,
+            };
+          }
+        } else {
+          const prevRec = next[targetPl.index];
+          const infraLvl = prevRec?.infrastructureLevel || 1;
+          const incomeCr = 35 + (infraLvl - 1) * 20;
+          next[targetPl.index] = {
+            planetIndex: targetPl.index,
+            starSlotIndex: targetPl.starSlotIndex,
+            orbitOrder: targetPl.orbitOrder,
+            isCaptured: true,
+            capturedAtMs: Date.now(),
+            customName: payload.customName.trim() || 'Метадонг',
+            formerName: payload.formerName.trim() || targetPl.folkName,
+            formerOfficialName: targetPl.officialName,
+            affiliationKind: payload.affiliationKind,
+            clanOrUnionName: payload.clanOrUnionName.trim() || 'клан Розовой бабочки',
+            clanIcon: payload.clanIcon || '🦋',
+            clanColor: payload.clanColor || '#f472b6',
+            incomePerCycleCr: incomeCr,
+            infrastructureLevel: infraLvl,
+            totalEarnedCr: (prevRec?.totalEarnedCr || 0) + incomeCr,
+            isSystemFullyAnnexed: false,
+            auctionBiddingRound: prevRec?.auctionBiddingRound || 0,
+          };
+        }
+        return next;
+      });
+
+      const firstBonusCr = payload.applyToEntireSystem ? 175 : 35;
+      setCredits((c) => Number((c + firstBonusCr).toFixed(1)));
+      setEarnedGoBellKarma((k) => k + (payload.applyToEntireSystem ? 5 : 2));
+
+      const fullLabel = `${payload.customName.trim() || 'Метадонг'} - бывший ${
+        payload.formerName.trim() || targetPl.folkName
+      } · ${payload.clanOrUnionName.trim() || 'клан Розовой бабочки'}`;
+
+      setFlightMessage(
+        payload.applyToEntireSystem
+          ? `🌟 ВСЯ СИСТЕМА «${targetPl.starSystemTitle.toUpperCase()}» ЗАХВАЧЕНА И ПРИСОЕДИНЕНА К «${payload.clanOrUnionName.toUpperCase()}»! ФЛАГМАН: «${fullLabel.toUpperCase()}» · ПОЛУЧЕН ПЕРВЫЙ ДОХОД +${firstBonusCr} CR!`
+          : `🦋 ПЛАНЕТА ЗАХВАЧЕНА И ПЕРЕИМЕНОВАНА В КАРТОЧКЕ: «${fullLabel.toUpperCase()}» · ДОХОД +${firstBonusCr} CR ПОЛУЧЕН!`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // Захват и переименование планеты (1..4) текущей активной системы из 3D-карточки планеты
+  const handleCaptureAndAnnexActivePlanet = useCallback(
+    (payload: {
+      orbitOrder: 1 | 2 | 3 | 4;
+      customName: string;
+      formerName: string;
+      affiliationKind: ClanAffiliationKind;
+      clanOrUnionName: string;
+      clanIcon: string;
+      clanColor: string;
+      applyToEntireSystem?: boolean;
+    }) => {
+      const sysAssign = getStarSystemFullAssignment(activeSystemKeyRef.current || 'sys:0');
+      const targetPl = sysAssign.planets[(payload.orbitOrder - 1) as 0 | 1 | 2 | 3];
+      if (!targetPl) return;
+      handleCaptureAndRenamePlanetByIndex({
+        planetIndex: targetPl.index,
+        customName: payload.customName,
+        formerName: payload.formerName,
+        affiliationKind: payload.affiliationKind,
+        clanOrUnionName: payload.clanOrUnionName,
+        clanIcon: payload.clanIcon,
+        clanColor: payload.clanColor,
+        applyToEntireSystem: payload.applyToEntireSystem,
+      });
+    },
+    [handleCaptureAndRenamePlanetByIndex]
+  );
+
+  // Ручной сбор дохода с захваченной планеты или со всех захваченных планет
+  const handleCollectPlanetClanIncomeNow = useCallback(
+    (planetIndex: number, collectAllCaptured?: boolean) => {
+      const currentMap = capturedPlanetsMapRef.current;
+      if (collectAllCaptured) {
+        const list = (Object.values(currentMap) as CapturedPlanetClanRecord[]).filter(
+          (r) => r.isCaptured
+        );
+        const sumCr = list.reduce((acc, r) => acc + (r.incomePerCycleCr || 35), 0);
+        if (sumCr <= 0) return;
+        playZxBeep('DOCK');
+        setCredits((c) => Number((c + sumCr).toFixed(1)));
+        setCapturedPlanetsMap((prev) => {
+          const next = {...prev};
+          for (const r of list) {
+            if (next[r.planetIndex]) {
+              next[r.planetIndex] = {
+                ...next[r.planetIndex],
+                totalEarnedCr: (next[r.planetIndex].totalEarnedCr || 0) + r.incomePerCycleCr,
+              };
+            }
+          }
+          return next;
+        });
+        setFlightMessage(
+          `💰 СОБРАН КЛАНОВЫЙ ДОХОД СО ВСЕХ ЗАХВАЧЕННЫХ ПЛАНЕТ (${list.length}): +${sumCr} CR!`
+        );
+        return;
+      }
+
+      const rec = currentMap[planetIndex];
+      if (!rec || !rec.isCaptured) return;
+      playZxBeep('DOCK');
+      const payout = rec.incomePerCycleCr || 35;
+      setCredits((c) => Number((c + payout).toFixed(1)));
+      setCapturedPlanetsMap((prev) => ({
+        ...prev,
+        [planetIndex]: {
+          ...rec,
+          totalEarnedCr: (rec.totalEarnedCr || 0) + payout,
+        },
+      }));
+      setFlightMessage(
+        `💰 ДОХОД С ПЛАНЕТЫ «${formatCapturedPlanetFullTitle(rec).toUpperCase()}»: +${payout} CR ЗАЧИСЛЕНО НА СЧЁТ!`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // Улучшение инфраструктуры захваченной планеты (+20 CR/цикл и повышение цены на Галактическом Аукционе)
+  const handleUpgradePlanetClanInfrastructure = useCallback(
+    (planetIndex: number) => {
+      const rec = capturedPlanetsMapRef.current[planetIndex];
+      if (!rec || !rec.isCaptured) return;
+      const upgradeCostCr = 100;
+      if (credits < upgradeCostCr) {
+        playZxBeep('HIT');
+        setFlightMessage(
+          `⚠️ ДЛЯ УЛУЧШЕНИЯ ИНФРАСТРУКТУРЫ ПЛАНЕТЫ «${rec.customName.toUpperCase()}» НУЖНО ${upgradeCostCr} CR!`
+        );
+        return;
+      }
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c - upgradeCostCr).toFixed(1)));
+      setCapturedPlanetsMap((prev) => {
+        const cur = prev[planetIndex];
+        if (!cur) return prev;
+        const nextLevel = Math.min(5, (cur.infrastructureLevel || 1) + 1);
+        const nextIncome = (cur.incomePerCycleCr || 35) + 20;
+        return {
+          ...prev,
+          [planetIndex]: {
+            ...cur,
+            infrastructureLevel: nextLevel,
+            incomePerCycleCr: nextIncome,
+          },
+        };
+      });
+      setFlightMessage(
+        `⬆️ ИНФРАСТРУКТУРА ПЛАНЕТЫ «${rec.customName.toUpperCase()}» ПОВЫШЕНА: ДОХОД +${
+          (rec.incomePerCycleCr || 35) + 20
+        } CR/ЦИКЛ, ОЦЕНКА НА АУКЦИОНЕ ВЫРОСЛА!`
+      );
+    },
+    [credits, playZxBeep]
+  );
+
+  // Повышение ставки на Галактическом Аукционе (привлечение следующего синдиката-покупателя)
+  const handleRaisePlanetAuctionBid = useCallback(
+    (planetIndex: number) => {
+      playZxBeep('DOCK');
+      setCapturedPlanetsMap((prev) => {
+        const cur = prev[planetIndex];
+        if (!cur) return prev;
+        const nextRound = ((cur.auctionBiddingRound || 0) + 1) % 5;
+        const updated: CapturedPlanetClanRecord = {
+          ...cur,
+          isListedOnAuction: true,
+          auctionBiddingRound: nextRound,
+        };
+        const val = calculatePlanetAuctionValuationCr(updated);
+        updated.currentHighestBidCr = val.totalBidCr;
+        updated.currentHighestBidder = val.topBidderName;
+        setFlightMessage(
+          `🔨 ГАЛАКТИЧЕСКИЙ АУКЦИОН: «${val.topBidderName.toUpperCase()}» ПОДНЯЛ СТАВКУ ЗА «${cur.customName.toUpperCase()}» ДО +${val.totalBidCr} CR!`
+        );
+        return {
+          ...prev,
+          [planetIndex]: updated,
+        };
+      });
+    },
+    [playZxBeep]
+  );
+
+  // Продажа захваченной планеты (или всей звёздной системы из 4 планет) на Галактическом Аукционе
+  const handleSellPlanetOnAuction = useCallback(
+    (planetIndex: number, sellEntireSystem?: boolean) => {
+      const targetPl =
+        ALL_STANDARD_CONSTELLATION_PLANETS[
+          Math.max(0, Math.min(ALL_STANDARD_CONSTELLATION_PLANETS.length - 1, planetIndex - 1))
+        ];
+      if (!targetPl) return;
+
+      const existingRec = capturedPlanetsMapRef.current[planetIndex] || {
+        planetIndex: targetPl.index,
+        starSlotIndex: targetPl.starSlotIndex,
+        orbitOrder: targetPl.orbitOrder,
+        isCaptured: true,
+        capturedAtMs: Date.now(),
+        customName: 'Метадонг',
+        formerName: targetPl.folkName,
+        formerOfficialName: targetPl.officialName,
+        affiliationKind: 'CLAN' as ClanAffiliationKind,
+        clanOrUnionName: 'клан Розовой бабочки',
+        clanIcon: '🦋',
+        clanColor: '#f472b6',
+        incomePerCycleCr: 35,
+        infrastructureLevel: 1,
+        totalEarnedCr: 0,
+        auctionBiddingRound: 0,
+      };
+
+      const valuation = calculatePlanetAuctionValuationCr(existingRec);
+      const payoutCr = sellEntireSystem
+        ? Math.round(valuation.totalBidCr * 4 * 1.3)
+        : valuation.totalBidCr;
+
+      playZxBeep('MISSION');
+      setCredits((c) => Number((c + payoutCr).toFixed(1)));
+      setEarnedGoBellKarma((k) => k + (sellEntireSystem ? 6 : 2));
+
+      setCapturedPlanetsMap((prev) => {
+        const next = {...prev};
+        if (sellEntireSystem) {
+          const baseIdx = targetPl.starSlotIndex * 4;
+          for (let offset = 0; offset < 4; offset++) {
+            const sysPl = ALL_STANDARD_CONSTELLATION_PLANETS[baseIdx + offset];
+            if (!sysPl) continue;
+            const cur = next[sysPl.index] || {
+              ...existingRec,
+              planetIndex: sysPl.index,
+              orbitOrder: sysPl.orbitOrder,
+              formerName: sysPl.folkName,
+              formerOfficialName: sysPl.officialName,
+            };
+            next[sysPl.index] = {
+              ...cur,
+              isCaptured: false,
+              isListedOnAuction: false,
+              soldOnAuctionAtMs: Date.now(),
+              lastSoldPriceCr: Math.round(payoutCr / 4),
+              lastAuctionBuyer: valuation.topBidderName,
+            };
+          }
+        } else {
+          next[planetIndex] = {
+            ...existingRec,
+            isCaptured: false,
+            isListedOnAuction: false,
+            soldOnAuctionAtMs: Date.now(),
+            lastSoldPriceCr: payoutCr,
+            lastAuctionBuyer: valuation.topBidderName,
+          };
+        }
+        return next;
+      });
+
+      setFlightMessage(
+        sellEntireSystem
+          ? `🏛 ГАЛАКТИЧЕСКИЙ АУКЦИОН: ВСЯ ЗВЁЗДНАЯ СИСТЕМА «${targetPl.starSystemTitle.toUpperCase()}» (4 ПЛАНЕТЫ) ПРОДАНА ПОКУПАТЕЛЮ «${valuation.topBidderName.toUpperCase()}» ЗА +${payoutCr} CR!`
+          : `🏛 ГАЛАКТИЧЕСКИЙ АУКЦИОН: ПЛАНЕТА «${formatCapturedPlanetFullTitle(existingRec).toUpperCase()}» ПРОДАНА ПОКУПАТЕЛЮ «${valuation.topBidderName.toUpperCase()}» ЗА +${payoutCr} CR!`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // Открыть 3D-карточку планеты по номеру орбиты (1..4) в текущей системе
+  const handleOpenPlanetCardByOrbit = useCallback(
+    (orbitOrder: 1 | 2 | 3 | 4, openFullPlacard = false) => {
+      const sysAssign = getStarSystemFullAssignment(activeSystemKeyRef.current || 'sys:0');
+      const dictPl = sysAssign.planets[(orbitOrder - 1) as 0 | 1 | 2 | 3];
+      const st = flightStateRef.current;
+      const stPl = st.planets.find((p) => p.orbitOrder === orbitOrder);
+      if (!dictPl || !stPl) return;
+
+      const cap = capturedPlanetsMapRef.current[dictPl.index];
+      const planetGroupObj = stPl.gobellObjects?.find((o) => o.kind === 'GROUP');
+      const planetBusinessObj = stPl.gobellObjects?.find((o) => o.kind === 'BUSINESS');
+      const planetAdvertObjs = (stPl.gobellObjects || [])
+        .filter((o) => o.kind === 'ADVERT')
+        .map((o) => ({
+          slotId: o.slotId || 1,
+          title: o.title,
+          description: o.description,
+          authorName: o.authorName,
+          karmaPlus: o.karmaPlus,
+          karmaMinus: o.karmaMinus,
+        }));
+
+      const cardProfile: SpaceObjectProfileData = {
+        id: stPl.id,
+        kind: 'PLANET',
+        systemTag: `PLANET-${orbitOrder}`,
+        color: cap?.isCaptured ? cap.clanColor || stPl.color : stPl.color,
+        name: cap?.isCaptured
+          ? `${cap.customName} - бывший ${cap.formerName}`
+          : stPl.cleanName,
+        nickname: cap?.isCaptured
+          ? `${cap.clanIcon} ${cap.clanOrUnionName}`
+          : dictPl.factionBadge,
+        description: `${dictPl.dualNameLabel}. ${dictPl.loreDescription}`,
+        groupsTitle: `правительство (${stPl.cleanName} · #${
+          planetGroupObj?.groupTag || 'GO-EARTH'
+        })`,
+        groupsDescription:
+          planetGroupObj?.description ||
+          `Друзья планеты ${stPl.cleanName} · государственное управление.`,
+        groupTag: planetGroupObj?.groupTag,
+        businessesTitle: `торговля (${
+          planetBusinessObj?.title || `Торговая палата планеты ${stPl.cleanName}`
+        })`,
+        businessesDescription:
+          planetBusinessObj?.description ||
+          `Официальная торговля профильным ресурсом планеты ${stPl.cleanName}.`,
+        adverts: planetAdvertObjs,
+        karmaPlus: planetGroupObj?.karmaPlus ?? 30,
+        karmaMinus: planetGroupObj?.karmaMinus ?? 0,
+        distanceUnits: stPl.orbitRadius,
+        coordsLabel: `Орбита ${dictPl.orbitRoman} (R=${stPl.orbitRadius} ед.)`,
+        planetOrder: orbitOrder,
+        planetCleanName: stPl.cleanName,
+        dictatorPlanetIndex: dictPl.index,
+        officialPlanetName: dictPl.officialName,
+        folkPlanetName: dictPl.folkName,
+        starSystemTitle: `${sysAssign.starName} (${sysAssign.constellationNameRu})`,
+        initialTab: 'PROFILE',
+      };
+
+      st.cabinYawRate = 0;
+      st.cabinPitchRate = 0;
+      st.cabinMouseIn3DWindow = false;
+      setScreenMode('FLIGHT');
+      setIsObjectProfileFullPlacard(openFullPlacard);
+      activeObjectProfileRef.current = cardProfile;
+      setActiveObjectProfile(cardProfile);
     },
     []
   );
@@ -2560,13 +5309,447 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setWeaponComboMode('HEAVY_150KG');
       } else if (itemId === 'WEAPON_TWIN_200KG' && newOwnedCount > 0) {
         setUnlockedWeaponCombos((prev) =>
-          prev.includes('TWIN_100_PLUS_100') ? prev : [...prev, 'TWIN_100_PLUS_100']
+          prev.includes('TWIN_HEAVY_200KG') ? prev : [...prev, 'TWIN_HEAVY_200KG']
         );
-        setWeaponComboMode('TWIN_100_PLUS_100');
+        setWeaponComboMode('TWIN_HEAVY_200KG');
+      } else if (itemId === 'SHIELD_SPEED_CONVERTER_MK100' && newOwnedCount > 0) {
+        isShieldConverterActiveRef.current = true;
+        setIsShieldConverterActive(true);
       }
     },
     []
   );
+
+  // =========================================================================
+  // УПРАВЛЕНИЕ ПРИБОРОМ «КОНВЕРТОР» (МАССА КОРАБЛЯ 50 Т → БАЛАНС ТЯГА/СКОРОСТЬ ↔ СИЛА ЩИТА):
+  // • Нормальный режим (ВЫКЛ): масса распределена 50% / 50% (напр. 25 т Тяга до 100 ед./с и 25 т Щит 100%).
+  // • Клавиша NumLock включает режим Конвертора:
+  //   - Колёсико мыши (и клавиши «+» / «-») в одну сторону (выше 100 ед./с) накручивает скорость (Форсаж до +100% = 200 ед./с при 0% щита).
+  //   - При снижении скорости ниже максимальной для обычного режима (100 ед./с) в другую сторону накручивает силу щита —
+  //     при полной остановке (0 ед./с) сила щита +100% (итого 200% щита)!
+  // =========================================================================
+  const handleToggleShieldSpeedConverter = useCallback(() => {
+    const st = flightStateRef.current;
+    const nextActive = !isShieldConverterActiveRef.current;
+    isShieldConverterActiveRef.current = nextActive;
+    setIsShieldConverterActive(nextActive);
+
+    if (nextActive) {
+      const curSpeedUnits = st.stationaryOrbitPlanetId
+        ? 0
+        : Math.max(0, Math.min(200, Math.round(st.targetSpeed)));
+      const shiftPct = Math.max(-100, Math.min(100, curSpeedUnits - 100));
+      shieldConverterPctRef.current = shiftPct;
+      setShieldConverterPct(shiftPct);
+      st.converterActive = true;
+      st.converterPct = shiftPct;
+      st.maxSpeed = MAX_SYSTEM_SPEED * 2; // В режиме Конвертора потолок скорости открыт до 200 ед./с (+100% форсаж)
+      st.targetSpeed = curSpeedUnits;
+      setThrottleUi(curSpeedUnits);
+
+      const shieldCap = Math.max(0, Math.min(200, 100 - shiftPct));
+      // Единый закон Конвертора: Сила щита (%) = 200% - Скорость (%)
+      // • При 100 ед. (100%) -> Щит 100%
+      // • При 200 ед. (200%) -> Щит 0%
+      // • При 0 ед. (полная остановка) -> Щит 200%
+      st.frontShield = shieldCap;
+      st.aftShield = shieldCap;
+
+      const thrustMass = ((totalShipMassTons * curSpeedUnits) / 200).toFixed(1);
+      const shieldMass = ((totalShipMassTons * shieldCap) / 200).toFixed(1);
+
+      playZxBeep('HYPERSPACE');
+      setFlightMessage(
+        shiftPct > 0
+          ? `⚡ КОНВЕРТОР [NumLk] ВКЛЮЧЁН: СКОРОСТЬ ${curSpeedUnits}% (${curSpeedUnits} ЕД.) → СИЛА ЩИТА ${shieldCap}% · МАССА ${totalShipMassTons}Т: ${thrustMass}Т ТЯГА / ${shieldMass}Т ЩИТ`
+          : shiftPct < 0
+          ? `🛡️⚡ КОНВЕРТОР [NumLk] ВКЛЮЧЁН: СКОРОСТЬ ${curSpeedUnits}% (${curSpeedUnits} ЕД.) → СИЛА ЩИТА ${shieldCap}% · МАССА ${totalShipMassTons}Т: ${thrustMass}Т ТЯГА / ${shieldMass}Т ЩИТ`
+          : `⚡ КОНВЕРТОР [NumLk] ВКЛЮЧЁН (100 ЕД. → ЩИТ 100%): СВЕРХ 100 ЕД. СНИЖАЕТ ЩИТ (200% СКОР = 0% ЩИТ) · НИЖЕ 100 ЕД. УВЕЛИЧИВАЕТ ЩИТ (СТОП 0 ЕД. = 200% ЩИТ)!`
+      );
+    } else {
+      st.converterActive = false;
+      st.converterPct = 0;
+      shieldConverterPctRef.current = 0;
+      setShieldConverterPct(0);
+      st.maxSpeed = MAX_SYSTEM_SPEED;
+      const clampedNormalSpeed = st.stationaryOrbitPlanetId
+        ? 0
+        : Math.max(0, Math.min(MAX_SYSTEM_SPEED, Math.round(st.targetSpeed)));
+      st.targetSpeed = clampedNormalSpeed;
+      setThrottleUi(clampedNormalSpeed);
+      st.frontShield = 100;
+      st.aftShield = 100;
+
+      const halfMass = (totalShipMassTons / 2).toFixed(1);
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🛡️ КОНВЕРТОР [NumLk] ВЫКЛЮЧЕН: НОРМАЛЬНЫЙ РАВНОМЕРНЫЙ БАЛАНС 50/50 (${halfMass}Т ТЯГА / ${halfMass}Т ЩИТ) · МАКС. СКОРОСТЬ ${MAX_SYSTEM_SPEED} ЕД/С · СИЛА ЩИТА 100%`
+      );
+    }
+  }, [playZxBeep, totalShipMassTons]);
+
+  // Регулировка скорости и баланса Конвертора (вызывается колёсиком мыши, клавишами «+» / «-» и ползунками):
+  // • Принимает либо целевой сдвиг shiftPct (-100..+100), либо если передан autoActivateIfPositive — включает Конвертор
+  const handleSetShieldConverterPercent = useCallback(
+    (targetShiftPctRaw: number, autoActivate = false) => {
+      const st = flightStateRef.current;
+      const prevShift = shieldConverterPctRef.current;
+      const nextShift = Math.max(-100, Math.min(100, Math.round(targetShiftPctRaw)));
+
+      if (autoActivate && !isShieldConverterActiveRef.current) {
+        isShieldConverterActiveRef.current = true;
+        setIsShieldConverterActive(true);
+        st.converterActive = true;
+      }
+
+      if (isShieldConverterActiveRef.current) {
+        shieldConverterPctRef.current = nextShift;
+        setShieldConverterPct(nextShift);
+        st.converterActive = true;
+        st.converterPct = nextShift;
+        st.maxSpeed = MAX_SYSTEM_SPEED * 2;
+
+        const targetSpeedUnits = st.stationaryOrbitPlanetId ? 0 : 100 + nextShift;
+        const effectiveShift = st.stationaryOrbitPlanetId ? -100 : nextShift;
+        st.converterPct = effectiveShift;
+        shieldConverterPctRef.current = effectiveShift;
+        setShieldConverterPct(effectiveShift);
+
+        st.targetSpeed = targetSpeedUnits;
+        setThrottleUi(targetSpeedUnits);
+
+        const shieldCap = Math.max(0, Math.min(200, 100 - effectiveShift));
+        // Единый закон Конвертора: Сила щита (%) = 200% - Скорость (%)
+        st.frontShield = shieldCap;
+        st.aftShield = shieldCap;
+
+        const thrustMass = ((totalShipMassTons * targetSpeedUnits) / 200).toFixed(1);
+        const shieldMass = ((totalShipMassTons * shieldCap) / 200).toFixed(1);
+
+        playZxBeep('DOCK');
+        setFlightMessage(
+          effectiveShift > 0
+            ? `🔥 КОНВЕРТОР: СКОРОСТЬ ${targetSpeedUnits}% (${targetSpeedUnits} ЕД.) → СИЛА ЩИТА ${shieldCap}% · МАССА ${totalShipMassTons}Т: ${thrustMass}Т ТЯГА / ${shieldMass}Т ЩИТ`
+            : effectiveShift < 0
+            ? `🛡️ КОНВЕРТОР: СКОРОСТЬ ${targetSpeedUnits}% (${targetSpeedUnits} ЕД.) → СИЛА ЩИТА ${shieldCap}% (${
+                targetSpeedUnits === 0 ? 'ПОЛНАЯ ОСТАНОВКА: ЩИТ 200%!' : `УСИЛЕНИЕ ЩИТА ДО ${shieldCap}%`
+              }) · МАССА ${totalShipMassTons}Т: ${thrustMass}Т ТЯГА / ${shieldMass}Т ЩИТ`
+            : `⚖️ КОНВЕРТОР (ТОЧКА 100 ЕД.): СКОРОСТЬ 100% (100 ЕД.) · СИЛА ЩИТА 100% · МАССА ${totalShipMassTons}Т: ${thrustMass}Т ТЯГА / ${shieldMass}Т ЩИТ`
+        );
+      } else {
+        // Если Конвертор ВЫКЛЮЧЕН — клавиши +/- и колёсико мыши регулируют обычную скорость 0..100 ед./с (щит всегда 100%)
+        const normalSpeed = st.stationaryOrbitPlanetId
+          ? 0
+          : Math.max(0, Math.min(100, 100 + nextShift));
+        st.maxSpeed = MAX_SYSTEM_SPEED;
+        st.targetSpeed = normalSpeed;
+        setThrottleUi(normalSpeed);
+        playZxBeep('DOCK');
+        if (targetShiftPctRaw > 0) {
+          setFlightMessage(
+            `⚙️ ШТАТНЫЙ РЕЖИМ (50/50): СКОРОСТЬ МАКСИМУМ 100 ЕД/С (ЩИТ 100%). НАЖМИТЕ [NumLock], ЧТОБЫ ВКЛЮЧИТЬ КОНВЕРТОР И НАКРУТИТЬ ФОРСАЖ ДО 200 ЕД/С ИЛИ ЩИТ ДО +100%!`
+          );
+        } else {
+          setFlightMessage(
+            `⚙️ ШТАТНЫЙ РЕЖИМ (КОНВЕРТОР ВЫКЛ): СКОРОСТЬ ${normalSpeed} ЕД/С · ЩИТ 100% (ВКЛЮЧИТЕ [NumLock], ЧТОБЫ ПРИ СНИЖЕНИИ СКОРОСТИ НАКРУЧИВАТЬ СИЛУ ЩИТА ДО +100%!)`
+          );
+        }
+      }
+    },
+    [playZxBeep, totalShipMassTons]
+  );
+
+  // Единый обработчик шага скорости/баланса от колёсика мыши и клавиш «+» / «-»
+  const handleStepSpeedOrConverter = useCallback(
+    (stepDelta: number) => {
+      const st = flightStateRef.current;
+      if (isShieldConverterActiveRef.current) {
+        const curSpeed = Math.round(st.targetSpeed);
+        const nextSpeed = Math.max(0, Math.min(200, curSpeed + stepDelta));
+        handleSetShieldConverterPercent(nextSpeed - 100, false);
+      } else {
+        const curSpeed = Math.round(st.targetSpeed);
+        if (stepDelta > 0 && curSpeed >= 100) {
+          playZxBeep('HIT');
+          setFlightMessage(
+            '⚡ ДОСТИГНУТ ПРЕДЕЛ ОБЫЧНОГО РЕЖИМА (100 ЕД/С · БАЛАНС МАССЫ 50/50). НАЖМИТЕ [NumLock], ЧТОБЫ ВКЛЮЧИТЬ КОНВЕРТОР И НАКРУТИТЬ ФОРСАЖ КОЛЁСИКОМ МЫШИ!'
+          );
+          return;
+        }
+        const nextSpeed = Math.max(0, Math.min(100, curSpeed + stepDelta));
+        st.maxSpeed = MAX_SYSTEM_SPEED;
+        st.targetSpeed = nextSpeed;
+        setThrottleUi(nextSpeed);
+      }
+    },
+    [handleSetShieldConverterPercent, playZxBeep]
+  );
+
+  // =========================================================================
+  // ГРАВИТАЦИОННЫЙ КОНВЕРТОР (CAPACITOR) И СВЯЗКА БЛОКОВ КОРАБЛЯ:
+  // • Масса корабля (totalShipMassTons, напр. 60 т) определяет максимальную рабочую ёмкость конвертора.
+  // • Сама масса корабля при ударе не меняется — снижается только рабочая ёмкость конвертора!
+  // • Удар по щиту в 1 тонну снижает ёмкость на 1 тонну (становится 59 т).
+  // • Когда ёмкость падает до 0 т — конвертор теряет способность питать щит и удерживать блоки корабля вместе,
+  //   и корабль РАЗЛЕТАЕТСЯ НА БЛОКИ в трёхмерном пространстве!
+  // =========================================================================
+  const triggerShipBlockDisintegration = useCallback(
+    (reason: string) => {
+      const st = flightStateRef.current;
+      st.gravConverterTons = 0;
+      setGravConverterTons(0);
+      st.frontShield = 0;
+      st.aftShield = 0;
+      st.speed = 0;
+      st.targetSpeed = 0;
+      setThrottleUi(0);
+
+      playZxBeep('EXPLODE');
+
+      // Создаём трёхмерные блоки конструкции корабля, которые разлетаются во все стороны
+      const structuralBlockTemplates = [
+        { name: 'БЛОК ГЭУ / РЕАКТОР', size: { w: 22, h: 18, d: 26 }, color: '#00e5ff' },
+        { name: 'КАТУШКА ГРАВИ-КОНВЕРТОРА', size: { w: 20, h: 20, d: 24 }, color: '#38bdf8' },
+        { name: 'КАРКАС НОСОВОГО ЩИТА', size: { w: 32, h: 14, d: 20 }, color: '#f59e0b' },
+        { name: 'БРОНЕПЛИТА ПРАВОГО БОРТА', size: { w: 28, h: 8, d: 36 }, color: '#94a3b8' },
+        { name: 'БРОНЕПЛИТА ЛЕВОГО БОРТА', size: { w: 28, h: 8, d: 36 }, color: '#94a3b8' },
+        { name: 'КРЫЛЬЕВОЙ ПИЛОН [A]', size: { w: 40, h: 6, d: 22 }, color: '#00e5ff' },
+        { name: 'КРЫЛЬЕВОЙ ПИЛОН [B]', size: { w: 40, h: 6, d: 22 }, color: '#00e5ff' },
+        { name: 'КОНТЕЙНЕР НАКОПИТЕЛЯ ВЕТРА', size: { w: 16, h: 16, d: 20 }, color: '#3b82f6' },
+        { name: 'МАНЕВРОВЫЙ ДВИГАТЕЛЬ R', size: { w: 14, h: 14, d: 18 }, color: '#ef4444' },
+        { name: 'МАНЕВРОВЫЙ ДВИГАТЕЛЬ L', size: { w: 14, h: 14, d: 18 }, color: '#ef4444' },
+        { name: 'МОДУЛЬ КАБИНЫ ПИЛОТА', size: { w: 24, h: 20, d: 26 }, color: '#22c55e' },
+        { name: 'ПИЛОН ГРУЗОВОГО ОТСЕКА', size: { w: 28, h: 22, d: 32 }, color: '#cbd5e1' },
+        { name: 'ЛАБОРАТОРНЫЙ КОРПУС', size: { w: 22, h: 16, d: 20 }, color: '#a855f7' },
+        { name: 'АНГАРНАЯ СТРУКТУРНАЯ РАМА', size: { w: 30, h: 18, d: 24 }, color: '#eab308' },
+        { name: 'ОРУДИЙНЫЙ ЛАФЕТ МЕШ-СИСТЕМЫ', size: { w: 12, h: 12, d: 40 }, color: '#f43f5e' },
+        { name: 'КОРМОВОЙ СТАБИЛИЗАТОР', size: { w: 18, h: 28, d: 10 }, color: '#06b6d4' },
+      ];
+
+      const blocks = [];
+      const totalBlocksCount = 28;
+      for (let i = 0; i < totalBlocksCount; i++) {
+        const tmpl = structuralBlockTemplates[i % structuralBlockTemplates.length];
+        const angle = (i / totalBlocksCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        const speedHoriz = 16 + Math.random() * 28;
+        const speedZ = -6 + Math.random() * 34;
+
+        blocks.push({
+          pos: {
+            x: (Math.random() - 0.5) * 45,
+            y: (Math.random() - 0.5) * 35,
+            z: 35 + Math.random() * 55,
+          },
+          vel: {
+            x: Math.cos(angle) * speedHoriz,
+            y: Math.sin(angle) * speedHoriz * 0.75 + (Math.random() - 0.5) * 10,
+            z: speedZ,
+          },
+          rot: {
+            x: Math.random() * Math.PI * 2,
+            y: Math.random() * Math.PI * 2,
+            z: Math.random() * Math.PI * 2,
+          },
+          rotSpeed: {
+            x: (Math.random() - 0.5) * 0.18,
+            y: (Math.random() - 0.5) * 0.18,
+            z: (Math.random() - 0.5) * 0.18,
+          },
+          size: tmpl.size,
+          color: tmpl.color,
+          name: tmpl.name,
+        });
+      }
+
+      st.shipDisintegrationBlocks = blocks;
+      st.shipDisintegrationTimer = 220; // ~3.6 сек эффектной 3D-анимации разлёта
+
+      // Осколки и искры разрыва гравитационных связей
+      for (let k = 0; k < 60; k++) {
+        st.debris.push({
+          pos: { x: (Math.random() - 0.5) * 30, y: (Math.random() - 0.5) * 30, z: 45 },
+          vel: {
+            x: (Math.random() - 0.5) * 38,
+            y: (Math.random() - 0.5) * 38,
+            z: (Math.random() - 0.5) * 38,
+          },
+          ttl: 100 + Math.random() * 60,
+          color: Math.random() > 0.5 ? '#ff3366' : '#00e5ff',
+        });
+      }
+
+      setFlightMessage(
+        `💥 ${reason.toUpperCase()}! ПОТЕРЯ ГРАВИТАЦИОННОЙ СВЯЗКИ: КОРАБЛЬ РАЗЛЕТЕЛСЯ НА БЛОКИ!`
+      );
+    },
+    [playZxBeep]
+  );
+
+  const applyShieldImpactTons = useCallback(
+    (impactTons: number = 1.0, sourceName: string = 'Удар по щиту') => {
+      const st = flightStateRef.current;
+      if (st.shipDisintegrationTimer > 0) return;
+
+      const currentShield = Math.max(0, Math.min(200, Math.round(st.frontShield)));
+
+      // =========================================================================
+      // КОЭФФИЦИЕНТ ОБРАТНОГО УДАРА В ГРАВИ-КОНВЕРТОР В ЗАВИСИМОСТИ ОТ СИЛЫ ЩИТА:
+      // • При щите 200% (максимальная защита / остановка): урон конвертору = 0.1 т (коэфф. 0.1)
+      // • При щите 100% (штатный баланс): урон конвертору = 0.5 т (коэфф. 0.5)
+      // • При щите 1% (и ниже, истощение): урон конвертору = 1.0 т (коэфф. 1.0)
+      // =========================================================================
+      let backHitCoeff = 1.0;
+      if (currentShield >= 100) {
+        // Интерполяция от 100% (k=0.5) до 200% (k=0.1)
+        const t = Math.min(1, (currentShield - 100) / 100);
+        backHitCoeff = 0.5 - t * 0.4; // 0.50 -> 0.10
+      } else {
+        // Интерполяция от 0..1% (k=1.0) до 100% (k=0.5)
+        const t = Math.max(0, currentShield) / 100;
+        backHitCoeff = 1.0 - t * 0.5; // 1.00 -> 0.50
+      }
+
+      // Фактический урон, пробивающийся в грави-конвертор
+      const converterDamageTons = Number((impactTons * backHitCoeff).toFixed(2));
+
+      const currentMax = totalShipMassTons;
+      const currentCap = st.gravConverterTons ?? currentMax;
+      const newCap = Math.max(0, Number((currentCap - converterDamageTons).toFixed(2)));
+      st.gravConverterTons = newCap;
+      setGravConverterTons(newCap);
+
+      // Снижение силы щита от удара и синхронизация с емкостью конвертора
+      const directShieldDrop = Math.max(2, Math.round((impactTons / Math.max(1, currentMax)) * 50));
+      const capFraction = currentMax > 0 ? newCap / currentMax : 0;
+      const maxCeiling = st.converterActive ? Math.max(0, 100 - st.converterPct) : 100;
+      const maxAllowedShield = Math.round(capFraction * (st.converterActive ? 200 : maxCeiling));
+      const postHitShield = Math.max(0, Math.min(maxAllowedShield, currentShield - directShieldDrop));
+
+      st.frontShield = postHitShield;
+      st.aftShield = postHitShield;
+
+      playZxBeep('HIT');
+
+      if (newCap <= 0) {
+        triggerShipBlockDisintegration('Критический отказ Грави-Конвертора (0 т)');
+      } else {
+        setFlightMessage(
+          `💥 ${sourceName.toUpperCase()} (${impactTons.toFixed(1)} т)! ЩИТ ${currentShield}% (ОБРАТНЫЙ КОЭФФ. ×${backHitCoeff.toFixed(2)}) → УРОН В КОНВЕРТОР -${converterDamageTons.toFixed(2)} Т (ОСТАЛОСЬ: ${newCap} т / ${currentMax} т)`
+        );
+      }
+    },
+    [playZxBeep, totalShipMassTons, triggerShipBlockDisintegration]
+  );
+
+  // Обработчик масштабирования 3D-радара, проекции и навигации клавишами «+» и «-»:
+  // • Свыше 10 000 ед. — шаг 10 000 ед.
+  // • При значении 10 000 ед. и ниже — шаг 2 000 ед. до предела 2 000 ед. (10 000 → 8 000 → 6 000 → 4 000 → 2 000)
+  const handleStepRadarScale = useCallback(
+    (stepDeltaOrDirection: number | 'IN' | 'OUT') => {
+      setRadarScaleUnits((prev) => {
+        let next = prev;
+        const isDecreasing =
+          stepDeltaOrDirection === 'IN' ||
+          (typeof stepDeltaOrDirection === 'number' && stepDeltaOrDirection < 0);
+
+        if (isDecreasing) {
+          // Уменьшение масштаба (зум ближе):
+          if (prev <= 10000) {
+            next = Math.max(2000, prev - 2000);
+          } else {
+            next = Math.max(10000, prev - 10000);
+          }
+        } else {
+          // Увеличение масштаба (зум дальше):
+          if (prev < 10000) {
+            next = Math.min(10000, prev + 2000);
+          } else {
+            next = Math.min(1000000, prev + 10000);
+          }
+        }
+
+        if (next === prev) {
+          playZxBeep('HIT');
+          setFlightMessage(
+            isDecreasing
+              ? '⚡ МАКСИМАЛЬНЫЙ ЗУМ 3D-РАДАРА (МИНИМАЛЬНЫЙ ПРЕДЕЛ: 2 000 ЕД.)'
+              : '⚡ МАКСИМАЛЬНЫЙ ОБЗОР 3D-РАДАРА (ПРЕДЕЛ: 1 000 000 ЕД.)'
+          );
+          return prev;
+        }
+
+        flightStateRef.current.radarScaleUnits = next;
+        playZxBeep('DOCK');
+        const stepInfo = next <= 10000 ? 'ШАГ 2 000 (ДО 2 000)' : 'ШАГ 10 000';
+        setFlightMessage(
+          `🔍 МАСШТАБ 3D-РАДАРА, ПРОЕКЦИИ И НАВИГАЦИИ: ${next.toLocaleString()} ЕД. [КЛАВИШИ + / - (${stepInfo})]`
+        );
+        return next;
+      });
+    },
+    [playZxBeep]
+  );
+
+  // Прямая установка масштаба радара (для кнопок быстрых пресетов)
+  const handleSetRadarScale = useCallback(
+    (targetScale: number) => {
+      const clamped = Math.max(2000, Math.min(1000000, targetScale));
+      setRadarScaleUnits(clamped);
+      flightStateRef.current.radarScaleUnits = clamped;
+      playZxBeep('DOCK');
+      const stepInfo = clamped <= 10000 ? 'ШАГ 2 000' : 'ШАГ 10 000';
+      setFlightMessage(
+        `🔍 МАСШТАБ 3D-РАДАРА, ПРОЕКЦИИ И НАВИГАЦИИ: ${clamped.toLocaleString()} ЕД. [${stepInfo}]`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // Переключение фильтра радара (клавиша * на Numpad): только объекты с двигателем (корабли) / все объекты
+  const handleToggleRadarShipsOnlyFilter = useCallback(() => {
+    setRadarShipsOnlyFilter((prev) => {
+      const next = !prev;
+      flightStateRef.current.radarShipsOnlyFilter = next;
+      playZxBeep('DOCK');
+      if (next) {
+        const curEng = flightStateRef.current.radarEngineFilter || 'ALL';
+        const curEngMeta =
+          RADAR_ENGINE_FILTERS.find((f) => f.id === curEng) || RADAR_ENGINE_FILTERS[0];
+        setFlightMessage(
+          `🎯 ФИЛЬТР РАДАРА [Num *] ВКЛЮЧЁН: ТОЛЬКО КОРАБЛИ [ДВИГАТЕЛЬ: ${curEngMeta.badgeRu} (Num /)]. ПЛАНЕТЫ, ЗВЕЗДА И СТАНЦИИ СКРЫТЫ.`
+        );
+      } else {
+        setFlightMessage(
+          '🌐 ФИЛЬТР РАДАРА [Num *] ВЫКЛЮЧЁН: ПОКАЗ ВСЕХ ОБЪЕКТОВ СИСТЕМЫ (ПЛАНЕТЫ, ЗВЕЗДА, СТАНЦИИ, ЧАСОВЫЕ).'
+        );
+      }
+      return next;
+    });
+  }, [playZxBeep]);
+
+  // Переключение фильтра кораблей по типам двигателей (клавиша «/» на Numpad / NumLock):
+  // «все , паруса, реактивные, импульсные, ионные, плазменные, фотонный, гравитационные, подпространственные».
+  // Работает только в паре с фильтром кораблей (клавиша * на Numpad).
+  const handleCycleRadarEngineFilter = useCallback(() => {
+    // Если фильтр кораблей выключен — включаем его в паре!
+    if (!flightStateRef.current.radarShipsOnlyFilter) {
+      setRadarShipsOnlyFilter(true);
+      flightStateRef.current.radarShipsOnlyFilter = true;
+    }
+
+    setRadarEngineFilter((prev) => {
+      const idx = RADAR_ENGINE_FILTERS.findIndex((f) => f.id === prev);
+      const nextIdx = (idx + 1) % RADAR_ENGINE_FILTERS.length;
+      const next = RADAR_ENGINE_FILTERS[nextIdx].id;
+      flightStateRef.current.radarEngineFilter = next;
+      const nextMeta = RADAR_ENGINE_FILTERS[nextIdx];
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `⚙️ ФИЛЬТР ДВИГАТЕЛЕЙ [Num /]: ${nextMeta.badgeRu} (${nextMeta.labelRu}) · [РАДАР: ТОЛЬКО КОРАБЛИ [Num *]]`
+      );
+      return next;
+    });
+  }, [playZxBeep]);
 
   const handleBuyLaboratory = useCallback(() => {
     if (hasLaboratory) return;
@@ -2828,6 +6011,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     maxSpeed: number;
     pitchRate: number;
     rollRate: number;
+    pitchAxis: number;
+    rollAxis: number;
     bankAngle: number;
     pitchAngle: number;
     frontShield: number;
@@ -2841,12 +6026,41 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     tractorBeamTimer: number;
     hyperspaceTimer: number;
     hyperspaceTargetId: number;
-    // Координаты прицела Огневой Башни (указатель мыши на 3D-экране)
+    // Координаты прицела Огневой Рубки (Меш-системы камер и орудий) на 3D-экране
     turretX: number;
     turretY: number;
     turretActive: boolean;
     lastShotTargetX: number;
     lastShotTargetY: number;
+    // МЕШ-СИСТЕМА КАМЕР/ОРУДИЙ И 3-ОБРУЧЕВЫЙ ГИРОСКОП ОГНЕВОЙ РУБКИ ВНУТРИ КОРАБЛЯ (БЕЗ ОГРАНИЧЕНИЙ МАНЁВРЕННОСТИ 360°):
+    // Истинный 3D-базис корпуса корабля в пространстве взгляда рубки (View-Space):
+    // В стандартном положении shipForward = {x: 0, y: 0, z: 1} (Путевой центр строго посередине экрана).
+    shipForward: Vec3;
+    shipUp: Vec3;
+    shipRight: Vec3;
+    cabinRawMouseX: number;
+    cabinRawMouseY: number;
+    cabinMouseIn3DWindow: boolean;
+    cabinAutoCentering: boolean;
+    cabinYawRate: number;
+    cabinPitchRate: number;
+    activeWeaponSlot: number; // Выбранный цифрами 1..9, 0 слот оружия Меш-системы (1=Лазер, 2=Плазма, 3=Гамма Ω-γ, 4..10=резерв арсенала)
+    // Прибор «Конвертор» (Энергия щита → Скорость: Форсаж +100% скорость / -100% щита, вкл/выкл NumLock, % клавишами +/-)
+    converterActive: boolean;
+    converterPct: number;
+    // ГРАВИТАЦИОННЫЙ КОНВЕРТОР (CAPACITOR): емкость в тоннах, при 0 т разлёт на блоки
+    gravConverterTons: number;
+    maxShipMassTons: number;
+    shipDisintegrationTimer: number;
+    shipDisintegrationBlocks: Array<{
+      pos: Vec3;
+      vel: Vec3;
+      rot: Vec3;
+      rotSpeed: Vec3;
+      size: { w: number; h: number; d: number };
+      color: string;
+      name: string;
+    }>;
     // Динамические параметры массы корабля для 60 FPS цикла
     massTons: number;
     maneuverFactor: number;
@@ -2865,15 +6079,21 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     frameCounter: number;
     lastFrameTimeMs: number;
     entities: SpaceEntity[];
+    dictatorDrones: DictatorPunitiveDrone[];
     debris: DebrisParticle[];
     stars: Vec3[];
     keys: Record<string, boolean>;
+    radarScaleUnits: number;
+    radarShipsOnlyFilter: boolean;
+    radarEngineFilter: RadarEngineFilterType;
   }>({
     speed: MAX_SYSTEM_SPEED,
     targetSpeed: MAX_SYSTEM_SPEED,
     maxSpeed: MAX_SYSTEM_SPEED,
     pitchRate: 0,
     rollRate: 0,
+    pitchAxis: 0,
+    rollAxis: 0,
     bankAngle: 0,
     pitchAngle: 0,
     frontShield: 100,
@@ -2892,6 +6112,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     turretActive: false,
     lastShotTargetX: 430,
     lastShotTargetY: 194,
+    shipForward: {x: 0, y: 0, z: 1},
+    shipUp: {x: 0, y: 1, z: 0},
+    shipRight: {x: 1, y: 0, z: 0},
+    cabinRawMouseX: 430,
+    cabinRawMouseY: 194,
+    cabinMouseIn3DWindow: false,
+    cabinAutoCentering: false,
+    cabinYawRate: 0,
+    cabinPitchRate: 0,
+    activeWeaponSlot: 1,
+    converterActive: false,
+    converterPct: 0,
+    gravConverterTons: 60,
+    maxShipMassTons: 60,
+    shipDisintegrationTimer: 0,
+    shipDisintegrationBlocks: [],
     massTons: 25,
     maneuverFactor: 1.0,
     protectionFactor: 0.1,
@@ -2908,20 +6144,40 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     frameCounter: 0,
     lastFrameTimeMs: 0,
     entities: [],
+    dictatorDrones: [],
     debris: [],
     stars: [],
     keys: {},
+    radarScaleUnits: 10000,
+    radarShipsOnlyFilter: false,
+    radarEngineFilter: 'ALL',
   });
 
-  // Синхронизируем расчётную массу, базовую манёвренность и защиту с физическим движком
-  // При этом максимальная крейсерская скорость в системе фиксирована = 100 ед./сек (ровно 5 мин от окраины 30000 до звезды и 1 мин между планетами 6000!)
+  // Синхронизируем расчётную массу, базовую манёвренность, защиту, масштаб радара, фильтры и прибор «Конвертор» с физическим движком
+  // Штатная максимальная крейсерская скорость в системе = 100 ед./сек (при балансе 50/50), а при включённом Конверторе (NumLock) потолок открыт до 200 ед./сек (+100% форсаж)!
   useEffect(() => {
     const st = flightStateRef.current;
+    st.radarScaleUnits = radarScaleUnits;
+    st.radarShipsOnlyFilter = radarShipsOnlyFilter;
+    st.radarEngineFilter = radarEngineFilter;
     st.massTons = totalShipMassTons;
+    st.maxShipMassTons = totalShipMassTons;
+    if (st.gravConverterTons === undefined || st.gravConverterTons > totalShipMassTons) {
+      st.gravConverterTons = totalShipMassTons;
+      setGravConverterTons(totalShipMassTons);
+    }
     st.maneuverFactor = baseMassManeuverPct / 100;
     st.protectionFactor = armorProtectionPct / 100;
-    st.maxSpeed = MAX_SYSTEM_SPEED;
-  }, [totalShipMassTons, baseMassManeuverPct, armorProtectionPct]);
+    st.maxSpeed = isShieldConverterActive ? MAX_SYSTEM_SPEED * 2 : MAX_SYSTEM_SPEED;
+  }, [
+    radarScaleUnits,
+    radarShipsOnlyFilter,
+    radarEngineFilter,
+    totalShipMassTons,
+    baseMassManeuverPct,
+    armorProtectionPct,
+    isShieldConverterActive,
+  ]);
 
   // Инициализация чистой сцены Звёздной Системы внутри Сферы (R = 30 000):
   // В центре сферы — Звезда, вокруг неё — 4 планеты по принципу первых 4 планет Солнечной системы
@@ -3062,165 +6318,375 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     ];
   };
 
-  const spawnSystemEntities = useCallback((sysId: number) => {
+  const spawnSystemEntities = useCallback((sysId: number, customSystemKey?: string) => {
     const sys = GALAXY_SYSTEMS[sysId] || GALAXY_SYSTEMS[0];
-    const shortSysName = sys.name.split('·')[0].trim();
+    const effectiveKey = customSystemKey || activeSystemKeyRef.current || `sys:${sysId}`;
+    activeSystemKeyRef.current = effectiveKey;
+    setActiveSystemKey(effectiveKey);
+    syncActiveSystemPlanetLogisticsConfig(effectiveKey);
+
+    const sysAssign = getStarSystemFullAssignment(effectiveKey);
+    const [p1, p2, p3, p4] = sysAssign.planets;
+    const dsMeta = sysAssign.deathStar;
+    const stMeta = sysAssign.spaceStation;
+
+    // Синхронизация фотонно-квантового солнечного конвертора всей сети Часовых со звездой системы:
+    const starProf = getStarRadiationProfile(effectiveKey);
+    setSentinelNetwork((prev) =>
+      prev.map((s) => ({
+        ...s,
+        sectorName: starProf.systemOriginName || s.sectorName,
+        currentStarProfile: starProf,
+      }))
+    );
 
     const st = flightStateRef.current;
     st.eclipticU = {x: 1, y: 0, z: 0};
     st.eclipticV = {x: 0, y: 0.16, z: 0.987};
     st.eclipticN = {x: 0, y: 0.987, z: -0.16};
+    st.shipForward = {x: 0, y: 0, z: 1};
+    st.shipUp = {x: 0, y: 1, z: 0};
+    st.shipRight = {x: 1, y: 0, z: 0};
+    st.cabinAutoCentering = false;
+    st.cabinYawRate = 0;
+    st.cabinPitchRate = 0;
 
-    // СПЕЦИАЛИЗАЦИЯ ЗВЕЗДЫ И ЧЕТЫРЁХ ПЛАНЕТ СИСТЕМЫ:
-    // • Звезда в центре — ИСТОЧНИК ЭНЕРГИИ.
-    // • 1-я планета (ближайшая к звезде — Меркурий): ЖЕЛЕЗО (Fe) — необходимый запас для восстановления повреждений во время гиперпрыжка.
-    // • 2-я планета (Венера): АЛЮМИНИЙ (Al) — необходимо для восстановления повреждений во время гиперпрыжка.
-    // • 3-я планета (Земля): ПРОДОВОЛЬСТВИЕ (необходимое для автономного нахождения в космосе) и ВОДА (необходимая как питьё и источник кислорода O₂).
-    // • 4-я планета (Марс): ТИТАН (Ti) — необходимый для восстановления повреждений во время гиперпрыжка.
+    // СПЕЦИАЛИЗАЦИЯ ЗВЕЗДЫ И ЧЕТЫРЁХ УНИКАЛЬНЫХ ПЛАНЕТ СИСТЕМЫ (С ФРАКЦИОННЫМИ ПРЕФИКСАМИ И ДВОЙНЫМИ ИМЕНАМИ):
     st.planets = [
       {
         id: `planet-${sysId}-1`,
-        name: `I. МЕРКУРИЙ (${shortSysName}-I · ЖЕЛЕЗО Fe)`,
-        cleanName: 'Меркурий',
-        shortMarker: 'I. МЕРКУРИЙ [ЖЕЛЕЗО Fe]',
-        specializationShort: 'ЖЕЛЕЗО (Fe) · Ремонт гиперпрыжка',
+        name: `I. ${p1.officialName.toUpperCase()} (В НАРОДЕ: «${p1.folkName.toUpperCase()}» · ${p1.dictatorCode} · ЖЕЛЕЗО Fe)`,
+        cleanName: `${p1.officialName} («${p1.folkName}»)`,
+        shortMarker: `I. ${p1.officialName.toUpperCase()} [«${p1.folkName.toUpperCase()}» · Fe]`,
+        specializationShort: `${p1.factionBadge} · ${p1.dualNameLabel} · ЖЕЛЕЗО (Fe)`,
         orbitOrder: 1,
         orbitRadius: PLANET_ORBIT_STEP * 1, // 6 000 ед. от Звезды (1 мин от Звезды)
-        orbitAngle: -Math.PI / 2 - 0.11,
-        orbitSpeed: 0.000015,
+        orbitAngle: -Math.PI / 2 - 0.88,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 1 * 60),
         radius3D: 95,
         spinAngle: 0,
-        spinSpeed: 0.0026, // В 3 раза медленнее
-        color: '#fb923c', // Янтарно-оранжевая точка/сфера
+        spinSpeed: 0.0026,
+        color: '#fb923c',
         labelOffsetY: -26,
         gobellObjects: buildPlanetGoBellObjects(
           `planet-${sysId}-1`,
           1,
-          'Меркурий',
+          `${p1.officialName} («${p1.folkName}»)`,
           'GO-MERCURY',
-          '⚙️ СПЕЦИАЛИЗАЦИЯ 1-Й ПЛАНЕТЫ: ЖЕЛЕЗО (Fe)',
-          'Необходимый запас для восстановления повреждений во время гиперпрыжка',
-          'Бизнес «Феррум-Меркурий · Запас Железа (Fe)»',
-          'Добыча и поставка ЖЕЛЕЗА (Fe) — необходимого запаса для восстановления повреждений силового каркаса во время гиперпрыжка.',
+          `⚙️ I ОРБИТА (${p1.factionBadge}): ${p1.dualNameLabel}`,
+          `${p1.loreDescription} · ${p1.dictatorRuleTitle}`,
+          `Бизнес «${p1.officialName} (в народе: "${p1.folkName}") · Запас Железа (Fe)»`,
+          `${p1.dualNameLabel}. ${p1.loreDescription}. Поставка ЖЕЛЕЗА (Fe) для восстановления повреждений во время гиперпрыжка.`,
           [
-            'ЖЕЛЕЗО (Fe) конструкционное: необходимый запас для восстановления повреждений корабля во время гиперпрыжка #железо #гиперпрыжок #ремонт',
-            'Отгрузка слитков чистого железа Меркурия для восстановления силовых шпангоутов после перегрузок гиперпрыжка #запас #железо #каркас',
-            'Ремонтные комплекты из железа (Fe) для автоматической сварки повреждений обшивки при гиперпрыжке #сварка #железо #обшивка',
-            'Пополнение бортового бункера железа перед серией дальних гиперпрыжков по системам GoBell #опт #железо #меркурий',
+            `${p1.dualNameLabel}: конструкционное ЖЕЛЕЗО (Fe) для ремонта корабля во время гиперпрыжка #железо #гиперпрыжок #ремонт`,
+            `Отгрузка слитков чистого железа мира «${p1.officialName}» («${p1.folkName}») для силовых шпангоутов #запас #железо #каркас`,
+            `${p1.factionBadge} (${p1.dictatorCode}): ремонтные комплекты из железа (Fe) для автоматической сварки #сварка #железо #обшивка`,
+            `Пополнение бортового бункера железа на орбите «${p1.officialName}» перед серией гиперпрыжков #опт #железо #диктатор`,
           ]
         ),
       },
       {
         id: `planet-${sysId}-2`,
-        name: `II. ВЕНЕРА (${shortSysName}-II · АЛЮМИНИЙ Al)`,
-        cleanName: 'Венера',
-        shortMarker: 'II. ВЕНЕРА [АЛЮМИНИЙ Al]',
-        specializationShort: 'АЛЮМИНИЙ (Al) · Ремонт гиперпрыжка',
+        name: `II. ${p2.officialName.toUpperCase()} (В НАРОДЕ: «${p2.folkName.toUpperCase()}» · ${p2.dictatorCode} · АЛЮМИНИЙ Al)`,
+        cleanName: `${p2.officialName} («${p2.folkName}»)`,
+        shortMarker: `II. ${p2.officialName.toUpperCase()} [«${p2.folkName.toUpperCase()}» · Al]`,
+        specializationShort: `${p2.factionBadge} · ${p2.dualNameLabel} · АЛЮМИНИЙ (Al)`,
         orbitOrder: 2,
-        orbitRadius: PLANET_ORBIT_STEP * 2, // 12 000 ед. от Звезды (+1 мин от Меркурия)
-        orbitAngle: -Math.PI / 2 + 0.11,
-        orbitSpeed: 0.000011,
+        orbitRadius: PLANET_ORBIT_STEP * 2, // 12 000 ед. от Звезды
+        orbitAngle: -Math.PI / 2 + 0.76,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 2 * 60),
         radius3D: 120,
         spinAngle: 0,
-        spinSpeed: -0.002, // В 3 раза медленнее
-        color: '#a3e635', // Изумрудно-золотистая точка/сфера
+        spinSpeed: -0.002,
+        color: '#a3e635',
         labelOffsetY: 18,
         gobellObjects: buildPlanetGoBellObjects(
           `planet-${sysId}-2`,
           2,
-          'Венера',
+          `${p2.officialName} («${p2.folkName}»)`,
           'GO-VENUS',
-          '🔩 СПЕЦИАЛИЗАЦИЯ 2-Й ПЛАНЕТЫ: АЛЮМИНИЙ (Al)',
-          'Необходимо для восстановления повреждений во время гиперпрыжка',
-          'Бизнес «АлюмПром-Венера · Запас Алюминия (Al)»',
-          'Производство и поставка АЛЮМИНИЯ (Al) — необходимого для восстановления повреждений переборок и контуров во время гиперпрыжка.',
+          `🔩 II ОРБИТА (${p2.factionBadge}): ${p2.dualNameLabel}`,
+          `${p2.loreDescription} · ${p2.dictatorRuleTitle}`,
+          `Бизнес «${p2.officialName} (в народе: "${p2.folkName}") · Запас Алюминия (Al)»`,
+          `${p2.dualNameLabel}. ${p2.loreDescription}. Производство и поставка АЛЮМИНИЯ (Al) для восстановления обшивки во время гиперпрыжка.`,
           [
-            'АЛЮМИНИЙ (Al) авиакосмический: необходим для восстановления повреждений корпуса и экранов во время гиперпрыжка #алюминий #гиперпрыжок #ремонт',
-            'Листовой и профильный алюминий Венеры для герметизации отсеков после повреждений гиперпрыжка #алюминий #герметизация #корпус',
-            'Алюминиевые шины и радиаторы охлаждения для восстановления энергоконтуров во время гиперпрыжка #охлаждение #алюминий #венера',
-            'Срочная загрузка бортового запаса алюминия (Al) на орбите Венеры для защиты в гиперпрыжке #запас #алюминий #орбита',
+            `${p2.dualNameLabel}: авиакосмический АЛЮМИНИЙ (Al) для восстановления корпуса во время гиперпрыжка #алюминий #гиперпрыжок #ремонт`,
+            `Листовой и профильный алюминий мира «${p2.officialName}» («${p2.folkName}») для герметизации отсеков #алюминий #герметизация #корпус`,
+            `${p2.factionBadge} (${p2.dictatorCode}): алюминиевые шины и радиаторы охлаждения энергоконтуров #охлаждение #алюминий #диктатор`,
+            `Срочная загрузка бортового запаса алюминия (Al) на орбите «${p2.officialName}» #запас #алюминий #орбита`,
           ]
         ),
       },
       {
         id: `planet-${sysId}-3`,
-        name: `III. ЗЕМЛЯ (${shortSysName}-III · ПРОДОВОЛЬСТВИЕ И ВОДА O₂)`,
-        cleanName: 'Земля',
-        shortMarker: 'III. ЗЕМЛЯ [ПРОДОВОЛЬСТВИЕ И ВОДА O₂]',
-        specializationShort: 'ПРОДОВОЛЬСТВИЕ (автономность) и ВОДА (питьё + кислород O₂)',
+        name: `III. ${p3.officialName.toUpperCase()} (В НАРОДЕ: «${p3.folkName.toUpperCase()}» · ${p3.dictatorCode} · ПРОДОВОЛЬСТВИЕ И ВОДА O₂)`,
+        cleanName: `${p3.officialName} («${p3.folkName}»)`,
+        shortMarker: `III. ${p3.officialName.toUpperCase()} [«${p3.folkName.toUpperCase()}» · H₂O/O₂]`,
+        specializationShort: `${p3.factionBadge} · ${p3.dualNameLabel} · ПРОДОВОЛЬСТВИЕ И ВОДА (O₂)`,
         orbitOrder: 3,
-        orbitRadius: PLANET_ORBIT_STEP * 3, // 18 000 ед. от Звезды (+1 мин от Венеры)
-        orbitAngle: -Math.PI / 2 - 0.14,
-        orbitSpeed: 0.000008,
+        orbitRadius: PLANET_ORBIT_STEP * 3, // 18 000 ед. от Звезды
+        orbitAngle: -Math.PI / 2,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 3 * 60),
         radius3D: 132,
         spinAngle: 0,
-        spinSpeed: 0.0036, // В 3 раза медленнее
-        color: '#38bdf8', // Ярко-голубая точка/сфера
+        spinSpeed: 0.0036,
+        color: '#38bdf8',
         labelOffsetY: -18,
         isMainWorld: true,
         gobellObjects: buildPlanetGoBellObjects(
           `planet-${sysId}-3`,
           3,
-          'Земля',
+          `${p3.officialName} («${p3.folkName}»)`,
           'GO-EARTH',
-          '🍎💧 СПЕЦИАЛИЗАЦИЯ 3-Й ПЛАНЕТЫ: ПРОДОВОЛЬСТВИЕ И ВОДА (O₂)',
-          'Продовольствие для автономного нахождения в космосе и Вода как питьё и источник кислорода',
-          'Бизнес «АгроАква-Земля · Продовольствие и Вода (O₂)»',
-          'Поставка ПРОДОВОЛЬСТВИЯ (необходимого для автономного нахождения в космосе) и ВОДЫ (необходимой как питьё и источник кислорода O₂).',
+          `🍎💧 III ОРБИТА (${p3.factionBadge}): ${p3.dualNameLabel}`,
+          `${p3.loreDescription} · ${p3.dictatorRuleTitle}`,
+          `Бизнес «${p3.officialName} (в народе: "${p3.folkName}") · Продовольствие и Вода (O₂)»`,
+          `${p3.dualNameLabel}. ${p3.loreDescription}. Поставка ПРОДОВОЛЬСТВИЯ и ВОДЫ (питьё и источник кислорода O₂).`,
           [
-            'ПРОДОВОЛЬСТВИЕ для экипажей: необходимый запас рационов для длительного автономного нахождения в космосе #продовольствие #автономность #космос',
-            'ВОДА питьевая и электролизная (H₂O → O₂): необходима как питьё и главный источник кислорода на корабле #вода #кислород #питье',
-            'Комплекты автономного жизнеобеспечения Земли: свежее продовольствие + чистая вода для регенерации кислорода #жизнеобеспечение #продовольствие #вода',
-            'Полная заправка танков питьевой водой (источник кислорода O₂) и продовольственных складов корабля #кислород #вода #рационы',
+            `${p3.dualNameLabel}: ПРОДОВОЛЬСТВИЕ и рационы для длительного автономного нахождения в космосе #продовольствие #автономность #космос`,
+            `ВОДА питьевая и электролизная (H₂O → O₂) с планеты «${p3.officialName}» («${p3.folkName}») #вода #кислород #питье`,
+            `${p3.factionBadge} (${p3.dictatorCode}): комплекты жизнеобеспечения — свежее продовольствие + чистая вода #жизнеобеспечение #продовольствие #вода`,
+            `Полная заправка танков питьевой водой (источник кислорода O₂) и провиантом на орбите «${p3.officialName}» #кислород #вода #рационы`,
           ]
         ),
       },
       {
         id: `planet-${sysId}-4`,
-        name: `IV. МАРС (${shortSysName}-IV · ТИТАН Ti)`,
-        cleanName: 'Марс',
-        shortMarker: 'IV. МАРС [ТИТАН Ti]',
-        specializationShort: 'ТИТАН (Ti) · Ремонт гиперпрыжка',
+        name: `IV. ${p4.officialName.toUpperCase()} (В НАРОДЕ: «${p4.folkName.toUpperCase()}» · ${p4.dictatorCode} · ТИТАН Ti)`,
+        cleanName: `${p4.officialName} («${p4.folkName}»)`,
+        shortMarker: `IV. ${p4.officialName.toUpperCase()} [«${p4.folkName.toUpperCase()}» · Ti]`,
+        specializationShort: `${p4.factionBadge} · ${p4.dualNameLabel} · ТИТАН (Ti)`,
         orbitOrder: 4,
-        orbitRadius: PLANET_ORBIT_STEP * 4, // 24 000 ед. от Звезды (+1 мин от Земли)
-        orbitAngle: -Math.PI / 2 + 0.13,
-        orbitSpeed: 0.000006,
+        orbitRadius: PLANET_ORBIT_STEP * 4, // 24 000 ед. от Звезды
+        orbitAngle: -Math.PI / 2 + 1.68,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 4 * 60),
         radius3D: 105,
         spinAngle: 0,
-        spinSpeed: 0.003, // В 3 раза медленнее
-        color: '#f43f5e', // Красная точка/сфера
+        spinSpeed: 0.003,
+        color: '#f43f5e',
         labelOffsetY: 20,
         gobellObjects: buildPlanetGoBellObjects(
           `planet-${sysId}-4`,
           4,
-          'Марс',
+          `${p4.officialName} («${p4.folkName}»)`,
           'GO-MARS',
-          '🛡️ СПЕЦИАЛИЗАЦИЯ 4-Й ПЛАНЕТЫ: ТИТАН (Ti)',
-          'Необходимый запас для восстановления повреждений во время гиперпрыжка',
-          'Бизнес «ТитанКузница-Марс · Запас Титана (Ti)»',
-          'Добыча и отгрузка жаропрочного ТИТАНА (Ti) — необходимого для восстановления бронеплит и повреждений во время гиперпрыжка.',
+          `🛡️ IV ОРБИТА (${p4.factionBadge}): ${p4.dualNameLabel}`,
+          `${p4.loreDescription} · ${p4.dictatorRuleTitle}`,
+          `Бизнес «${p4.officialName} (в народе: "${p4.folkName}") · Запас Титана (Ti)»`,
+          `${p4.dualNameLabel}. ${p4.loreDescription}. Добыча и отгрузка жаропрочного ТИТАНА (Ti) для ремонта бронеплит во время гиперпрыжка.`,
           [
-            'ТИТАН (Ti) жаропрочный: необходимый запас для восстановления повреждений брони и узлов во время гиперпрыжка #титан #гиперпрыжок #ремонт',
-            'Марсианские титановые пластины для защиты и восстановления корпуса от разрывов гиперпространства #титан #броня #гиперпрыжок',
-            'Восстановление повреждений гипердвигателя и внешних сопел чистым титаном у Олимпа #ремонт #титан #марс',
-            'Оптовая загрузка бортового запаса титана (Ti) для безопасных гиперпрыжков между звёздными системами #запас #титан #снаряжение',
+            `${p4.dualNameLabel}: жаропрочный ТИТАН (Ti) для восстановления брони во время гиперпрыжка #титан #гиперпрыжок #ремонт`,
+            `Титановые пластины с рудников «${p4.officialName}» («${p4.folkName}») для защиты корпуса #титан #броня #гиперпрыжок`,
+            `${p4.factionBadge} (${p4.dictatorCode}): восстановление повреждений гипердвигателя и внешних сопел чистым титаном #ремонт #титан #диктатор`,
+            `Оптовая загрузка бортового запаса титана (Ti) на орбите «${p4.officialName}» #запас #титан #снаряжение`,
           ]
         ),
       },
+      {
+        id: `planet-${sysId}-5`,
+        name: `V. ЗВЕЗДА СМЕРТИ: ${dsMeta.officialName.toUpperCase()} (В НАРОДЕ: «${dsMeta.folkName.toUpperCase()}» · ${dsMeta.code})`,
+        cleanName: `${dsMeta.officialName} («${dsMeta.folkName}»)`,
+        shortMarker: `V. ЗВЕЗДА СМЕРТИ [«${dsMeta.folkName.toUpperCase()}» · ${dsMeta.code}]`,
+        specializationShort: `${dsMeta.factionBadge} · ${dsMeta.dualNameLabel}`,
+        orbitOrder: 5,
+        orbitRadius: PLANET_ORBIT_STEP * 4,
+        orbitAngle: -Math.PI / 2 + 1.68 + Math.PI,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 4 * 60),
+        radius3D: 128,
+        spinAngle: 0,
+        spinSpeed: 0.0022,
+        color: '#94a3b8',
+        labelOffsetY: -24,
+        isDeathStar: true,
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-5`,
+          5,
+          `${dsMeta.officialName} («${dsMeta.folkName}»)`,
+          'GO-DEATHSTAR',
+          `💀 ЗВЕЗДА СМЕРТИ (${dsMeta.factionBadge}): ${dsMeta.dualNameLabel}`,
+          dsMeta.superlaserSpec,
+          `Арсенал «${dsMeta.officialName} (в народе: "${dsMeta.folkName}")»`,
+          `${dsMeta.dualNameLabel}. Отгрузка имперских бронеплит (Титан Ti + Железо Fe) и обслуживание реакторов суперлазера в экваториальном доке.`,
+          [
+            `${dsMeta.dualNameLabel}: комплекты тяжёлой брони (Ti + Fe) в экваториальном доке #звездасмерти #броня #док`,
+            `СЕВЕРНЫЙ КРАТЕР СУПЕРЛАЗЕРА «${dsMeta.folkName}»: калибровка фокусирующих линз и энергокристаллов #суперлазер #энергия #империя`,
+            `ГАРНИЗОН ДИКТАТОРА (${dsMeta.code}): база перехватчиков и карательных роёв защиты челноков #диктатор #гарнизон #дроны`,
+            `КОНТРАКТЫ ЦИТАДЕЛИ «${dsMeta.officialName}»: снабжение боевого планетоида редкими элементами Пояса #цитадель #контракт #ресурсы`,
+          ]
+        ).map((obj) =>
+          obj.kind === 'GROUP'
+            ? {
+                ...obj,
+                latDeg: -28,
+                lonOffsetDeg: -22,
+              }
+            : obj
+        ),
+      },
+      {
+        id: `planet-${sysId}-6`,
+        name: `VI. КОСМИЧЕСКАЯ СТАНЦИЯ: ${stMeta.officialName.toUpperCase()} (В НАРОДЕ: «${stMeta.folkName.toUpperCase()}» · ${stMeta.code})`,
+        cleanName: `${stMeta.officialName} («${stMeta.folkName}»)`,
+        shortMarker: `VI. СТАНЦИЯ [«${stMeta.folkName.toUpperCase()}» · ${stMeta.code}]`,
+        specializationShort: `${stMeta.factionBadge} · ${stMeta.dualNameLabel}`,
+        orbitOrder: 6,
+        orbitRadius: PLANET_ORBIT_STEP * 3,
+        orbitAngle: -Math.PI / 2 + Math.PI,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 3 * 60),
+        radius3D: 132,
+        spinAngle: 0,
+        spinSpeed: 0.0068,
+        color: '#22d3ee',
+        labelOffsetY: -26,
+        isTorusShip: true,
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-6`,
+          6,
+          `${stMeta.officialName} («${stMeta.folkName}»)`,
+          'GO-TORUS',
+          `🍩 КОСМИЧЕСКАЯ СТАНЦИЯ-ТОР (${stMeta.factionBadge}): ${stMeta.dualNameLabel}`,
+          stMeta.stationLore,
+          `Станция «${stMeta.officialName} (в народе: "${stMeta.folkName}")»`,
+          `${stMeta.dualNameLabel}. Снабжение автономных экспедиций из кольцевого биома 1G (Вода/O₂ + Алюминий Al) и обслуживание 4 радиальных лифтов-переходов.`,
+          [
+            `${stMeta.dualNameLabel}: жилые и аграрные сектора внешнего обода станции 1G #станция #тор #центробежнаясила`,
+            `4 ВНУТРЕННИХ ЛУЧА-ПЕРЕХОДА СТАНЦИИ «${stMeta.folkName}»: радиальные туннели с лифтами к центральному доку #лучи #переходы #центр`,
+            `ЦЕНТРАЛЬНЫЙ ДОК НЕВЕСОМОСТИ (0G · ${stMeta.code}): точка пересечения 4 лучей в центре станции #док #невесомость #стыковка`,
+            `ОРБИТА ПРОТИВОФАЗЫ III ПЛАНЕТЫ: синхронный полёт станции «${stMeta.officialName}» на орбите 18 000 ед. #противофаза #станция #ковчег`,
+          ]
+        ),
+      },
+      {
+        id: `planet-${sysId}-7`,
+        name: `VII. ${stMeta.stargateDesignation.toUpperCase()} (НЕВРАЩАЮЩИЙСЯ ПОРТАЛ В ПРОТИВОФАЗЕ С II ОРБИТОЙ)`,
+        cleanName: stMeta.stargateDesignation,
+        shortMarker: `VII. ${stMeta.stargateDesignation.toUpperCase()} [9 ШЕВРОНОВ]`,
+        specializationShort:
+          'ЗВЁЗДНЫЕ ВРАТА РАЗМЕРОМ С ПЛАНЕТУ (НЕВРАЩАЮЩИЕСЯ) · 9 шевронов и горизонт событий для набора кода мира',
+        orbitOrder: 7,
+        orbitRadius: PLANET_ORBIT_STEP * 2,
+        orbitAngle: -Math.PI / 2 + 0.76 + Math.PI,
+        orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (PLANET_ORBIT_STEP * 2 * 60),
+        radius3D: 124,
+        spinAngle: 0,
+        spinSpeed: 0,
+        color: '#a855f7',
+        labelOffsetY: 24,
+        isStargate: true,
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-7`,
+          7,
+          stMeta.stargateDesignation,
+          'GO-STARGATE',
+          `⛩️ МЕГАСТРУКТУРА «${stMeta.stargateDesignation.toUpperCase()}» (НЕВРАЩАЮЩИЙСЯ ПОРТАЛ ЧЕРВОТОЧИНЫ)`,
+          'Невращающиеся Звёздные Врата размером с планету на II орбите в противофазе относительно Звезды: 9 замков-шевронов, 36 статичных рун-глифов и горизонт событий',
+          `Консорциум «${stMeta.stargateDesignation} · Квантовые Шевроны и Алюминиевые Контуры»`,
+          'Калибровка 9 шевронов межзвёздного перехода, стабилизация горизонта событий и отгрузка авиакосмического Алюминия (Al) и энергокристаллов.',
+          [
+            '9 ЗАМКОВ-ШЕВРОНОВ ПО ПЕРИМЕТРУ: жёсткая фиксация координат без осевого вращения кольца Врат #звездныеврата #шевроны #портал',
+            'ГОРИЗОНТ СОБЫТИЙ В НАШЕМ СТИЛЕ: меридианы и параллели квантовой мембраны червоточины #горизонтсобытий #меридианы #червоточина',
+            'СТАТИЧНОЕ КОЛЬЦО (0 РАД/С): абсолютная гироскопическая неподвижность мегаструктуры размером с планету #статика #мегаструктура #врата',
+            'ОРБИТА ПРОТИВОФАЗЫ II ПЛАНЕТЫ: синхронное движение на орбите 12 000 ед. строго в противофазе 180° #противофаза #врата',
+          ]
+        ),
+      },
+      // =========================================================================
+      // 8..19. ПОЯС КОЙПЕРА (R = 90 000 .. 100 000 ЕД. НА САМОМ КРАЮ СИСТЕМЫ):
+      // Карликовые планеты МАС (Плутон, Макемаке, Хаумеа), главные кандидаты
+      // (Квавар, Орк «анти-Плутон», Гунгун, Салация) и малые планеты
+      // (Варуна, Иксион, Варда, Аррокот «снеговик», Седна).
+      // Скорость движения такая же, как у планет: V = 25 ед/с, omega = V / R.
+      // =========================================================================
+      ...KUIPER_BELT_DEFINITIONS.map((kb, idx): SystemPlanet => {
+        const pId = `kuiper-${sysId}-${kb.orderIndex}`;
+        return {
+          id: pId,
+          name: `${kb.orderIndex + 7}. ${kb.officialName.toUpperCase()} [ПОЯС КОЙПЕРА · ${kb.classificationLabelRu.toUpperCase()}]`,
+          cleanName: `${kb.officialName} («${kb.folkName}»)`,
+          shortMarker: `${kb.officialName.toUpperCase()} [${kb.diameterKm} км]`,
+          specializationShort: `🪐 ПОЯС КОЙПЕРА · ${kb.classificationLabelRu} (${kb.diameterLabelRu})`,
+          orbitOrder: 7 + kb.orderIndex,
+          orbitRadius: kb.orbitRadius,
+          orbitAngle: kb.initialOrbitAngle,
+          orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (kb.orbitRadius * 60),
+          radius3D: kb.radius3D,
+          spinAngle: 0,
+          spinSpeed: kb.spinSpeed,
+          color: kb.color,
+          labelOffsetY: idx % 2 === 0 ? -24 : 24,
+          isKuiperBelt: true,
+          kuiperMeta: kb,
+          shapeType: kb.shapeType,
+          ellipsoidScale: kb.ellipsoidScale,
+          hasRings: kb.hasRings,
+          ringRadiusRatio: kb.ringRadiusRatio,
+          ringColor: kb.ringColor,
+          isRocheLimitAnomaly: kb.isRocheLimitAnomaly,
+          hasHeartFeature: kb.hasHeartFeature,
+          isSnowmanContactBinary: kb.isSnowmanContactBinary,
+          kuiperMoons: kb.moons,
+          gobellObjects: buildPlanetGoBellObjects(
+            pId,
+            7 + kb.orderIndex,
+            kb.officialName,
+            kb.groupTag,
+            kb.researchBadge,
+            kb.researchPurpose,
+            kb.consortiumTitle,
+            kb.consortiumDesc,
+            kb.adverts
+          ),
+        };
+      }),
     ];
 
+    // Применяем сохранённые захваты планет, переименования («Метадонг - бывший Шлак-9») и кланы («клан Розовой бабочки»)
+    const capMapAtSpawn = capturedPlanetsMapRef.current;
+    st.planets = st.planets.map((pl) => {
+      if (pl.orbitOrder < 1 || pl.orbitOrder > 4) return pl;
+      const pAssign = sysAssign.planets[pl.orbitOrder - 1];
+      if (!pAssign) return pl;
+      const cap = capMapAtSpawn[pAssign.index];
+      if (cap?.isCaptured && !cap.soldOnAuctionAtMs) {
+        const romanOrder = ['I', 'II', 'III', 'IV'][pl.orbitOrder - 1] || `${pl.orbitOrder}`;
+        return {
+          ...pl,
+          liberated: true,
+          ownerName: `${cap.clanIcon} ${cap.clanOrUnionName}`,
+          cleanName: formatCapturedPlanetFullTitle(cap),
+          shortMarker: formatCapturedPlanetHudMarker(romanOrder, cap, 'РЕСУРС'),
+          name: `${romanOrder}. ${formatCapturedPlanetFullTitle(cap).toUpperCase()}`,
+        };
+      }
+      if (cap?.soldOnAuctionAtMs) {
+        const romanOrder = ['I', 'II', 'III', 'IV'][pl.orbitOrder - 1] || `${pl.orbitOrder}`;
+        const buyerName = cap.lastAuctionBuyer || cap.currentHighestBidder || 'Консорциум';
+        const soldTitle = `${cap.customName || pAssign.officialName} — бывший ${pAssign.folkName} (Продано: ${buyerName})`;
+        return {
+          ...pl,
+          liberated: true,
+          ownerName: `Аукционный владелец: ${buyerName}`,
+          cleanName: soldTitle,
+          shortMarker: `${romanOrder}. 💰 ${(cap.customName || pAssign.officialName).toUpperCase()} [ПРОДАНО]`,
+          name: `${romanOrder}. 💰 ${soldTitle.toUpperCase()}`,
+        };
+      }
+      return pl;
+    });
+
     // При старте в обычной системе помещаем корабль прямо перед Планетой III. Земля (на 1/2 экрана),
-    // а если это СТАРАЯ ГАЛАКТИКА БЕЗ ЗАСЕЛЁННЫХ ПЛАНЕТ (sys.isOldGalaxy) — планет нет вообще (из-за частых взрывов сверхновых!),
-    // и корабль выходит прямо в реликтовый пояс Критического вещества (Ω-γ) перед умирающей звездой!
+    // а если это СТАРАЯ ГАЛАКТИКА БЕЗ ЗАСЕЛЁННЫХ ПЛАНЕТ (sys.isOldGalaxy) — заселённых планет нет, кроме гигантских техно-объектов!
     if (sys.isOldGalaxy) {
-      st.planets = [];
+      st.planets = st.planets.filter(
+        (p) => p.isDeathStar || p.isTorusShip || p.isStargate || p.isKuiperBelt
+      );
       st.starPos = {
         x: 0,
         y: 35,
         z: 26800,
       };
     } else {
-      const startPlanet = st.planets[2];
+      const startPlanet = st.planets.find((p) => p.orbitOrder === 3) || st.planets[0];
       const cosA = Math.cos(startPlanet.orbitAngle);
       const sinA = Math.sin(startPlanet.orbitAngle);
       const offsetX = startPlanet.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
@@ -3237,7 +6703,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     st.targetSpeed = 0;
     st.stationaryOrbitPlanetId = null;
     st.stationaryOrbitTurnRad = 0;
+    st.dictatorDrones = [];
     setStationaryOrbitInfo(null);
+    setDictatorSwarmUi(null);
     setThrottleUi(0);
 
     // Пояс Астероидов за 4-й планетой (Марсом) на радиусе R = 26 500 .. 27 500 внутри Сферы Системы (R = 30 000):
@@ -3294,6 +6762,31 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         elementSymbol: elSym,
       });
     }
+
+    // ЛЕДЯНЫЕ ПЛАНЕТЕЗИМАЛИ И КОМЕТНЫЕ ЯДРА ПОЯСА КОЙПЕРА (R = 90 200 .. 99 600 ЕД.):
+    // Рассредоточены по внешней зоне системы между карликовыми планетами
+    const kuiperBeltAsteroidsCount = 45;
+    const kuiperElementsPool: AsteroidElementSymbol[] = ['H2O', 'H2O', 'H2O', 'Omega', 'Pt', 'Au', 'Ti', 'Ni'];
+    for (let k = 0; k < kuiperBeltAsteroidsCount; k++) {
+      const kAngle = (k / kuiperBeltAsteroidsCount) * Math.PI * 2 + ((k * 17) % 11) * 0.08;
+      const isVal = k % 2 === 0;
+      const kSym = isVal ? kuiperElementsPool[(k * 5 + sysId) % kuiperElementsPool.length] : undefined;
+      generatedAsteroids.push({
+        id: `kuiper-ast-${sysId}-${k}`,
+        orbitRadius: 90400 + ((k * 223) % 9200), // 90 400 .. 99 600 ед.
+        orbitAngle: kAngle,
+        orbitSpeed: 0.000003 + (k % 4) * 0.0000008,
+        yOffset: ((k % 11) - 5) * 38,
+        size3D: 16 + (k % 5) * 6,
+        rotAngle: (k * 0.85) % (Math.PI * 2),
+        rotSpeed: 0.009 + (k % 3) * 0.004,
+        color: '#bae6fd', // Первозданный голубоватый космический лёд
+        isValuable: isVal,
+        revealed: false,
+        elementSymbol: kSym,
+        isKuiperBelt: true,
+      });
+    }
     st.asteroids = generatedAsteroids;
 
     // =========================================================================
@@ -3317,11 +6810,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       createPlanetaryLogisticsModuleEntity(2, sysId, isOld, 'OUTBOUND_FLIGHT', 1, 0.015),
       // 4. Логистический стандартный модуль Планеты IV (Марс): подлетает по маршруту Марс -> Земля (96% пути — приближается к орбите Земли и растёт в масштабе!)
       createPlanetaryLogisticsModuleEntity(3, sysId, isOld, 'OUTBOUND_FLIGHT', 2, 0.96),
-      // 5. Груз после боя, продолжающий двигаться строго по траектории убитого корабля (Марс -> Земля) — исчезнет в планете назначения Земля, если не подобрать и не расстрелять как астероид!
+      // 5. Груз после боя, продолжающий двигаться строго по траектории убитого корабля (Марс -> Земля) с ПОЛОВИНОЙ скорости модуля (120с),
+      // чтобы его мог догнать и подобрать пират или мародёр!
       {
         id: `after-battle-loot-${sysId}-1`,
         kind: 'CARGO',
-        label: `📦 ГРУЗ НА ТРАЕКТОРИИ [1т ${isOld ? 'Ω-γ' : 'Ti'} · 93% → ИСЧЕЗНЕТ В «ЗЕМЛЯ» | СКМ=МАРОДЁР / ЛКМ=АСТЕРОИД]`,
+        label: `📦 ГРУЗ НА ТРАЕКТОРИИ [1т ${isOld ? 'Ω-γ' : 'Ti'} · V=½ МОДУЛЯ · 78% → ИСЧЕЗНЕТ В «ЗЕМЛЯ» | СКМ=МАРОДЁР / ЛКМ=АСТЕРОИД]`,
         pos: {x: 0, y: 0, z: 500},
         vel: {x: 0, y: 0, z: 0},
         rot: {x: 0, y: 0, z: 0},
@@ -3334,16 +6828,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         lootElement: isOld ? 'Omega' : 'Ti',
         trajFromPlanetIdx: 3,
         trajToPlanetIdx: 2,
-        trajProgress: 0.93,
-        trajDurationSec: 60,
+        trajProgress: 0.78,
+        trajDurationSec: DESTROYED_MODULE_CARGO_DURATION_SEC,
         isFollowingKilledShipTrajectory: true,
       },
-      // 6. Мусор обломков на траектории убитого корабля (Марс -> Земля) — исчезнет в планете назначения Земля, а его уничтожение считается уничтожением астероида!
+      // 6. Мусор обломков на траектории убитого корабля (Марс -> Земля) с половиной скорости модуля (120с) — исчезнет в планете назначения Земля, а его уничтожение считается уничтожением астероида!
       {
         id: `traj-debris-init-${sysId}-1`,
         kind: 'SPACE_DEBRIS',
         label:
-          '🪨 МУСОР НА ТРАЕКТОРИИ [94% → ИСЧЕЗНЕТ В «ЗЕМЛЯ» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]',
+          '🪨 МУСОР НА ТРАЕКТОРИИ [V=½ МОДУЛЯ · 80% → ИСЧЕЗНЕТ В «ЗЕМЛЯ» | ЛКМ/ПКМ = УНИЧТОЖИТЬ КАК АСТЕРОИД!]',
         pos: {x: 0, y: 0, z: 520},
         vel: {x: 0, y: 0, z: 0},
         rot: {x: 0, y: 0, z: 0},
@@ -3354,10 +6848,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         bounty: 0,
         trajFromPlanetIdx: 3,
         trajToPlanetIdx: 2,
-        trajProgress: 0.94,
-        trajDurationSec: 60,
+        trajProgress: 0.8,
+        trajDurationSec: DESTROYED_MODULE_CARGO_DURATION_SEC,
         isFollowingKilledShipTrajectory: true,
       },
+      // 7–10. ЧЕТЫРЕ СТАНДАРТНЫХ КОРАБЛЯ «БУРАН / ШАТТЛ» В ПОЯСЕ АСТЕРОИДОВ:
+      // • Равномерно распределены по Поясу Астероидов (через каждые 90°: сектора #1, #2, #3, #4)
+      // • Летят на ПОЛОВИНЕ скорости (50 ед/с = 1/2 от 100 ед/с)
+      // • Стреляют лазерами по астероидам и собирают металлы (Fe, Ti, Al, Cu, Ni, Co, Ag, Pt, Au)
+      // • На них нет никаких контактов (noContactsAllowed = true)
+      // • Их можно уничтожить, и после них (как и после челноков) остаётся их груз собранных металлов, который можно забрать!
+      createAsteroidBeltBuranMinerEntity(0, sysId, isOld),
+      createAsteroidBeltBuranMinerEntity(1, sysId, isOld),
+      createAsteroidBeltBuranMinerEntity(2, sysId, isOld),
+      createAsteroidBeltBuranMinerEntity(3, sysId, isOld),
     ];
     st.debris = [];
     st.stars = [];
@@ -3423,13 +6927,30 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       const st = flightStateRef.current;
       const isOld = Boolean(GALAXY_SYSTEMS[currentSystemId]?.isOldGalaxy);
       let absorbedNames: string[] = [];
+      for (const planet of st.planets) {
+        // Планеты также продвигаются по своим орбитам с четвертью (1/4) скорости автоматического модуля (25 ед/с от 100 ед/с)
+        const planetOrbitLinearSpd = MAX_SYSTEM_SPEED * 0.25;
+        planet.orbitAngle += (planetOrbitLinearSpd / planet.orbitRadius) * deltaSec;
+      }
+      const nowMs = Date.now();
+      for (const ast of st.asteroids) {
+        if (ast.respawnAtMs !== undefined) {
+          ast.respawnAtMs -= deltaSec * 1000;
+          if (ast.respawnAtMs <= nowMs) {
+            ast.respawnAtMs = undefined;
+            ast.revealed = false;
+            ast.color = '#94a3b8';
+          }
+        }
+      }
       st.entities = stepSystemTrajectories(
         st.entities,
         deltaSec,
         isOld,
         (itemLabel, destPlanetName) => {
           absorbedNames.push(`${itemLabel.split('[')[0].trim()} → ${destPlanetName}`);
-        }
+        },
+        st.planets.filter((p) => !p.isDeathStar)
       );
       playZxBeep('DOCK');
       if (absorbedNames.length > 0) {
@@ -3461,9 +6982,50 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       setStationaryOrbitInfo(null);
       st.pitchRate = 0;
       st.rollRate = 0;
+      st.pitchAxis = 0;
+      st.rollAxis = 0;
+      st.shipForward = {x: 0, y: 0, z: 1};
+      st.shipUp = {x: 0, y: 1, z: 0};
+      st.shipRight = {x: 1, y: 0, z: 0};
+      st.cabinAutoCentering = false;
+      st.cabinYawRate = 0;
+      st.cabinPitchRate = 0;
       st.speed = 0;
       st.targetSpeed = 0;
       setThrottleUi(0);
+
+      // Если выбран один из 4 кораблей «Буран / Шаттл» в Поясе Астероидов или его сброшенный груз:
+      if (target.isBuranMiner || target.isBeltOrbitDrop) {
+        const beltR = target.beltOrbitRadius || 27000;
+        const beltA = target.beltOrbitAngle ?? -Math.PI / 2;
+        const beltY = target.beltYOffset ?? 0;
+        const cA = Math.cos(beltA);
+        const sA = Math.sin(beltA);
+        const rVec = {x: -0.96, y: 0, z: -0.28};
+        const tVec = {x: -0.28, y: 0, z: 0.96};
+        st.eclipticU = {
+          x: cA * rVec.x - sA * tVec.x,
+          y: 0,
+          z: cA * rVec.z - sA * tVec.z,
+        };
+        st.eclipticV = {
+          x: sA * rVec.x + cA * tVec.x,
+          y: 0,
+          z: sA * rVec.z + cA * tVec.z,
+        };
+        st.eclipticN = {x: 0, y: 1, z: 0};
+        st.starPos = {
+          x: 12 - beltR * rVec.x,
+          y: -10 - beltY,
+          z: 120 - beltR * rVec.z,
+        };
+        setIsLogisticsModalOpen(false);
+        playZxBeep('MISSION');
+        setFlightMessage(
+          `🎯 ПЕРЕХВАТ В ПОЯСЕ АСТЕРОИДОВ: ${target.label} · ДИСТАНЦИЯ 120 ЕД. (ЗОНА 100% УРОНА · ЛКМ=ОГОНЬ / СКМ=ЗАБРАТЬ ГРУЗ)`
+        );
+        return;
+      }
 
       // Вычисляем точное положение модуля/груза на его 3D-маршруте относительно Звезды и ставим корабль игрока в 160 ед. перед этой точкой маршрута
       st.eclipticU = {x: 1, y: 0, z: 0};
@@ -3471,7 +7033,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       st.eclipticN = {x: 0, y: 0.987, z: -0.16};
 
       const getPlanetOffsetFromStar = (idx: number): {vec: Vec3; r: number} => {
-        const p = st.planets[idx];
+        const p = st.planets.find((pl) => !pl.isDeathStar && pl.orbitOrder === idx + 1);
         const orbitR = p ? p.orbitRadius : PLANET_ORBIT_STEP * (idx + 1);
         const orbitA = p ? p.orbitAngle : -Math.PI / 2 + (idx % 2 === 0 ? -0.11 : 0.11);
         const r3d = p ? p.radius3D : 110;
@@ -3541,11 +7103,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         z: startZ + (endZ - startZ) * prog,
       };
 
-      // Размещаем корабль игрока на дистанции 165 ед. перед точкой траектории модуля
+      // Размещаем корабль игрока на дистанции 145 ед. в ракурсе 3/4 перед точкой траектории челнока «Буран / Шаттл»
       st.starPos = {
-        x: -entOffsetFromStar.x,
-        y: -entOffsetFromStar.y,
-        z: 165 - entOffsetFromStar.z,
+        x: -entOffsetFromStar.x - 16,
+        y: -entOffsetFromStar.y - 12,
+        z: 145 - entOffsetFromStar.z,
       };
 
       playZxBeep('MISSION');
@@ -3659,7 +7221,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         | 'PLANET_2'
         | 'PLANET_3'
         | 'PLANET_4'
+        | 'DEATH_STAR'
+        | 'TORUS_SHIP'
+        | 'STARGATE'
+        | 'BURAN_SHUTTLE'
         | 'ASTEROID_BELT'
+        | 'KUIPER_BELT'
+        | `KUIPER_${number}`
+        | string
     ) => {
       const st = flightStateRef.current;
       setScreenMode('FLIGHT');
@@ -3668,23 +7237,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       setStationaryOrbitInfo(null);
       st.pitchRate = 0;
       st.rollRate = 0;
+      st.pitchAxis = 0;
+      st.rollAxis = 0;
       st.eclipticU = {x: 1, y: 0, z: 0};
       st.eclipticV = {x: 0, y: 0.16, z: 0.987};
       st.eclipticN = {x: 0, y: 0.987, z: -0.16};
 
       if (mode === 'SYSTEM_EDGE') {
-        // Окраина Сферы Системы (R = 30 000): все 4 планеты и звезда видны как разноцветные точки с текстовыми маркерами!
-        // Полёт до Звезды на максимальной скорости (100 ед/с) занимает ровно 5 минут (300 сек), между планетами — по 1 минуте (60 сек).
+        // Окраина Сферы Системы (R = 100 000): все 4 планеты, орбиты и объекты видны на своих местах!
         st.starPos = {x: 0, y: 90, z: SYSTEM_SPHERE_RADIUS};
-        if (st.planets[0]) st.planets[0].orbitAngle = -Math.PI / 2 - 0.11;
-        if (st.planets[1]) st.planets[1].orbitAngle = -Math.PI / 2 + 0.11;
-        if (st.planets[2]) st.planets[2].orbitAngle = -Math.PI / 2 - 0.14;
-        if (st.planets[3]) st.planets[3].orbitAngle = -Math.PI / 2 + 0.13;
         st.targetSpeed = MAX_SYSTEM_SPEED;
         st.speed = MAX_SYSTEM_SPEED;
         setThrottleUi(100);
         setFlightMessage(
-          '🔭 ОКРАИНА СФЕРЫ СИСТЕМЫ (R=30 000): ЗВЕЗДА И 4 ПЛАНЕТЫ — ЦВЕТНЫЕ ТОЧКИ С МАРКЕРАМИ · 5 МИН ДО ЗВЕЗДЫ, 1 МИН МЕЖДУ ПЛАНЕТАМИ'
+          '🔭 ОКРАИНА СФЕРЫ СИСТЕМЫ (R=100 000): ЗВЕЗДА И 4 ПЛАНЕТЫ НА СВОИХ МЕСТАХ И ОРБИТАХ · ПАНОРАМА 100 000 ЕД.'
         );
       } else if (mode === 'STAR_CLOSE') {
         // В непосредственной близости к Центральной Звезде: жёлтый кружочек с лучиками на пол-экрана + зарядка энергией 100%!
@@ -3704,11 +7270,177 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setFlightMessage(
           '🪨 ПОЯС АСТЕРОИДОВ (R=27 000): КАМЕННОЕ КОЛЬЦО ЭКЛИПТИКИ ЗА ЧЕТВЁРТОЙ ПЛАНЕТОЙ МАРС-IV'
         );
+      } else if (mode === 'DEATH_STAR') {
+        const targetDS = st.planets.find((p) => p.isDeathStar);
+        if (targetDS) {
+          targetDS.spinAngle = 0;
+          const cosA = Math.cos(targetDS.orbitAngle);
+          const sinA = Math.sin(targetDS.orbitAngle);
+          const offsetX = targetDS.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const offsetY = targetDS.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const offsetZ = targetDS.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+          const closeDist = Math.round(targetDS.radius3D * 2.05);
+          st.starPos = {
+            x: -offsetX,
+            y: -offsetY,
+            z: closeDist - offsetZ,
+          };
+          st.targetSpeed = 0;
+          st.speed = 0;
+          setThrottleUi(0);
+          setHoveredPlanetObjUi(null);
+          hoveredPlanetObjRef.current = null;
+          setFlightMessage(
+            `💀 БОЕВОЙ ПЛАНЕТОИД «ЗВЕЗДА СМЕРТИ» ВБЛИЗИ (${closeDist} ЕД. < 400): НА ОРБИТЕ МАРСА В ПРОТИВОФАЗЕ ОТНОСИТЕЛЬНО СОЛНЦА · [X] ОРБИТА!`
+          );
+        }
+      } else if (mode === 'TORUS_SHIP') {
+        const targetTorus = st.planets.find((p) => p.isTorusShip);
+        if (targetTorus) {
+          const cosA = Math.cos(targetTorus.orbitAngle);
+          const sinA = Math.sin(targetTorus.orbitAngle);
+          const offsetX =
+            targetTorus.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const offsetY =
+            targetTorus.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const offsetZ =
+            targetTorus.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+          const closeDist = Math.round(targetTorus.radius3D * 2.05);
+          st.starPos = {
+            x: -offsetX,
+            y: -offsetY,
+            z: closeDist - offsetZ,
+          };
+          st.targetSpeed = 0;
+          st.speed = 0;
+          setThrottleUi(0);
+          setHoveredPlanetObjUi(null);
+          hoveredPlanetObjRef.current = null;
+          setFlightMessage(
+            `🍩 КОСМИЧЕСКИЙ КОРАБЛЬ «БУБЛИК» ВБЛИЗИ (${closeDist} ЕД. < 400): РАЗМЕРОМ С ПЛАНЕТУ, 4 ВНУТРЕННИХ ЛУЧА-ПЕРЕХОДА В ЦЕНТРЕ, ЦЕНТРОБЕЖНАЯ СИЛА · ПРОТИВОФАЗА С ЗЕМЛЁЙ [X — ОРБИТА]!`
+          );
+        }
+      } else if (mode === 'STARGATE') {
+        const targetGate = st.planets.find((p) => p.isStargate);
+        if (targetGate) {
+          targetGate.spinAngle = 0;
+          const cosA = Math.cos(targetGate.orbitAngle);
+          const sinA = Math.sin(targetGate.orbitAngle);
+          const baseU: Vec3 = {x: 1, y: 0, z: 0};
+          const baseV: Vec3 = {x: 0, y: 0.16, z: 0.987};
+          const baseN: Vec3 = {x: 0, y: 0.987, z: -0.16};
+          // Разворачиваем курс корабля строго вдоль касательной орбиты Звёздных Врат (позади Врат на их орбите),
+          // чтобы Врата летели ПЛОСКОСТЬЮ вперёд по своей орбите и их можно было догонять прямо по орбите!
+          st.eclipticU = {
+            x: cosA * baseU.x - sinA * baseV.x,
+            y: cosA * baseU.y - sinA * baseV.y,
+            z: cosA * baseU.z - sinA * baseV.z,
+          };
+          st.eclipticV = {
+            x: sinA * baseU.x + cosA * baseV.x,
+            y: sinA * baseU.y + cosA * baseV.y,
+            z: sinA * baseU.z + cosA * baseV.z,
+          };
+          st.eclipticN = baseN;
+
+          const offsetX =
+            targetGate.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const offsetY =
+            targetGate.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const offsetZ =
+            targetGate.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+          const closeDist = Math.round(targetGate.radius3D * 2.05);
+          st.starPos = {
+            x: -offsetX,
+            y: -offsetY,
+            z: closeDist - offsetZ,
+          };
+          st.targetSpeed = 0;
+          st.speed = 0;
+          setThrottleUi(0);
+          setHoveredPlanetObjUi(null);
+          hoveredPlanetObjRef.current = null;
+          setFlightMessage(
+            `⛩️ «ЗВЁЗДНЫЕ ВРАТА» НА КУРСЕ ПО ОРБИТЕ (${closeDist} ЕД.): ЛЕТЯТ ПЛОСКОСТЬЮ ВПЕРЁД ПО СВОЕЙ ОРБИТЕ БЕЗ ИЗМЕНЕНИЯ ОСЕЙ · ПРИБАВЬТЕ ХОД (W), ЧТОБЫ ДОГНАТЬ ПО ОРБИТЕ!`
+          );
+        }
+      } else if (mode === 'BURAN_SHUTTLE') {
+        // Циклическое переключение между 4 стандартными кораблями «Буран / Шаттл» в Поясе Астероидов (или их сброшенным грузом после уничтожения):
+        let beltTargets = st.entities.filter(
+          (e) => e.isBuranMiner || (e.isBeltOrbitDrop && e.kind === 'CARGO')
+        );
+        if (beltTargets.length === 0) {
+          // Если все 4 корабля в Поясе Астероидов были уничтожены и весь их груз собран — выводим новую четвёрку «Буранов» в Пояс Астероидов:
+          const isOld = Boolean(GALAXY_SYSTEMS[currentSystemId]?.isOldGalaxy);
+          const freshMiners = [0, 1, 2, 3].map((idx) =>
+            createAsteroidBeltBuranMinerEntity(idx, currentSystemId, isOld)
+          );
+          st.entities.push(...freshMiners);
+          beltTargets = freshMiners;
+        }
+        const pickedIdx =
+          ((st.frameCounter >> 2) + Math.floor(Date.now() / 350)) % beltTargets.length;
+        const targetEnt = beltTargets[pickedIdx] || beltTargets[0];
+        const beltR = targetEnt.beltOrbitRadius || 27000;
+        const beltA = targetEnt.beltOrbitAngle ?? -Math.PI / 2;
+        const beltY = targetEnt.beltYOffset ?? 0;
+        const cA = Math.cos(beltA);
+        const sA = Math.sin(beltA);
+        const rVec = {x: -0.96, y: 0, z: -0.28};
+        const tVec = {x: -0.28, y: 0, z: 0.96};
+        st.eclipticU = {
+          x: cA * rVec.x - sA * tVec.x,
+          y: 0,
+          z: cA * rVec.z - sA * tVec.z,
+        };
+        st.eclipticV = {
+          x: sA * rVec.x + cA * tVec.x,
+          y: 0,
+          z: sA * rVec.z + cA * tVec.z,
+        };
+        st.eclipticN = {x: 0, y: 1, z: 0};
+        st.starPos = {
+          x: 12 - beltR * rVec.x,
+          y: -10 - beltY,
+          z: 120 - beltR * rVec.z,
+        };
+        st.targetSpeed = 0;
+        st.speed = 0;
+        setThrottleUi(0);
+        setHoveredPlanetObjUi(null);
+        hoveredPlanetObjRef.current = null;
+
+        // Гарантируем, что прямо перед носом выбранного «Бурана / Шаттла» в Поясе Астероидов находится богатый металлом астероид,
+        // по которому он ведёт прицельный лазерный огонь и собирает металлы:
+        if (targetEnt.isBuranMiner && st.asteroids.length > 0) {
+          const targetAst = st.asteroids[(targetEnt.minerIndex ?? 0) % st.asteroids.length];
+          if (targetAst) {
+            targetAst.respawnAtMs = undefined;
+            targetAst.orbitRadius = beltR - 10;
+            targetAst.orbitAngle = beltA + 145 / beltR;
+            targetAst.yOffset = beltY + 4;
+            targetAst.isValuable = true;
+            targetAst.elementSymbol = targetEnt.lootElement || 'Ti';
+            targetAst.revealed = true;
+            targetAst.color =
+              ASTEROID_PERIODIC_ELEMENTS[targetAst.elementSymbol]?.color || '#38bdf8';
+          }
+          targetEnt.miningLaserTimer = 35;
+          targetEnt.miningCooldownSec = 1.6;
+        }
+
+        const activeMinersCount = st.entities.filter((e) => e.isBuranMiner).length;
+        setFlightMessage(
+          targetEnt.isBuranMiner
+            ? `🚀 ПОЯС АСТЕРОИДОВ (${activeMinersCount}/4 В СТРОЮ): ${targetEnt.label} · СТРЕЛЯЕТ ПО АСТЕРОИДАМ И СОБИРАЕТ МЕТАЛЛЫ · БЕЗ КОНТАКТОВ · МОЖНО УНИЧТОЖИТЬ И ЗАБРАТЬ ГРУЗ!`
+            : `📦 СБРОШЕННЫЙ ГРУЗ МЕТАЛЛОВ СБИТОГО «БУРАНА» В ПОЯСЕ АСТЕРОИДОВ: ${targetEnt.label} · НАЖМИТЕ СКМ / C, ЧТОБЫ ЗАБРАТЬ!`
+        );
       } else {
         // Подлёт вплотную (на пол-экрана) к выбранной планете (I. Меркурий, II. Венера, III. Земля, IV. Марс)
-        const pIndex =
-          mode === 'PLANET_1' ? 0 : mode === 'PLANET_2' ? 1 : mode === 'PLANET_3' ? 2 : 3;
-        const targetP = st.planets[pIndex] || st.planets[2];
+        const pOrder =
+          mode === 'PLANET_1' ? 1 : mode === 'PLANET_2' ? 2 : mode === 'PLANET_3' ? 3 : 4;
+        const targetP =
+          st.planets.find((p) => p.orbitOrder === pOrder) || st.planets[0];
         if (targetP) {
           targetP.spinAngle = 0;
           const cosA = Math.cos(targetP.orbitAngle);
@@ -3800,6 +7532,133 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   }, []);
 
   // =========================================================================
+  // ЗАЩИТА ЧЕЛНОКОВ НА ПОГРУЗКЕ/РАЗГРУЗКЕ У ПЛАНЕТЫ И КАРА ДИКТАТОРА:
+  // • Нельзя уничтожать челноки, если они разгружаются или загружаются возле планеты
+  //   (фазы WAIT_HOME_ORBIT / WAIT_OTHER_ORBIT или дистанция челнока до планеты < 400 ед.).
+  // • При попытке атаковать такой челнок с планеты вылетает рой из 5 дронов Диктатора,
+  //   движущихся хаотически независимо друг от друга со скоростью вдвое выше скорости корабля нарушителя (2x),
+  //   а сила выстрела каждого дрона в 20 раз меньше, чем нужно для разрушения корабля нарушителя (5%).
+  // =========================================================================
+  const checkAndTriggerDictatorSwarmIfShuttleAtPlanet = useCallback(
+    (targetEnt: SpaceEntity): boolean => {
+      if (!targetEnt.isLogisticsModule && targetEnt.kind !== 'TRADER') return false;
+      const st = flightStateRef.current;
+      let protectingPlanetIdx: number | null = null;
+
+      if (targetEnt.logisticsPhase === 'WAIT_HOME_ORBIT') {
+        protectingPlanetIdx = targetEnt.homePlanetIdx ?? targetEnt.trajFromPlanetIdx ?? 0;
+      } else if (targetEnt.logisticsPhase === 'WAIT_OTHER_ORBIT') {
+        protectingPlanetIdx = targetEnt.trajToPlanetIdx ?? targetEnt.homePlanetIdx ?? 0;
+      } else if (st.planets && st.planets.length > 0) {
+        for (let i = 0; i < st.planets.length; i++) {
+          const p = st.planets[i];
+          const cA = Math.cos(p.orbitAngle);
+          const sA = Math.sin(p.orbitAngle);
+          const px = st.starPos.x + p.orbitRadius * (cA * st.eclipticU.x + sA * st.eclipticV.x);
+          const py = st.starPos.y + p.orbitRadius * (cA * st.eclipticU.y + sA * st.eclipticV.y);
+          const pz = st.starPos.z + p.orbitRadius * (cA * st.eclipticU.z + sA * st.eclipticV.z);
+          const distShuttleToPlanet = Math.hypot(
+            targetEnt.pos.x - px,
+            targetEnt.pos.y - py,
+            targetEnt.pos.z - pz
+          );
+          if (distShuttleToPlanet < 400) {
+            protectingPlanetIdx = i;
+            break;
+          }
+        }
+      }
+
+      if (protectingPlanetIdx === null) return false;
+
+      const planetObj = st.planets[protectingPlanetIdx] || st.planets[0];
+      const planetCfg =
+        PLANET_LOGISTICS_CONFIG[protectingPlanetIdx] || PLANET_LOGISTICS_CONFIG[0];
+      const planetCleanName = planetObj ? planetObj.cleanName : planetCfg.cleanName;
+      const orbitR = planetObj ? planetObj.orbitRadius : PLANET_ORBIT_STEP * (protectingPlanetIdx + 1);
+      const orbitA = planetObj ? planetObj.orbitAngle : 0;
+      const baseU = orbitR * Math.cos(orbitA);
+      const baseV = orbitR * Math.sin(orbitA);
+
+      const violatorShipSpeed = Math.max(MAX_SYSTEM_SPEED, st.maxSpeed, st.speed);
+      const droneSpeed = Math.round(violatorShipSpeed * 2);
+      const droneColors = ['#ff0055', '#fb7185', '#f97316', '#ef4444', '#e11d48'];
+
+      const launchedDrones: DictatorPunitiveDrone[] = [];
+      for (let i = 0; i < DICTATOR_SWARM_DRONE_COUNT; i++) {
+        const randTheta = Math.random() * Math.PI * 2;
+        const randPhi = (Math.random() - 0.5) * Math.PI * 0.85;
+        const dirU = Math.cos(randPhi) * Math.cos(randTheta);
+        const dirN = Math.sin(randPhi);
+        const dirV = Math.cos(randPhi) * Math.sin(randTheta);
+        const spreadR = (planetObj ? planetObj.radius3D : 110) * 1.25;
+
+        const sysOffsetU = baseU + dirU * spreadR;
+        const sysOffsetN = dirN * spreadR;
+        const sysOffsetV = baseV + dirV * spreadR;
+
+        const camX =
+          st.starPos.x +
+          sysOffsetU * st.eclipticU.x +
+          sysOffsetV * st.eclipticV.x +
+          sysOffsetN * st.eclipticN.x;
+        const camY =
+          st.starPos.y +
+          sysOffsetU * st.eclipticU.y +
+          sysOffsetV * st.eclipticV.y +
+          sysOffsetN * st.eclipticN.y;
+        const camZ =
+          st.starPos.z +
+          sysOffsetU * st.eclipticU.z +
+          sysOffsetV * st.eclipticV.z +
+          sysOffsetN * st.eclipticN.z;
+
+        launchedDrones.push({
+          id: `dictator-drone-${Date.now()}-${i + 1}-${Math.floor(Math.random() * 999)}`,
+          droneNumber: i + 1,
+          originPlanetIdx: protectingPlanetIdx,
+          originPlanetName: planetCleanName,
+          sysOffsetU,
+          sysOffsetN,
+          sysOffsetV,
+          dirU,
+          dirN,
+          dirV,
+          chaosTimerSec: 0.25 + Math.random() * 0.45,
+          chaosPhase: Math.random() * Math.PI * 2,
+          chaosFreqX: 2.2 + Math.random() * 3.5,
+          chaosFreqY: 2.5 + Math.random() * 3.5,
+          chaosFreqZ: 2.0 + Math.random() * 3.3,
+          speedUnitsPerSec: droneSpeed,
+          hp: 35,
+          maxHp: 35,
+          fireCooldownSec: 1.1 + i * 0.38 + Math.random() * 0.45,
+          laserVisualTimer: 0,
+          color: droneColors[i % droneColors.length],
+          camPos: {x: camX, y: camY, z: camZ},
+          engineType: (['PLASMA', 'IMPULSE', 'ION', 'GRAVITATIONAL', 'REACTIVE'] as RadarEngineFilterType[])[
+            i % 5
+          ],
+        });
+      }
+
+      // Поддерживаем рой из 5 дронов с атакованной планеты
+      st.dictatorDrones = launchedDrones;
+      setDictatorSwarmUi({
+        activeCount: launchedDrones.length,
+        originPlanetName: planetCleanName,
+        droneSpeed,
+      });
+      playZxBeep('EXPLODE');
+      setFlightMessage(
+        `🚨 КАРА ДИКТАТОРА «${planetCleanName.toUpperCase()}»: ЧЕЛНОК НА ПОГРУЗКЕ/РАЗГРУЗКЕ У ПЛАНЕТЫ НЕУЯЗВИМ! С ПЛАНЕТЫ ВЫЛЕТЕЛ РОЙ ИЗ 5 КАРАТЕЛЬНЫХ ДРОНОВ (ХАОТИЧЕСКОЕ ДВИЖЕНИЕ · СКОРОСТЬ ${droneSpeed} ЕД/С = 2× КОРАБЛЯ · УРОН 1/20 = 5% ЗА ВЫСТРЕЛ)!`
+      );
+      return true;
+    },
+    [playZxBeep]
+  );
+
+  // =========================================================================
   // ОНТОЛОГИЧЕСКАЯ МЕХАНИКА №2: ТЯЖЁЛОЕ ВООРУЖЕНИЕ — ГАММА-КВАНТОВЫЙ РАЗМЫКАТЕЛЬ УЗЛОВ (Клавиша V / Кнопка)
   // • Контролируемый пучок гамма-квантов вызывает лавинообразное размыкание локальных узлов в цели:
   //   аналог гамма-всплеска сверхновой, но БЕЗ ПОСЛЕСВЕЧЕНИЯ!
@@ -3824,6 +7683,37 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     st.gammaWeaponFiringTimer = 9; // Короткий чистый гамма-импульс БЕЗ ПОСЛЕСВЕЧЕНИЯ!
     setHeavyGammaCharges((c) => Math.max(0, c - 1));
     playZxBeep('EXPLODE');
+
+    // 0. Проверяем попадание по карательным дронам Диктатора
+    for (let i = 0; i < st.dictatorDrones.length; i++) {
+      const dr = st.dictatorDrones[i];
+      if (dr.camPos.z > 20 && dr.camPos.z < 9000) {
+        const projRatio = 380 / dr.camPos.z;
+        const dScreenX = 430 + dr.camPos.x * projRatio;
+        const dScreenY = 194 - dr.camPos.y * projRatio;
+        const hitR = Math.max(20, Math.min(64, (18 * 380) / dr.camPos.z + 16));
+        if (Math.hypot(dScreenX - aimX, dScreenY - aimY) <= hitR) {
+          st.dictatorDrones.splice(i, 1);
+          const rem = st.dictatorDrones.length;
+          setDictatorSwarmUi(
+            rem > 0
+              ? {
+                  activeCount: rem,
+                  originPlanetName: dr.originPlanetName,
+                  droneSpeed: dr.speedUnitsPerSec,
+                }
+              : null
+          );
+          setCredits((c) => c + 45);
+          setFlightMessage(
+            rem > 0
+              ? `💥 КАРАТЕЛЬНЫЙ ДРОН #${dr.droneNumber} ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» СБИТ (+45 CR)! В РОЕ ОСТАЛОСЬ: ${rem} ДРОНОВ`
+              : `★ ВЕСЬ РОЙ КАРАТЕЛЬНЫХ ДРОНОВ ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» УНИЧТОЖЕН!`
+          );
+          return;
+        }
+      }
+    }
 
     // 1. Проверяем попадание по кораблям или грузу/мусору на траектории в секторе
     let hitEntity: SpaceEntity | null = null;
@@ -3862,6 +7752,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       // Если уничтожен космический мусор или груз на траектории — считается уничтожением астероида и вознаграждается соответственно!
       if (hitEntity.kind === 'CARGO' || hitEntity.kind === 'SPACE_DEBRIS') {
         rewardDestroyCargoOrDebrisAsAsteroid(hitEntity, 'GAMMA');
+        return;
+      }
+
+      // Нельзя уничтожать челноки на погрузке/разгрузке у планеты — вызывается Кара Диктатора (рой из 5 дронов)!
+      if (checkAndTriggerDictatorSwarmIfShuttleAtPlanet(hitEntity)) {
         return;
       }
 
@@ -3916,6 +7811,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       );
     }
   }, [
+    checkAndTriggerDictatorSwarmIfShuttleAtPlanet,
     currentSystemId,
     getWeaponDamageMultiplierByDistance,
     heavyGammaCharges,
@@ -3938,11 +7834,15 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     playZxBeep('EXPLODE');
 
     // Взрыв сверхновой выбрасывает в космос новые сгустки Критического вещества (Ω-γ)
-    for (let i = 0; i < Math.min(18, st.asteroids.length); i++) {
+    const nowBurstMs = Date.now();
+    let convertedCount = 0;
+    for (let i = 0; i < st.asteroids.length && convertedCount < 18; i++) {
+      if (st.asteroids[i].respawnAtMs && nowBurstMs < st.asteroids[i].respawnAtMs!) continue;
       st.asteroids[i].isValuable = true;
       st.asteroids[i].revealed = true;
       st.asteroids[i].elementSymbol = 'Omega';
       st.asteroids[i].color = '#e879f9';
+      convertedCount++;
     }
 
     if (reactorSuperEnergySec > 0) {
@@ -4079,8 +7979,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         lootElement: afterBattleSym,
         trajFromPlanetIdx: 3, // Марс (#4)
         trajToPlanetIdx: 2, // Земля (#3)
-        trajProgress: 0.955,
-        trajDurationSec: 60,
+        trajProgress: 0.78,
+        trajDurationSec: DESTROYED_MODULE_CARGO_DURATION_SEC,
         isFollowingKilledShipTrajectory: true,
       }
     );
@@ -4108,8 +8008,68 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     st.laserFiringTimer = 7;
     playZxBeep('LASER');
 
-    // Проверяем попадание по 3D-объектам в точке ПРИЦЕЛА ОГНЕВОЙ БАШНИ (включая ГРУЗ / МУСОР на траектории!)
     const damage = hasMilitaryLaser ? 42 : 26;
+
+    // 0. Проверяем попадание лазером по карательным дронам Диктатора
+    for (let i = 0; i < st.dictatorDrones.length; i++) {
+      const dr = st.dictatorDrones[i];
+      if (dr.camPos.z > 20 && dr.camPos.z < 9000) {
+        const projRatio = 380 / dr.camPos.z;
+        const dScreenX = 430 + dr.camPos.x * projRatio;
+        const dScreenY = 194 - dr.camPos.y * projRatio;
+        const hitR = Math.max(20, Math.min(58, (16 * 380) / dr.camPos.z + 15));
+        if (Math.hypot(dScreenX - aimX, dScreenY - aimY) <= hitR) {
+          const dist3D = Math.max(1, Math.round(Math.hypot(dr.camPos.x, dr.camPos.y, dr.camPos.z)));
+          const mult = getWeaponDamageMultiplierByDistance(dist3D);
+          if (mult <= 0) {
+            playZxBeep('HIT');
+            setFlightMessage(`⚠️ ДРОН ДИКТАТОРА ВНЕ ЗОНЫ ПОРАЖЕНИЯ (${dist3D} ЕД. ≥ 1000 ЕД.)!`);
+            return;
+          }
+          dr.hp -= damage * mult;
+          for (let k = 0; k < 10; k++) {
+            st.debris.push({
+              pos: {...dr.camPos},
+              vel: {
+                x: (Math.random() - 0.5) * 20,
+                y: (Math.random() - 0.5) * 20,
+                z: (Math.random() - 0.5) * 20,
+              },
+              ttl: 20,
+              color: dr.color,
+            });
+          }
+          if (dr.hp <= 0) {
+            playZxBeep('EXPLODE');
+            st.dictatorDrones.splice(i, 1);
+            const rem = st.dictatorDrones.length;
+            setDictatorSwarmUi(
+              rem > 0
+                ? {
+                    activeCount: rem,
+                    originPlanetName: dr.originPlanetName,
+                    droneSpeed: dr.speedUnitsPerSec,
+                  }
+                : null
+            );
+            setCredits((c) => c + 35);
+            setFlightMessage(
+              rem > 0
+                ? `💥 КАРАТЕЛЬНЫЙ ДРОН #${dr.droneNumber} ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» СБИТ ЛАЗЕРОМ (+35 CR)! ОСТАЛОСЬ В РОЕ: ${rem}`
+                : `★ ВЕСЬ РОЙ ИЗ 5 ДРОНОВ ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» ЛИКВИДИРОВАН!`
+            );
+          } else {
+            playZxBeep('HIT');
+            setFlightMessage(
+              `⚡ ПОПАДАНИЕ ПО ДРОНУ ДИКТАТОРА #${dr.droneNumber} (ОСТАТОК ПРОЧНОСТИ: ${Math.ceil(dr.hp)}/${dr.maxHp})`
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    // Проверяем попадание по 3D-объектам в точке ПРИЦЕЛА ОГНЕВОЙ БАШНИ (включая ГРУЗ / МУСОР на траектории!)
     let hitEntity: SpaceEntity | null = null;
     let bestDist = Infinity;
 
@@ -4119,7 +8079,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         const projRatio = 380 / ent.pos.z;
         const entScreenX = 430 + ent.pos.x * projRatio;
         const entScreenY = 194 - ent.pos.y * projRatio;
-        const hitRadius = Math.max(18, Math.min(68, (24 * 380) / ent.pos.z + 14));
+        const hitRadius = Math.max(
+          20,
+          Math.min(78, ((ent.isBuranMiner ? 42 : 24) * 380) / ent.pos.z + 16)
+        );
         const dist = Math.hypot(entScreenX - aimX, entScreenY - aimY);
         if (dist <= hitRadius && dist < bestDist) {
           bestDist = dist;
@@ -4151,6 +8114,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       // =========================================================================
       if (hitEntity.kind === 'CARGO' || hitEntity.kind === 'SPACE_DEBRIS') {
         rewardDestroyCargoOrDebrisAsAsteroid(hitEntity, 'LASER');
+        return;
+      }
+
+      // Нельзя уничтожать челноки на погрузке/разгрузке возле планеты — срабатывает Кара Диктатора (рой из 5 дронов)!
+      if (checkAndTriggerDictatorSwarmIfShuttleAtPlanet(hitEntity)) {
         return;
       }
 
@@ -4280,7 +8248,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setPendingTargetHitSummary(null);
         setLogisticsUiSnapshot(buildLogisticsUiSnapshot(st.entities, isOld));
         setFlightMessage(
-          isTeamCombatMode && teamDestroyedTons > 0
+          hitEntity.isBuranMiner
+            ? `💥 КОРАБЛЬ «БУРАН / ШАТТЛ #${(hitEntity.minerIndex ?? 0) + 1}» В ПОЯСЕ АСТЕРОИДОВ УНИЧТОЖЕН (+${creditedPlayerTonsXp} Т XP)! ПОСЛЕ НЕГО ОСТАЛСЯ ГРУЗ СОБРАННЫХ МЕТАЛЛОВ (${hitEntity.minedMetalsTons ?? 1}т ${ASTEROID_PERIODIC_ELEMENTS[hitEntity.lootElement || 'Ti']?.displaySymbol || 'Ti'}) — НАЖМИТЕ СКМ / C, ЧТОБЫ ЗАБРАТЬ!`
+            : isTeamCombatMode && teamDestroyedTons > 0
             ? `💥 ВРАГ (${((hitEntity.maxMassKg || 50000) / 1000).toFixed(
                 0
               )} Т) УНИЧТОЖЕН КОМАНДОЙ! ТВОИ ПОПАДАНИЯ = +${creditedPlayerTonsXp} Т XP! ГРУЗ ДВИЖЕТСЯ ПО ТРАЕКТОРИИ В «${destPlanetName.toUpperCase()}»!`
@@ -4298,7 +8268,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 setEarnedGoBellKarma((k) => k + m.rewardKarma);
                 onEarnKarmaAndBonus?.(m.rewardKarma, m.rewardCredits, m.title);
                 setFlightMessage(
-                  `★ МИССИЯ GOBELL ВЫПОЛНЕНА: ${m.title} (+${m.rewardCredits} CR, +${m.rewardKarma} КАРМА) ★`
+                  `★ МИССИЯ G. BELL ВЫПОЛНЕНА: ${m.title} (+${m.rewardCredits} CR, +${m.rewardKarma} КАРМА) ★`
                 );
                 return {...m, killsDone: nextKills, status: 'COMPLETED'};
               }
@@ -4316,8 +8286,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     let bestAstDist = Infinity;
     let hitAstPos: Vec3 = {x: 0, y: 0, z: 300};
     let hitAstDist3D = 300;
+    const nowLaserMs = Date.now();
     for (let i = 0; i < st.asteroids.length; i++) {
       const ast = st.asteroids[i];
+      if (ast.respawnAtMs && nowLaserMs < ast.respawnAtMs) continue;
       const cosA = Math.cos(ast.orbitAngle);
       const sinA = Math.sin(ast.orbitAngle);
       const ax =
@@ -4371,7 +8343,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             color: i % 2 === 0 ? '#fde047' : '#94a3b8',
           });
         }
-        st.asteroids.splice(hitAsteroidIdx, 1);
+        hitAst.respawnAtMs = Date.now() + ASTEROID_RESPAWN_DELAY_MS;
+        hitAst.revealed = false;
+        hitAst.color = '#94a3b8';
 
         const bountyCr =
           joinedPlanetGroups.includes('GO-MARS') || joinedPlanetGroups.includes('GO-EARTH') ? 8 : 4;
@@ -4379,7 +8353,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setClearedBouldersCount((cnt) => cnt + 1);
         setBeltSafetyPct((prev) => Math.min(100, prev + 4));
         setFlightMessage(
-          `💥 ОГНЕВОЙ КОНТАКТ: ПРОСТОЙ БУЛЫЖНИК ИСЧЕЗ БЕССЛЕДНО СО ВЗРЫВОМ! БЕЗОПАСНОСТЬ ПОЯСА: ${Math.min(
+          `💥 ОГНЕВОЙ КОНТАКТ: ПРОСТОЙ БУЛЫЖНИК УНИЧТОЖЕН (ВОССТАНОВИТСЯ НА ЭТОМ МЕСТЕ ЧЕРЕЗ 5 МИН)! БЕЗОПАСНОСТЬ ПОЯСА: ${Math.min(
             100,
             beltSafetyPct + 4
           )}% (+${bountyCr} CR ЗА ОЧИСТКУ)`
@@ -4407,7 +8381,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         );
       }
     }
-  }, [beltSafetyPct, currentSystemId, getWeaponDamageMultiplierByDistance, hasMilitaryLaser, isTeamCombatMode, joinedPlanetGroups, onEarnKarmaAndBonus, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
+  }, [beltSafetyPct, checkAndTriggerDictatorSwarmIfShuttleAtPlanet, currentSystemId, getWeaponDamageMultiplierByDistance, hasMilitaryLaser, isTeamCombatMode, joinedPlanetGroups, onEarnKarmaAndBonus, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
 
   // ОРУЖИЕ №2 (Правая кнопка мыши ПКМ / R): Тяжёлый Плазменный Залп Огневой Башни в точку прицела мыши
   const handleFireSecondaryWeapon = useCallback(() => {
@@ -4428,6 +8402,61 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     playZxBeep('HIT');
 
     const heavyDamage = 65;
+
+    // 0. Проверяем попадание плазмой по карательным дронам Диктатора
+    for (let i = 0; i < st.dictatorDrones.length; i++) {
+      const dr = st.dictatorDrones[i];
+      if (dr.camPos.z > 20 && dr.camPos.z < 9000) {
+        const projRatio = 380 / dr.camPos.z;
+        const dScreenX = 430 + dr.camPos.x * projRatio;
+        const dScreenY = 194 - dr.camPos.y * projRatio;
+        const hitR = Math.max(22, Math.min(66, (18 * 380) / dr.camPos.z + 16));
+        if (Math.hypot(dScreenX - aimX, dScreenY - aimY) <= hitR) {
+          const dist3D = Math.max(1, Math.round(Math.hypot(dr.camPos.x, dr.camPos.y, dr.camPos.z)));
+          const mult = getWeaponDamageMultiplierByDistance(dist3D);
+          if (mult <= 0) {
+            playZxBeep('HIT');
+            setFlightMessage(`⚠️ ДРОН ДИКТАТОРА ВНЕ ЗОНЫ ПОРАЖЕНИЯ (${dist3D} ЕД. ≥ 1000 ЕД.)!`);
+            return;
+          }
+          dr.hp -= heavyDamage * mult;
+          for (let k = 0; k < 14; k++) {
+            st.debris.push({
+              pos: {...dr.camPos},
+              vel: {
+                x: (Math.random() - 0.5) * 24,
+                y: (Math.random() - 0.5) * 24,
+                z: (Math.random() - 0.5) * 24,
+              },
+              ttl: 24,
+              color: '#ffff00',
+            });
+          }
+          if (dr.hp <= 0) {
+            playZxBeep('EXPLODE');
+            st.dictatorDrones.splice(i, 1);
+            const rem = st.dictatorDrones.length;
+            setDictatorSwarmUi(
+              rem > 0
+                ? {
+                    activeCount: rem,
+                    originPlanetName: dr.originPlanetName,
+                    droneSpeed: dr.speedUnitsPerSec,
+                  }
+                : null
+            );
+            setCredits((c) => c + 40);
+            setFlightMessage(
+              rem > 0
+                ? `🔥 КАРАТЕЛЬНЫЙ ДРОН #${dr.droneNumber} ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» СБИТ ПЛАЗМОЙ (+40 CR)! ОСТАЛОСЬ В РОЕ: ${rem}`
+                : `★ ВЕСЬ РОЙ ИЗ 5 ДРОНОВ ДИКТАТОРА «${dr.originPlanetName.toUpperCase()}» УНИЧТОЖЕН!`
+            );
+          }
+          return;
+        }
+      }
+    }
+
     let hitEntity: SpaceEntity | null = null;
     let bestDist = Infinity;
 
@@ -4438,7 +8467,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         const entScreenX = 430 + ent.pos.x * projRatio;
         const entScreenY = 194 - ent.pos.y * projRatio;
         const dist = Math.hypot(entScreenX - aimX, entScreenY - aimY);
-        const hitRadius = Math.max(22, Math.min(86, (28 * 380) / ent.pos.z + 16));
+        const hitRadius = Math.max(
+          24,
+          Math.min(88, ((ent.isBuranMiner ? 44 : 28) * 380) / ent.pos.z + 18)
+        );
         if (dist <= hitRadius && dist < bestDist) {
           bestDist = dist;
           hitEntity = ent;
@@ -4469,6 +8501,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       // =========================================================================
       if (hitEntity.kind === 'CARGO' || hitEntity.kind === 'SPACE_DEBRIS') {
         rewardDestroyCargoOrDebrisAsAsteroid(hitEntity, 'PLASMA');
+        return;
+      }
+
+      // Нельзя уничтожать челноки на погрузке/разгрузке возле планеты — срабатывает Кара Диктатора (рой из 5 дронов)!
+      if (checkAndTriggerDictatorSwarmIfShuttleAtPlanet(hitEntity)) {
         return;
       }
 
@@ -4578,7 +8615,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setPendingTargetHitSummary(null);
         setLogisticsUiSnapshot(buildLogisticsUiSnapshot(st.entities, isOld));
         setFlightMessage(
-          isTeamCombatMode && teamDestroyedTons > 0
+          hitEntity.isBuranMiner
+            ? `💥 КОРАБЛЬ «БУРАН / ШАТТЛ #${(hitEntity.minerIndex ?? 0) + 1}» В ПОЯСЕ АСТЕРОИДОВ УНИЧТОЖЕН ПЛАЗМОЙ (+${creditedPlayerTonsXp} Т XP)! ПОСЛЕ НЕГО ОСТАЛСЯ ГРУЗ СОБРАННЫХ МЕТАЛЛОВ (${hitEntity.minedMetalsTons ?? 1}т ${ASTEROID_PERIODIC_ELEMENTS[hitEntity.lootElement || 'Ti']?.displaySymbol || 'Ti'}) — НАЖМИТЕ СКМ / C, ЧТОБЫ ЗАБРАТЬ!`
+            : isTeamCombatMode && teamDestroyedTons > 0
             ? `💥 ВРАГ (${((hitEntity.maxMassKg || 50000) / 1000).toFixed(
                 0
               )} Т) УНИЧТОЖЕН КОМАНДОЙ! ТВОИ ПОПАДАНИЯ = +${creditedPlayerTonsXp} Т XP! ГРУЗ ДВИЖЕТСЯ ПО ТРАЕКТОРИИ В «${destPlanetName.toUpperCase()}»!`
@@ -4593,8 +8632,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     let bestAstDist = Infinity;
     let hitAstPos: Vec3 = {x: 0, y: 0, z: 300};
     let hitAstDist3D = 300;
+    const nowPlasmaMs = Date.now();
     for (let i = 0; i < st.asteroids.length; i++) {
       const ast = st.asteroids[i];
+      if (ast.respawnAtMs && nowPlasmaMs < ast.respawnAtMs) continue;
       const cosA = Math.cos(ast.orbitAngle);
       const sinA = Math.sin(ast.orbitAngle);
       const ax =
@@ -4647,14 +8688,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             color: i % 2 === 0 ? '#ffff00' : '#94a3b8',
           });
         }
-        st.asteroids.splice(hitAsteroidIdx, 1);
+        hitAst.respawnAtMs = Date.now() + ASTEROID_RESPAWN_DELAY_MS;
+        hitAst.revealed = false;
+        hitAst.color = '#94a3b8';
         const bountyCr =
           joinedPlanetGroups.includes('GO-MARS') || joinedPlanetGroups.includes('GO-EARTH') ? 10 : 6;
         setCredits((c) => c + bountyCr);
         setClearedBouldersCount((cnt) => cnt + 1);
         setBeltSafetyPct((prev) => Math.min(100, prev + 6));
         setFlightMessage(
-          `💥 ПЛАЗМА БАШНИ: ПРОСТОЙ БУЛЫЖНИК ИСЧЕЗ БЕССЛЕДНО СО ВЗРЫВОМ! БЕЗОПАСНОСТЬ ПОЯСА: ${Math.min(
+          `💥 ПЛАЗМА БАШНИ: ПРОСТОЙ БУЛЫЖНИК УНИЧТОЖЕН (ВОССТАНОВИТСЯ НА ЭТОМ МЕСТЕ ЧЕРЕЗ 5 МИН)! БЕЗОПАСНОСТЬ ПОЯСА: ${Math.min(
             100,
             beltSafetyPct + 6
           )}% (+${bountyCr} CR)`
@@ -4682,12 +8725,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         );
       }
     }
-  }, [beltSafetyPct, currentSystemId, getWeaponDamageMultiplierByDistance, isTeamCombatMode, joinedPlanetGroups, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
+  }, [beltSafetyPct, checkAndTriggerDictatorSwarmIfShuttleAtPlanet, currentSystemId, getWeaponDamageMultiplierByDistance, isTeamCombatMode, joinedPlanetGroups, playZxBeep, rewardDestroyCargoOrDebrisAsAsteroid, screenMode, weaponComboMode]);
 
   // ЗАХВАТ ПРИ НАЖАТИИ КОЛЁСИКА МЫШИ (СКМ / C):
-  // Захватывает помеченный (после огневого контакта!) ценный булыжник (Fe, Al, Ti, H₂O, Cu, Ni, Co, Li, Ag, Pt, Au)
-  // и размещает его в грузовом отсеке корабля в соответствии с его вместимостью (maxCargoCapacity)!
-  const handleTractorCapture = useCallback(() => {
+  // Захватывает астероид, спасательную капсулу или контейнер с озвучиванием названия объекта!
+  const handleTractorCapture = useCallback((overrideName?: unknown) => {
+    const customTargetName = typeof overrideName === 'string' ? overrideName : undefined;
     if (screenMode !== 'FLIGHT') return;
     const st = flightStateRef.current;
     const aimX = st.turretActive ? st.turretX : 430;
@@ -4695,7 +8738,6 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     st.lastShotTargetX = aimX;
     st.lastShotTargetY = aimY;
     st.tractorBeamTimer = 14;
-    playZxBeep('DOCK');
 
     // 1. Сначала проверяем предметы CARGO (с разбитого тобой корабля -> ПИРАТ / после чужой драки -> МАРОДЁР) и спасательные капсулы SOS_POD
     let target = st.entities.find((ent) => {
@@ -4716,10 +8758,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
     if (target) {
       if (target.kind === 'SOS_POD') {
-        playZxBeep('MISSION');
         setCredits((c) => c + 350);
         setEarnedGoBellKarma((k) => k + 2);
         onEarnKarmaAndBonus?.(2, 350, 'Захват и эвакуация спасательной капсулы пилота');
+        const podTitle = target.label ? `Спасательная капсула: ${target.label}` : 'Спасательная капсула';
+        playCaptureVoiceNotification(podTitle, false);
         setFlightMessage(
           `★ ЛУЧ ЗАХВАТА БАШНИ: КАПСУЛА «${target.label}» СПАСЕНА (+350 CR · +2 КАРМА)! ★`
         );
@@ -4737,19 +8780,28 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         const origin = target.lootOrigin || 'AFTER_BATTLE';
         const sym = target.lootElement || 'Pt';
         const shipName = target.destroyedShipName || target.label;
+        const tonsToCollect = target.minedMetalsTons || 1;
         st.entities = st.entities.filter((e) => e.id !== target!.id);
-        collectSpaceLootItem(origin, sym, shipName);
+        const lootMeta = ASTEROID_PERIODIC_ELEMENTS[sym];
+        const lootTitle = lootMeta?.nameRu ? `Контейнер: ${lootMeta.nameRu}` : (target.label || 'Грузовой контейнер');
+        playCaptureVoiceNotification(lootTitle, false);
+        collectSpaceLootItem(origin, sym, shipName, tonsToCollect);
         return;
       }
     }
 
     // 2. Ищем в Поясе Астероидов ПОМЕЧЕННЫЙ после огневого контакта ценный булыжник (revealed === true)
+    // или булыжник прямо под прицелом для прямого захвата лучом
     let revealedIdx = -1;
     let bestRevealedDist = Infinity;
+    let unrevealedIdx = -1;
+    let bestUnrevealedDist = Infinity;
     let unrevealedHit = false;
+    const nowCaptureMs = Date.now();
 
     for (let i = 0; i < st.asteroids.length; i++) {
       const ast = st.asteroids[i];
+      if (ast.respawnAtMs && nowCaptureMs < ast.respawnAtMs) continue;
       const cosA = Math.cos(ast.orbitAngle);
       const sinA = Math.sin(ast.orbitAngle);
       const ax =
@@ -4772,8 +8824,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       if (ast.revealed && ast.isValuable && dist <= 95 && dist < bestRevealedDist) {
         bestRevealedDist = dist;
         revealedIdx = i;
-      } else if (!ast.revealed && dist <= 55) {
+      } else if (!ast.revealed && dist <= 65) {
         unrevealedHit = true;
+        if (dist < bestUnrevealedDist) {
+          bestUnrevealedDist = dist;
+          unrevealedIdx = i;
+        }
       }
     }
 
@@ -4781,6 +8837,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     if (revealedIdx === -1) {
       for (let i = 0; i < st.asteroids.length; i++) {
         const ast = st.asteroids[i];
+        if (ast.respawnAtMs && nowCaptureMs < ast.respawnAtMs) continue;
         if (!ast.revealed || !ast.isValuable) continue;
         const cosA = Math.cos(ast.orbitAngle);
         const sinA = Math.sin(ast.orbitAngle);
@@ -4809,6 +8866,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       }
     }
 
+    // Если помеченного не было, но игрок нажал колёсико мыши прямо на астероид перед собой — захватываем его!
+    if (revealedIdx === -1 && unrevealedIdx !== -1 && bestUnrevealedDist <= 65) {
+      revealedIdx = unrevealedIdx;
+      const targetAst = st.asteroids[revealedIdx];
+      targetAst.revealed = true;
+    }
+
     if (revealedIdx !== -1) {
       // Проверяем вместимость грузового отсека (usedCargoTonsForPhysics < maxCargoCapacity)
       if (usedCargoTonsForPhysics >= maxCargoCapacity) {
@@ -4823,9 +8887,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       const sym = capturedAst.elementSymbol || 'Fe';
       const elMeta = ASTEROID_PERIODIC_ELEMENTS[sym];
 
-      // Удаляем захваченный булыжник из космоса (перемещён в грузовой отсек!)
-      st.asteroids.splice(revealedIdx, 1);
-      playZxBeep('MISSION');
+      // Переводим захваченный булыжник в режим восстановления на том же месте через 5 минут
+      capturedAst.respawnAtMs = Date.now() + ASTEROID_RESPAWN_DELAY_MS;
+      capturedAst.revealed = false;
+      capturedAst.color = '#94a3b8';
+      
+      // Озвучиваем конкретное название захваченного объекта (астероид и его рудный элемент)
+      const astTitle = customTargetName || (elMeta ? `Астероид: ${elMeta.nameRu}` : 'Астероид');
+      playCaptureVoiceNotification(astTitle, true);
 
       if (sym === 'Fe') {
         setIronStock((s) => s + 1);
@@ -4861,7 +8930,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         'ЛУЧ ЗАХВАТА (СКМ / C): СНАЧАЛА ВЫСТРЕЛИТЕ ПО БУЛЫЖНИКУ (ЛКМ / F), ЧТОБЫ ПОМЕТИТЬ ЭЛЕМЕНТ (Fe, Al, Ti, H₂O...), ЗАТЕМ ЗАХВАТИТЕ В ОТСЕК!'
       );
     }
-  }, [maxCargoCapacity, onEarnKarmaAndBonus, playZxBeep, screenMode, usedCargoTonsForPhysics]);
+  }, [maxCargoCapacity, onEarnKarmaAndBonus, playCaptureVoiceNotification, playZxBeep, screenMode, usedCargoTonsForPhysics]);
 
   // Продажа элементов периодической системы и воды (H₂O), добытых в поясе астероидов:
   // • Правительства планет закупают элементы за ПОЛЦЕНЫ (50% = govBuyCr) и продают за ПОЛНУЮ (100% = fullCr).
@@ -5163,6 +9232,68 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             ? `🛡️ МАРС (ВЫ В ГРУППЕ #GO-MARS · СКИДКА ДО 1 CR!): КУПЛЕНО +1т ТИТАНА (Ti) ЗА 1 CR (ОТСЕК: ${usedCargoTonsForPhysics + 1}/${maxCargoCapacity}т)`
             : `🛡️ МАРС (БЕЗ ГРУППЫ · 5 CR): КУПЛЕНО +1т ТИТАНА (Ti) ЗА 5 CR (ОТСЕК: ${usedCargoTonsForPhysics + 1}/${maxCargoCapacity}т)`
         );
+      } else if (planetOrder === 5) {
+        const inDeathStarGroup = joinedPlanetGroups.includes('GO-DEATHSTAR');
+        const cost = (inDeathStarGroup ? 1 : 5) * pirateBuyMultiplier;
+        if (credits < cost) {
+          setFlightMessage(
+            `НЕДОСТАТОЧНО КРЕДИТОВ (${cost} CR${isPirateStatus ? ' · ПИРАТ ×10' : ''}) ДЛЯ ЗАКУПКИ ИМПЕРСКОГО ТИТАНА (Ti) НА ЗВЕЗДЕ СМЕРТИ!`
+          );
+          return;
+        }
+        playZxBeep('DOCK');
+        setCredits((c) => Number((c - cost).toFixed(1)));
+        setTitaniumStock((s) => s + 1);
+        setFlightMessage(
+          `💀 АРСЕНАЛ ЗВЕЗДЫ СМЕРТИ: ЗАГРУЖЕНО +1т БРОНЕВОГО ТИТАНА (Ti) ЗА -${cost} CR (ОТСЕК: ${usedCargoTonsForPhysics + 1}/${maxCargoCapacity}т)`
+        );
+      } else if (planetOrder === 6) {
+        const inTorusGroup = joinedPlanetGroups.includes('GO-TORUS');
+        const cost = (inTorusGroup ? 1 : 5) * pirateBuyMultiplier;
+        if (credits < cost) {
+          setFlightMessage(
+            `НЕДОСТАТОЧНО КРЕДИТОВ (${cost} CR${isPirateStatus ? ' · ПИРАТ ×10' : ''}) ДЛЯ ЗАКУПКИ РЕСУРСОВ НА КОРАБЛЕ-ТОРЕ «БУБЛИК»!`
+          );
+          return;
+        }
+        playZxBeep('MISSION');
+        setCredits((c) => Number((c - cost).toFixed(1)));
+        setFoodStockPct(100);
+        setWaterOxygenStockPct(100);
+        setFoodWaterCargoStock((s) => s + 1);
+        setFlightMessage(
+          `🍩 КОРАБЛЬ-ТОР «БУБЛИК» (ЦЕНТРОБЕЖНЫЙ БИОМ 1G): ПОПОЛНЕНЫ ЗАПАСЫ ВОДЫ/O₂ И ПРОДОВОЛЬСТВИЯ (+1т) ЗА -${cost} CR`
+        );
+      } else if (planetOrder === 7) {
+        const inStargateGroup = joinedPlanetGroups.includes('GO-STARGATE');
+        const cost = (inStargateGroup ? 1 : 5) * pirateBuyMultiplier;
+        if (credits < cost) {
+          setFlightMessage(
+            `НЕДОСТАТОЧНО КРЕДИТОВ (${cost} CR${isPirateStatus ? ' · ПИРАТ ×10' : ''}) ДЛЯ ЗАКУПКИ СПЛАВОВ АЛЮМИНИЯ (Al) НА ЗВЁЗДНЫХ ВРАТАХ!`
+          );
+          return;
+        }
+        playZxBeep('DOCK');
+        setCredits((c) => Number((c - cost).toFixed(1)));
+        setAluminumStock((s) => s + 1);
+        setFlightMessage(
+          `⛩️ ЗВЁЗДНЫЕ ВРАТА (ПРОТИВОФАЗА ВЕНЕРЫ): ЗАГРУЖЕНО +1т АВИАКОСМИЧЕСКОГО АЛЮМИНИЯ (Al) ЗА -${cost} CR (ОТСЕК: ${usedCargoTonsForPhysics + 1}/${maxCargoCapacity}т)`
+        );
+      } else if (planetOrder === 8) {
+        const inBuranGroup = joinedPlanetGroups.includes('GO-BURAN');
+        const cost = (inBuranGroup ? 1 : 5) * pirateBuyMultiplier;
+        if (credits < cost) {
+          setFlightMessage(
+            `НЕДОСТАТОЧНО КРЕДИТОВ (${cost} CR${isPirateStatus ? ' · ПИРАТ ×10' : ''}) ДЛЯ ЗАКУПКИ КОМПЛЕКТА ОБШИВКИ НА КОРАБЛЕ «БУРАН / ШАТТЛ»!`
+          );
+          return;
+        }
+        playZxBeep('DOCK');
+        setCredits((c) => Number((c - cost).toFixed(1)));
+        setTitaniumStock((s) => s + 1);
+        setFlightMessage(
+          `🚀 ДОК КОРАБЛЯ «БУРАН / ШАТТЛ»: ЗАГРУЖЕНО +1т АЭРОКОСМИЧЕСКОГО ТИТАНА (Ti) ЗА -${cost} CR (ОТСЕК: ${usedCargoTonsForPhysics + 1}/${maxCargoCapacity}т)`
+        );
       }
     },
     [
@@ -5345,25 +9476,31 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
   // Гиперпрыжок (H) с расходом и автоматическим восстановлением повреждений во время гиперпрыжка (Железо + Алюминий + Титан)
   const handleHyperspaceJump = useCallback(
-    (forcedDestId?: number) => {
-      const destId = typeof forcedDestId === 'number' ? forcedDestId : targetSystemId;
-      if (destId === currentSystemId) {
+    (forcedDestId?: number, customStarSystemLabel?: string, customSystemKey?: string) => {
+      let destId = typeof forcedDestId === 'number' ? forcedDestId : targetSystemId;
+      if (customStarSystemLabel && destId === currentSystemId) {
+        destId = (currentSystemId + 1) % GALAXY_SYSTEMS.length;
+      }
+      if (destId === currentSystemId && !customStarSystemLabel && !customSystemKey) {
         setScreenMode('GALAXY_MAP');
         setFlightMessage('SELECT TARGET STAR SYSTEM FOR HYPERSPACE JUMP (H)');
         return;
       }
       const distLy = 1.8;
-      if (fuel < distLy) {
+      if (fuel < distLy && !customStarSystemLabel && !customSystemKey) {
         setFlightMessage('HYPERSPACE ABORTED · INSUFFICIENT FUEL! DOCK (T) TO REFUEL');
         return;
       }
-      if (foodStockPct <= 5 || waterOxygenStockPct <= 5) {
+      if ((foodStockPct <= 5 || waterOxygenStockPct <= 5) && !customStarSystemLabel && !customSystemKey) {
         setFlightMessage(
-          '⚠️ КРИТИЧЕСКИЙ УРОВЕНЬ ПРОДОВОЛЬСТВИЯ ИЛИ ВОДЫ/КИСЛОРОДА (O₂)! ПОПОЛНИТЕ НА 3-Й ПЛАНЕТЕ (ЗЕМЛЯ)!'
+          '⚠️ КРИТИЧЕСКИЙ УРОВЕНЬ ПРОДОВОЛЬСТВИЯ ИЛИ ВОДЫ/КИСЛОРОДА (O₂)! ПОПОЛНИТЕ НА 3-Й ПЛАНЕТЕ!'
         );
         return;
       }
 
+      activeConstellationStarJumpLabelRef.current = customStarSystemLabel || null;
+      pendingConstellationSystemKeyRef.current = customSystemKey || `sys:${destId}`;
+      setTargetSystemId(destId);
       setScreenMode('FLIGHT');
       flightStateRef.current.stationaryOrbitPlanetId = null;
       flightStateRef.current.stationaryOrbitTurnRad = 0;
@@ -5371,10 +9508,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       flightStateRef.current.hyperspaceTimer = 55;
       flightStateRef.current.hyperspaceTargetId = destId;
       playZxBeep('HYPERSPACE');
-      setFuel((f) => Math.max(0, Number((f - distLy).toFixed(1))));
+      setFuel((f) => (f >= distLy ? Math.max(0, Number((f - distLy).toFixed(1))) : 7.0));
       // Расход автономных запасов продовольствия и воды/кислорода при межзвёздном переходе
-      setFoodStockPct((p) => Math.max(5, p - 12));
-      setWaterOxygenStockPct((p) => Math.max(5, p - 14));
+      setFoodStockPct((p) => Math.max(10, p - 12));
+      setWaterOxygenStockPct((p) => Math.max(10, p - 14));
+
+      const jumpDestTitle = customStarSystemLabel || GALAXY_SYSTEMS[destId].name;
 
       // Проверка наличия запаса Железа (1-я пл.), Алюминия (2-я пл.) и Титана (4-я пл.) для восстановления повреждений во время гиперпрыжка
       if (ironStock >= 1 && aluminumStock >= 1 && titaniumStock >= 1) {
@@ -5383,12 +9522,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         setTitaniumStock((s) => s - 1);
         setHullIntegrityPct(100);
         setFlightMessage(
-          `⚡ ГИПЕРПРЫЖОК В ${GALAXY_SYSTEMS[destId].name}: ПОВРЕЖДЕНИЯ ВО ВРЕМЯ ГИПЕРПРЫЖКА ВОССТАНОВЛЕНЫ (ИЗРАСХОДОВАНО ПО 1т ЖЕЛЕЗА, АЛЮМИНИЯ И ТИТАНА)!`
+          `⚡ ГИПЕРПРЫЖОК К ЗВЕЗДЕ «${jumpDestTitle}»: ПОВРЕЖДЕНИЯ ВО ВРЕМЯ ГИПЕРПРЫЖКА ВОССТАНОВЛЕНЫ (ИЗРАСХОДОВАНО ПО 1т ЖЕЛЕЗА, АЛЮМИНИЯ И ТИТАНА)!`
         );
       } else {
         setHullIntegrityPct((h) => Math.max(25, h - 32));
         setFlightMessage(
-          `⚠️ ГИПЕРПРЫЖОК В ${GALAXY_SYSTEMS[destId].name}: ПОЛУЧЕНЫ ПОВРЕЖДЕНИЯ КОРПУСА! ПОПОЛНИТЕ ЖЕЛЕЗО (1-Я ПЛ.), АЛЮМИНИЙ (2-Я ПЛ.) И ТИТАН (4-Я ПЛ.)!`
+          `⚠️ ГИПЕРПРЫЖОК К ЗВЕЗДЕ «${jumpDestTitle}»: ПОЛУЧЕНЫ ПОВРЕЖДЕНИЯ КОРПУСА! ПОПОЛНИТЕ ЖЕЛЕЗО (1-Я ПЛ.), АЛЮМИНИЙ (2-Я ПЛ.) И ТИТАН (4-Я ПЛ.)!`
         );
       }
     },
@@ -5405,6 +9544,105 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     ]
   );
 
+  // Гиперпрыжок прямо из карточки созвездия к выбранной звезде системы
+  const handleHyperspaceJumpToConstellationStar = useCallback(
+    (starItem: ConstellationStarJumpItem, constellationName: string) => {
+      isHoveringObjectCardRef.current = false;
+      activeObjectProfileRef.current = null;
+      setActiveObjectProfile(null);
+      const rawSysId = Math.abs(starItem.targetSystemId) % 6; // всегда обитаемый сектор с 4 планетами!
+      const destSysId =
+        rawSysId === currentSystemId ? (currentSystemId + 1) % 6 : rawSysId;
+      handleHyperspaceJump(
+        destSysId,
+        `${starItem.starName} · ${constellationName}`,
+        starItem.starId
+      );
+    },
+    [currentSystemId, handleHyperspaceJump]
+  );
+
+  // Прямой гиперпрыжок из Реестра Планет Созвездий / Звёзд Смерти / Станций
+  const handleJumpFromWorldsCatalog = useCallback(
+    (
+      systemKey: string,
+      starTitle: string,
+      focusTarget?: 'PLANET_1' | 'PLANET_2' | 'PLANET_3' | 'PLANET_4' | 'DEATH_STAR' | 'TORUS_SHIP' | 'STARGATE'
+    ) => {
+      pendingFocusAfterJumpRef.current = focusTarget || 'PLANET_3';
+      const nextSysId = (currentSystemId + 1) % 6;
+      handleHyperspaceJump(nextSysId, starTitle, systemKey);
+    },
+    [currentSystemId, handleHyperspaceJump]
+  );
+
+  // =========================================================================
+  // ТЕХНОЛОГИИ ЭЛИТНОГО КЛАССА «ДОМИНАТОРЫ»:
+  // 1. Установка Вакуумной Конвертации (1 кг граничного вещества / 1 экв. энергии / мин).
+  // 2. Технология Пространства-Времени: расчёт и прыжок в ЛЮБУЮ точку назначения в гиперпрыжке.
+  // 3. Установка Звёздных Врат (Развёртывание новых звёздных врат в галактике).
+  // =========================================================================
+  const handleToggleVacuumConversion = useCallback(() => {
+    if (boundaryMatterFuelStockKg <= 0.05) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        '⚠️ НЕДОСТАТОЧНО ГРАНИЧНОГО ВЕЩЕСТВА КАК КАТАЛИЗАТОРА ДЛЯ ВАКУУМНОЙ КОНВЕРТАЦИИ (НУЖНО 1 КГ / 1 ЭКВ. ЭНЕРГИИ В МИНУТУ)!'
+      );
+      return;
+    }
+    setIsVacuumConversionActive((prev) => {
+      const next = !prev;
+      playZxBeep('MISSION');
+      setFlightMessage(
+        next
+          ? `👑 ДОМИНАТОР: ВАКУУМНАЯ КОНВЕРТАЦИЯ АКТИВИРОВАНА! КАТАЛИЗАТОР — ГРАНИЧНОЕ ВЕЩЕСТВО (${boundaryMatterFuelStockKg.toFixed(1)} КГ) · ГЕНЕРАЦИЯ 1 ЭКВ. ЭНЕРГИИ В МИНУТУ ИЗ ВАКУУМА!`
+          : '⚡ ВАКУУМНАЯ КОНВЕРТАЦИЯ ОТКЛЮЧЕНА · ГЭУ ПЕРЕШЛА НА ВОЗОБНОВЛЯЕМЫЙ ВЕТЕР И РЕАКТОР'
+      );
+      return next;
+    });
+  }, [boundaryMatterFuelStockKg, playZxBeep]);
+
+  const handleDeployDominatorStargate = useCallback(() => {
+    playZxBeep('MISSION');
+    setDeployedStargatesCount((c) => c + 1);
+    setFlightMessage(
+      `⛩️ ДОМИНАТОРЫ: РАЗВЁРНУТЫ НОВЫЕ ЗВЁЗДНЫЕ ВРАТА #${deployedStargatesCount + 1}! ИСКРИВЛЕНИЕ МЕТРИКИ ПРОСТРАНСТВА-ВРЕМЕНИ ЗАФИКСИРОВАНО В СЕКТОРЕ «${
+        GALAXY_SYSTEMS[currentSystemId].name
+      }»!`
+    );
+  }, [currentSystemId, deployedStargatesCount, playZxBeep]);
+
+  const handleDominatorSpacetimeJump = useCallback(
+    (customPointLabel: string, targetSysId: number) => {
+      playZxBeep('HYPERSPACE');
+      handleHyperspaceJump(targetSysId, `⛩️ [ПРОСТРАНСТВО-ВРЕМЯ] ${customPointLabel}`);
+      setFlightMessage(
+        `🌀 ТЕХНОЛОГИЯ ПРОСТРАНСТВА-ВРЕМЕНИ ДОМИНАТОРОВ: ПРОИЗВОЛЬНЫЙ ГИПЕРПРЫЖОК В ТОЧКУ «${customPointLabel.toUpperCase()}» УСПЕШНО ЗАВЕРШЁН!`
+      );
+      setIsSpacetimeJumpModalOpen(false);
+    },
+    [handleHyperspaceJump, playZxBeep]
+  );
+
+  const handleAddFuelStock = useCallback(
+    (type: 'URANIUM' | 'PLUTONIUM' | 'BOUNDARY', amountKg: number) => {
+      playZxBeep('MISSION');
+      if (type === 'URANIUM') {
+        setUraniumFuelStockKg((prev) => prev + amountKg);
+        setFlightMessage(`☢️ ГЭУ: ПОПОЛНЕН ЗАПАС УРАНОВОГО ТОПЛИВА (+${amountKg} КГ)!`);
+      } else if (type === 'PLUTONIUM') {
+        setPlutoniumFuelStockKg((prev) => prev + amountKg);
+        setFlightMessage(`☢️ ГЭУ: ПОПОЛНЕН ЗАПАС ПЛУТОНИЕВОГО ТОПЛИВА (+${amountKg} КГ)!`);
+      } else {
+        setBoundaryMatterFuelStockKg((prev) => prev + amountKg);
+        setFlightMessage(
+          `👑 ГЭУ: ПОПОЛНЕН ЗАПАС ГРАНИЧНОГО ВЕЩЕСТВА (+${amountKg} КГ) ДЛЯ ВАКУУМНОЙ КОНВЕРТАЦИИ ДОМИНАТОРОВ!`
+        );
+      }
+    },
+    [playZxBeep]
+  );
+
   // Стыковка со станцией и Торговля / Выбор миссии GoBell (T)
   const handleToggleDocking = useCallback(() => {
     if (screenMode === 'DOCKED') {
@@ -5418,6 +9656,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     setScreenMode('DOCKED');
     flightStateRef.current.frontShield = 100;
     flightStateRef.current.aftShield = 100;
+    flightStateRef.current.gravConverterTons = totalShipMassTons;
+    setGravConverterTons(totalShipMassTons);
     flightStateRef.current.laserHeat = 0;
 
     // Проверяем завершение курьерских миссий GoBell (ADVERT) в этой системе
@@ -5428,14 +9668,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           setEarnedGoBellKarma((k) => k + m.rewardKarma);
           onEarnKarmaAndBonus?.(m.rewardKarma, m.rewardCredits, m.title);
           setFlightMessage(
-            `★ ДОСТАВКА GOBELL ЗАВЕРШЕНА: +${m.rewardCredits} CR И +${m.rewardKarma} К КАРМЕ! ★`
+            `★ ДОСТАВКА G. BELL ЗАВЕРШЕНА: +${m.rewardCredits} CR И +${m.rewardKarma} К КАРМЕ! ★`
           );
           return {...m, status: 'COMPLETED'};
         }
         return m;
       })
     );
-  }, [currentSystemId, onEarnKarmaAndBonus, playZxBeep, screenMode]);
+  }, [currentSystemId, onEarnKarmaAndBonus, playZxBeep, screenMode, totalShipMassTons]);
 
   // ЗАКРЕПЛЕНИЕ / ОТКРЕПЛЕНИЕ НА СТАЦИОНАРНОЙ ОРБИТЕ ПЛАНЕТЫ (Клавиша X / Кнопка):
   // При закреплении осевое вращение планеты относительно корабля прекращается,
@@ -5460,8 +9700,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       return;
     }
 
-    // Находим ближайшую планету системы для закрепления на стационарной орбите
-    if (!st.planets || st.planets.length === 0) return;
+    // Находим ближайшую планету системы для закрепления на стационарной орбите (доступно только на расстоянии < 400 ед.)
+    if (!st.planets || st.planets.length === 0) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        '⚠️ ЗАКРЕПЛЕНИЕ НА ОРБИТЕ (X) НЕДОСТУПНО: В ДАННОЙ ЗВЁЗДНОЙ СИСТЕМЕ НЕТ ПЛАНЕТ'
+      );
+      return;
+    }
     let nearestPlanet = st.planets[2] || st.planets[0];
     let bestDist = Infinity;
     let nearestCamPos: Vec3 = {x: 0, y: 0, z: 270};
@@ -5480,17 +9726,27 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       }
     }
 
-    // Если корабль находился далеко от планеты или планета была за спиной — выводим корабль на стационарную орбиту перед планетой
+    const MAX_STATIONARY_ORBIT_LOCK_DIST = 400;
+    const roundedBestDist = Math.round(bestDist);
+    if (bestDist >= MAX_STATIONARY_ORBIT_LOCK_DIST) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        `⚠️ ЗАКРЕПИТЬСЯ НА ОРБИТЕ (X) МОЖНО ТОЛЬКО У ПЛАНЕТЫ НА РАССТОЯНИИ МЕНЕЕ ${MAX_STATIONARY_ORBIT_LOCK_DIST} ЕД. · ДО «${nearestPlanet.cleanName.toUpperCase()}» СЕЙЧАС ${roundedBestDist} ЕД.`
+      );
+      return;
+    }
+
+    if (autopilotTargetRef.current) {
+      autopilotTargetRef.current = null;
+      setAutopilotTargetUi(null);
+    }
+
+    // Если корабль уже в пределах 400 ед., но планета сбоку или за спиной — поворачиваем взгляд на планету с сохранением текущей дистанции (< 400 ед.)
     const isPlanetVisibleInFront =
-      nearestCamPos.z >= nearestPlanet.radius3D * 1.25 &&
-      bestDist <= nearestPlanet.radius3D * 6.5 &&
-      Math.hypot(nearestCamPos.x, nearestCamPos.y) <= nearestCamPos.z * 0.75;
+      nearestCamPos.z >= nearestPlanet.radius3D * 1.15 &&
+      Math.hypot(nearestCamPos.x, nearestCamPos.y) <= nearestCamPos.z * 0.9;
 
     if (!isPlanetVisibleInFront) {
-      st.eclipticU = {x: 1, y: 0, z: 0};
-      st.eclipticV = {x: 0, y: 0.16, z: 0.987};
-      st.eclipticN = {x: 0, y: 0.987, z: -0.16};
-      nearestPlanet.spinAngle = 0;
       const cosA = Math.cos(nearestPlanet.orbitAngle);
       const sinA = Math.sin(nearestPlanet.orbitAngle);
       const offsetX =
@@ -5499,7 +9755,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         nearestPlanet.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
       const offsetZ =
         nearestPlanet.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
-      const closeDist = Math.round(nearestPlanet.radius3D * 2.05);
+      const closeDist = Math.max(
+        Math.round(nearestPlanet.radius3D * 1.65),
+        Math.min(MAX_STATIONARY_ORBIT_LOCK_DIST - 5, roundedBestDist)
+      );
       st.starPos = {
         x: -offsetX,
         y: -offsetY,
@@ -5513,6 +9772,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     st.targetSpeed = 0;
     st.pitchRate = 0;
     st.rollRate = 0;
+    st.pitchAxis = 0;
+    st.rollAxis = 0;
     setThrottleUi(0);
     setStationaryOrbitInfo({
       planetId: nearestPlanet.id,
@@ -5522,7 +9783,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     });
     playZxBeep('MISSION');
     setFlightMessage(
-      `🛰 ЗАКРЕПЛЁН НА СТАЦИОНАРНОЙ ОРБИТЕ «${nearestPlanet.cleanName.toUpperCase()}» (X): ОСЕВОЕ ВРАЩЕНИЕ ПЛАНЕТЫ ОСТАНОВЛЕНО, КОРАБЛЬ ДВИЖЕТСЯ ВОКРУГ ОСИ ВМЕСТЕ С ПЛАНЕТОЙ!`
+      `🛰 ЗАКРЕПЛЁН НА СТАЦИОНАРНОЙ ОРБИТЕ «${nearestPlanet.cleanName.toUpperCase()}» (ДИСТ: ${roundedBestDist} ЕД. < 400 ЕД.) [X]: КОРАБЛЬ ДВИЖЕТСЯ ВОКРУГ ОСИ И ПО ОРБИТЕ ВМЕСТЕ С ПЛАНЕТОЙ!`
     );
   }, [playZxBeep]);
 
@@ -5570,14 +9831,105 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         viewportWidth,
         viewportHeight,
       };
+      flightStateRef.current.cabinYawRate = 0;
+      flightStateRef.current.cabinPitchRate = 0;
+      flightStateRef.current.cabinMouseIn3DWindow = false;
+      setIsObjectProfileFullPlacard(false);
       activeObjectProfileRef.current = nextProfile;
       setActiveObjectProfile(nextProfile);
       playZxBeep('MISSION');
+      setFlightMessage(
+        `🔒 ТАБЛИЧКА ОБЪЕКТА «${nextProfile.name.toUpperCase()}» ОТКРЫТА: ОГНЕВАЯ РУБКА ЗАФИКСИРОВАНА · [ , ] — ПОЛНАЯ ТАБЛИЧКА · [ 0 ] — ЗАКРЫТЬ`
+      );
     } else if (activeObjectProfileRef.current) {
+      isHoveringObjectCardRef.current = false;
       activeObjectProfileRef.current = null;
       setActiveObjectProfile(null);
+      setIsObjectProfileFullPlacard(false);
     }
   }, [playZxBeep]);
+
+  // Закрыть табличку объекта клавишей «0» (Digit0 / Numpad0) и разблокировать огневую рубку
+  const handleCloseObjectPlacard = useCallback(() => {
+    const hadPlacard = Boolean(activeObjectProfileRef.current || planetContactTarget);
+    isHoveringObjectCardRef.current = false;
+    activeObjectProfileRef.current = null;
+    setActiveObjectProfile(null);
+    setIsObjectProfileFullPlacard(false);
+    setPlanetContactTarget(null);
+    if (hadPlacard) {
+      playZxBeep('DOCK');
+      setFlightMessage(
+        '✕ ТАБЛИЧКА ЗАКРЫТА [ 0 ] · ДВИЖЕНИЕ ОГНЕВОЙ РУБКИ У КРАЁВ ЭКРАНА СНОВА АКТИВНО'
+      );
+    }
+  }, [planetContactTarget, playZxBeep]);
+
+  // Открыть ПОЛНУЮ ТАБЛИЧКУ объекта клавишей «,» (запятая рядом с 0: NumpadDecimal / Comma / Period / Slash)
+  const handleOpenFullPlacardAtCursor = useCallback(() => {
+    const st = flightStateRef.current;
+    st.cabinYawRate = 0;
+    st.cabinPitchRate = 0;
+    st.cabinMouseIn3DWindow = false;
+
+    // 1) Если табличка уже открыта — разворачиваем её в Полную табличку со всеми разделами
+    if (activeObjectProfileRef.current) {
+      setIsObjectProfileFullPlacard(true);
+      playZxBeep('MISSION');
+      setFlightMessage(
+        `📋 ПОЛНАЯ ТАБЛИЧКА ОТКРЫТА [ , ]: «${activeObjectProfileRef.current.name.toUpperCase()}» · ОГНЕВАЯ РУБКА ЗАФИКСИРОВАНА · [ 0 ] — ЗАКРЫТЬ ТАБЛИЧКУ`
+      );
+      return;
+    }
+
+    // 2) Ищем объект под курсором или ближайший к курсору проекционный объект на 3D-экране
+    let targetHit = hoveredScreenTargetRef.current;
+    if (!targetHit && projectedScreenTargetsRef.current.length > 0) {
+      const aimX = st.turretActive ? st.turretX : 430;
+      const aimY = st.turretActive ? st.turretY : 194;
+      let bestScore = Infinity;
+      for (const cand of projectedScreenTargetsRef.current) {
+        const d = Math.hypot(cand.canvasX - aimX, cand.canvasY - aimY);
+        const score = d - cand.priority * 0.35;
+        if (score < bestScore) {
+          bestScore = score;
+          targetHit = cand;
+        }
+      }
+    }
+
+    if (targetHit) {
+      const canvas = canvasRef.current;
+      const container = viewportContainerRef.current;
+      const viewportWidth = container?.clientWidth || canvas?.clientWidth || 760;
+      const viewportHeight = container?.clientHeight || canvas?.clientHeight || 480;
+      const nextProfile: SpaceObjectProfileData = {
+        ...targetHit.profile,
+        canvasX: targetHit.canvasX,
+        canvasY: targetHit.canvasY,
+        anchorLeftPx: targetHit.canvasX,
+        anchorTopPx: targetHit.canvasY,
+        screenRadiusPx: targetHit.hitRadius,
+        viewportWidth,
+        viewportHeight,
+      };
+      setIsObjectProfileFullPlacard(true);
+      activeObjectProfileRef.current = nextProfile;
+      setActiveObjectProfile(nextProfile);
+      playZxBeep('MISSION');
+      setFlightMessage(
+        `📋 ПОЛНАЯ ТАБЛИЧКА ОТКРЫТА [ , ]: «${nextProfile.name.toUpperCase()}» · ОГНЕВАЯ РУБКА ЗАФИКСИРОВАНА · [ 0 ] — ЗАКРЫТЬ ТАБЛИЧКУ`
+      );
+      return;
+    }
+
+    // 3) Фолбэк: открываем полную табличку первой планеты системы
+    handleOpenPlanetCardByOrbit(1, true);
+    playZxBeep('MISSION');
+    setFlightMessage(
+      '📋 ПОЛНАЯ ТАБЛИЧКА ПЛАНЕТЫ ОТКРЫТА [ , ] · ОГНЕВАЯ РУБКА ЗАФИКСИРОВАНА · [ 0 ] — ЗАКРЫТЬ ТАБЛИЧКУ'
+    );
+  }, [handleOpenPlanetCardByOrbit, playZxBeep]);
 
   // Отключение автопилота при нажатии любой клавиши клавиатуры (кроме колёсика скорости и клавиш мыши управления огнём)
   const handleDisengageAutopilot = useCallback(
@@ -5698,14 +10050,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     autopilotTargetRef.current = nextLock;
     setAutopilotTargetUi(nextLock);
 
-    // Запускаем движение корабля в сторону захваченного объекта
-    if (st.targetSpeed < st.maxSpeed * 0.8) {
-      st.targetSpeed = st.maxSpeed;
-      setThrottleUi(100);
-    }
-    if (st.speed < 30) {
-      st.speed = 38;
-    }
+    // Запускаем движение корабля в сторону захваченного объекта на крейсерской скорости
+    st.targetSpeed = st.maxSpeed;
+    st.speed = st.maxSpeed;
+    setThrottleUi(100);
 
     setScreenMode('FLIGHT');
     playZxBeep('MISSION');
@@ -5725,11 +10073,25 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           profile.kind === 'ADVERT') &&
         profile.planetOrder
       ) {
-        const viewMap: Record<number, 'PLANET_1' | 'PLANET_2' | 'PLANET_3' | 'PLANET_4'> = {
+        const viewMap: Record<
+          number,
+          | 'PLANET_1'
+          | 'PLANET_2'
+          | 'PLANET_3'
+          | 'PLANET_4'
+          | 'DEATH_STAR'
+          | 'TORUS_SHIP'
+          | 'STARGATE'
+          | 'BURAN_SHUTTLE'
+        > = {
           1: 'PLANET_1',
           2: 'PLANET_2',
           3: 'PLANET_3',
           4: 'PLANET_4',
+          5: 'DEATH_STAR',
+          6: 'TORUS_SHIP',
+          7: 'STARGATE',
+          8: 'BURAN_SHUTTLE',
         };
         handleNavigateSystemView(viewMap[profile.planetOrder] || 'PLANET_3');
       } else if (profile.kind === 'ASTEROID') {
@@ -5762,6 +10124,151 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       const code = e.code;
       const key = e.key.toLowerCase();
       const isQKey = code === 'KeyQ' || key === 'q' || key === 'й';
+
+      // Клавиша Tab — мгновенное переключение между режимами «Полный экран (с блоками и панелью)» и «Чистый кокпит»
+      if (code === 'Tab') {
+        e.preventDefault();
+        if (e.repeat) return;
+        playZxBeep('DOCK');
+        setCockpitDisplayMode((prev) => (prev === 'CLEAN_COCKPIT' ? 'FULL' : 'CLEAN_COCKPIT'));
+        return;
+      }
+
+      // Клавиша Ctrl — автоматический плавный возврат 3-обручевого гироскопа Огневой Рубки (Меш-системы)
+      // в стандартное положение, где зелёный Путевой центр находится строго посередине экрана (не выключает Автопилот!)
+      if (code === 'ControlLeft' || code === 'ControlRight' || e.key === 'Control') {
+        e.preventDefault();
+        if (!e.repeat) {
+          playZxBeep('DOCK');
+        }
+        flightStateRef.current.cabinAutoCentering = true;
+        flightStateRef.current.cabinYawRate = 0;
+        flightStateRef.current.cabinPitchRate = 0;
+        return;
+      }
+
+      // Клавиша «NumLock» (кнопка numLK) — ВКЛЮЧЕНИЕ / ВЫКЛЮЧЕНИЕ ПРИБОРА «КОНВЕРТОР БАЛАНСА ЭНЕРГОУСТАНОВКИ»
+      // (Нарушает баланс 50/50 массы корабля: колёсико мыши и +/- выше 100 ед./с дают Форсаж до +100%, а ниже 100 ед./с — Силу Щита до +100% при остановке)
+      if (code === 'NumLock' || e.key === 'NumLock') {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleToggleShieldSpeedConverter();
+        return;
+      }
+
+      // Клавиши «+» и «-» — масштабирование 3D-радара, проекции и навигации:
+      // Свыше 10 000 ед. — шаг 10 000 ед., при ≤10 000 ед. — шаг 2 000 ед. до предела 2 000 ед.
+      // Не выключают Автопилот!
+      if (
+        code === 'Equal' ||
+        code === 'NumpadAdd' ||
+        e.key === '+' ||
+        e.key === '='
+      ) {
+        e.preventDefault();
+        handleStepRadarScale(1);
+        return;
+      }
+      if (
+        code === 'Minus' ||
+        code === 'NumpadSubtract' ||
+        e.key === '-' ||
+        e.key === '_'
+      ) {
+        e.preventDefault();
+        handleStepRadarScale(-1);
+        return;
+      }
+
+      // Клавиша «*» на Numpad (NumpadMultiply / *) — ФИЛЬТР 3D-РАДАРА:
+      // отключает все объекты кроме объектов с двигателем (кораблей). Повторное нажатие возвращает показ всех объектов.
+      if (code === 'NumpadMultiply' || e.key === '*') {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleToggleRadarShipsOnlyFilter();
+        return;
+      }
+
+      // Клавиша «/» на Numpad / NumLock (NumpadDivide / Slash / /) — ФИЛЬТР КОРАБЛЕЙ ПО ТИПАМ ДВИГАТЕЛЕЙ:
+      // «все , паруса, реактивные, импульсные, ионные, плазменные, фотонный, гравитационные, подпространственные».
+      // Работает только в паре с фильтром кораблей (клавиша * на Numpad).
+      if (
+        code === 'NumpadDivide' ||
+        (code === 'Slash' && !e.shiftKey) ||
+        e.key === '/'
+      ) {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleCycleRadarEngineFilter();
+        return;
+      }
+
+      // Клавиша «0» (Digit0 / Numpad0) — ЗАКРЫТЬ ТАБЛИЧКУ объекта и разблокировать Огневую Рубку
+      if (code === 'Digit0' || code === 'Numpad0' || e.key === '0') {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleCloseObjectPlacard();
+        return;
+      }
+
+      // Клавиша «,» (запятая рядом с 0: NumpadDecimal / Comma / Period) — ОТКРЫТЬ ПОЛНУЮ ТАБЛИЧКУ объекта
+      if (
+        code === 'NumpadDecimal' ||
+        code === 'Comma' ||
+        code === 'Period' ||
+        e.key === ',' ||
+        e.key === '.'
+      ) {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleOpenFullPlacardAtCursor();
+        return;
+      }
+
+      // Цифровые клавиши 1..9 — выбор слота оружия Меш-системы (не выключают Автопилот!)
+      const weaponDigitMap: Record<string, number> = {
+        Digit1: 1,
+        Digit2: 2,
+        Digit3: 3,
+        Digit4: 4,
+        Digit5: 5,
+        Digit6: 6,
+        Digit7: 7,
+        Digit8: 8,
+        Digit9: 9,
+        Numpad1: 1,
+        Numpad2: 2,
+        Numpad3: 3,
+        Numpad4: 4,
+        Numpad5: 5,
+        Numpad6: 6,
+        Numpad7: 7,
+        Numpad8: 8,
+        Numpad9: 9,
+      };
+      if (weaponDigitMap[code] !== undefined) {
+        e.preventDefault();
+        if (e.repeat) return;
+        const slotNum = weaponDigitMap[code];
+        flightStateRef.current.activeWeaponSlot = slotNum;
+        playZxBeep('DOCK');
+        const weaponNames: Record<number, string> = {
+          1: hasMilitaryLaser ? 'ВОЕННЫЙ ИМПУЛЬСНЫЙ ЛАЗЕР' : 'ИМПУЛЬСНЫЙ ЛАЗЕР МЕШ-СИСТЕМЫ',
+          2: 'ТЯЖЁЛАЯ ПЛАЗМЕННАЯ ПУШКА',
+          3: 'ГАММА-КВАНТОВЫЙ РАЗМЫКАТЕЛЬ УЗЛОВ [Ω-γ]',
+          4: 'СЛОТ ОРУЖИЯ #4 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          5: 'СЛОТ ОРУЖИЯ #5 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          6: 'СЛОТ ОРУЖИЯ #6 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          7: 'СЛОТ ОРУЖИЯ #7 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          8: 'СЛОТ ОРУЖИЯ #8 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          9: 'СЛОТ ОРУЖИЯ #9 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+          10: 'СЛОТ ОРУЖИЯ #0 (РЕЗЕРВ МЕШ-АРСЕНАЛА)',
+        };
+        setFlightMessage(
+          `🔫 ВЫБРАНО ОРУЖИЕ [${slotNum === 10 ? '0' : slotNum}]: ${weaponNames[slotNum]}`
+        );
+        return;
+      }
 
       // Если автопилот уже включён: нажатие ЛЮБОЙ клавиши клавиатуры выключает автопилот
       // (или перезахватывает новый объект, если курсор наведён на другой объект и нажата Q)
@@ -5798,10 +10305,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         handleTriggerObjectProfileAtCursor();
       } else if (code === 'KeyX' || key === 'x' || key === 'ч' || key === 'х') {
         e.preventDefault();
+        if (e.repeat) return;
         handleToggleStationaryOrbit();
       } else if (code === 'KeyF' || key === 'f' || key === 'а' || code === 'Space') {
         e.preventDefault();
-        handleFireLaser();
+        const activeSlot = flightStateRef.current.activeWeaponSlot;
+        if (activeSlot === 2) {
+          handleFireSecondaryWeapon();
+        } else if (activeSlot === 3) {
+          handleFireHeavyGammaWeapon();
+        } else {
+          handleFireLaser();
+        }
       } else if (code === 'KeyH' || key === 'h' || key === 'р') {
         e.preventDefault();
         handleHyperspaceJump();
@@ -5814,27 +10329,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       } else if (code === 'KeyV' || key === 'v' || key === 'м') {
         e.preventDefault();
         handleFireHeavyGammaWeapon();
-      } else if (code === 'Digit1') {
+      } else if (code === 'KeyJ' || key === 'j' || key === 'о') {
         e.preventDefault();
-        handleNavigateSystemView('SYSTEM_EDGE');
-      } else if (code === 'Digit2') {
+        setIsSentinelModalOpen((prev) => !prev);
+      } else if (code === 'KeyO' || key === 'o' || key === 'щ') {
         e.preventDefault();
-        handleNavigateSystemView('STAR_CLOSE');
-      } else if (code === 'Digit3') {
-        e.preventDefault();
-        handleNavigateSystemView('PLANET_1');
-      } else if (code === 'Digit4') {
-        e.preventDefault();
-        handleNavigateSystemView('PLANET_2');
-      } else if (code === 'Digit5') {
-        e.preventDefault();
-        handleNavigateSystemView('PLANET_3');
-      } else if (code === 'Digit6') {
-        e.preventDefault();
-        handleNavigateSystemView('PLANET_4');
-      } else if (code === 'Digit7') {
-        e.preventDefault();
-        handleNavigateSystemView('ASTEROID_BELT');
+        setObjectsGalleryTargetId(undefined);
+        setIsObjectsGalleryOpen((prev) => !prev);
       }
     };
 
@@ -5853,16 +10354,27 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       window.removeEventListener('keyup', onKeyUp);
     };
   }, [
+    handleCloseObjectPlacard,
     handleDisengageAutopilot,
     handleEngageAutopilotAtCursor,
     handleFireHeavyGammaWeapon,
     handleFireLaser,
+    handleFireSecondaryWeapon,
     handleHyperspaceJump,
     handleNavigateSystemView,
+    handleOpenFullPlacardAtCursor,
+    handleSetShieldConverterPercent,
+    handleStepRadarScale,
+    handleStepSpeedOrConverter,
     handleToggleDocking,
+    handleToggleRadarShipsOnlyFilter,
+    handleCycleRadarEngineFilter,
+    handleToggleShieldSpeedConverter,
     handleToggleStationaryOrbit,
     handleTriggerObjectProfileAtCursor,
+    hasMilitaryLaser,
     isOpen,
+    playZxBeep,
   ]);
 
   // Главный 60 FPS цикл рендеринга 3D Wireframe (в стиле ZX Spectrum 1984)
@@ -5884,20 +10396,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           const st = flightStateRef.current;
           const keys = st.keys;
 
-          // Обработка САМОЛЁТНОГО управления с учётом МАССЫ КОРАБЛЯ (чем тяжелее корабль — тем ниже манёвренность, но выше броня!):
-          // W / ↑ — штурвал от себя (пикирование, нос вниз)
-          // S / ↓ — штурвал на себя (кабрирование, нос вверх)
+          // Обработка управления с учётом МАССЫ КОРАБЛЯ (чем тяжелее корабль — тем ниже манёвренность, но выше броня!):
+          // W / ↑ — нос вверх (тангаж вверх)
+          // S / ↓ — нос вниз (тангаж вниз)
           // A / ← и D / → — крен крыльев влево / вправо (Roll)
-          // E / Shift — прибавить тягу (РУД +), Ctrl — убавить тягу (РУД -), Q — Автопилот
+          // + (Equal / NumpadAdd) и - (Minus / NumpadSubtract) — управление форсажем (тягой двигателей)
+          // Цифры 1..0 — выбор оружия Меш-системы, Ctrl — плавный возврат гироскопа Меш-Рубки в Путевой центр, Q — Автопилот
           const pitchInput =
-            (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0) -
-            (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0);
+            (keys['KeyW'] || keys['ArrowUp'] ? 1 : 0) -
+            (keys['KeyS'] || keys['ArrowDown'] ? 1 : 0);
           const rollInput =
             (keys['KeyD'] || keys['ArrowRight'] ? 1 : 0) -
             (keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0);
           const throttleInput =
-            (keys['KeyE'] || keys['ShiftLeft'] || keys['ShiftRight'] || keys['Equal'] ? 1 : 0) -
-            (keys['ControlLeft'] || keys['ControlRight'] || keys['Minus'] ? 1 : 0);
+            keys['KeyE'] || keys['ShiftLeft'] || keys['ShiftRight'] ? 1 : 0;
+
+          st.maxSpeed = st.converterActive ? MAX_SYSTEM_SPEED * 2 : MAX_SYSTEM_SPEED;
 
           const isStationaryLocked = Boolean(st.stationaryOrbitPlanetId);
           const activeAutopilot = autopilotTargetRef.current;
@@ -5905,16 +10419,39 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           if (isStationaryLocked) {
             st.targetSpeed = 0;
             st.speed = 0;
+            if (st.converterActive && st.converterPct !== -100) {
+              st.converterPct = -100;
+              shieldConverterPctRef.current = -100;
+              setShieldConverterPct(-100);
+              st.frontShield = 200;
+              st.aftShield = 200;
+            }
           } else if (throttleInput !== 0) {
             st.targetSpeed = Math.max(
               0,
               Math.min(st.maxSpeed, st.targetSpeed + throttleInput * 1.1)
             );
-            setThrottleUi(Math.round((st.targetSpeed / Math.max(1, st.maxSpeed)) * 100));
+            const roundedSpd = Math.round(st.targetSpeed);
+            setThrottleUi(roundedSpd);
+            if (st.converterActive) {
+              const liveShift = Math.max(-100, Math.min(100, roundedSpd - 100));
+              st.converterPct = liveShift;
+              shieldConverterPctRef.current = liveShift;
+              setShieldConverterPct(liveShift);
+              const liveShield = Math.max(0, Math.min(200, 100 - liveShift));
+              st.frontShield = liveShield;
+              st.aftShield = liveShield;
+            }
           } else if (st.targetSpeed > st.maxSpeed) {
             st.targetSpeed = st.maxSpeed;
           }
           st.speed = isStationaryLocked ? 0 : st.speed * 0.9 + st.targetSpeed * 0.1;
+          if (Math.abs(st.speed - st.targetSpeed) < 0.5) {
+            st.speed = st.targetSpeed;
+          }
+          if (st.converterActive && !isStationaryLocked) {
+            st.converterPct = Math.max(-100, Math.min(100, Math.round(st.targetSpeed) - 100));
+          }
 
           // Точный расчёт реального времени кадра (dtSec в секундах):
           // На максимальной скорости (100 ед./сек):
@@ -5944,29 +10481,122 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             // На стационарной орбите или при захвате автопилотом ручные угловые скорости погашены
             st.pitchRate = 0;
             st.rollRate = 0;
+            st.pitchAxis = 0;
+            st.rollAxis = 0;
             if (activeAutopilot) {
               st.bankAngle *= 0.88;
             }
           } else {
-            st.pitchRate = st.pitchRate * inertiaDamping + pitchInput * (0.0074 * effectiveMf);
-            st.rollRate = st.rollRate * inertiaDamping + rollInput * (0.0126 * effectiveMf);
+            // КРИВЫЕ ОТКЛИКА (Sensitivity / Non-linearity) ДЛЯ КЛАВИАТУРНОГО ДЖОЙСТИКА ТАНГАЖА (Pitch) И КРЕНА (Roll):
+            // 1. Вблизи центра (короткие нажатия при точном прицеливании) — мягкий нелинейный отклик без резких рывков.
+            // 2. При удержании клавиши — плавный «разгончик» по степенной кривой (Expo S-Curve) к максимальной угловой скорости.
+            // 3. При отпускании клавиши или смене направления (перекладке штурвала) — плавное инерционное торможение до полной остановки или реверса.
+            const frameScale = Math.max(0.4, Math.min(2.4, dtSec * 60));
+            const axisAccelSpeed = 0.038 * (0.55 + 0.45 * effectiveMf) * frameScale;
+            const axisReverseBrakeSpeed = 0.078 * (0.6 + 0.4 * effectiveMf) * frameScale;
+            const axisReleaseDecay = Math.pow(0.83, frameScale);
+
+            // Обновление виртуальной оси Тангажа (Pitch Axis [-1..+1])
+            if (pitchInput !== 0) {
+              if (st.pitchAxis !== 0 && Math.sign(pitchInput) !== Math.sign(st.pitchAxis)) {
+                // Торможение при смене направления тангажа (перекладка руля высоты)
+                st.pitchAxis *= Math.pow(0.76, frameScale);
+                st.pitchAxis += pitchInput * axisReverseBrakeSpeed;
+              } else {
+                // Плавный разгон виртуальной ручки от центра к 100%
+                st.pitchAxis += pitchInput * axisAccelSpeed;
+              }
+              st.pitchAxis = Math.max(-1, Math.min(1, st.pitchAxis));
+            } else {
+              // Плавное торможение после отпускания клавиши тангажа
+              st.pitchAxis *= axisReleaseDecay;
+              if (Math.abs(st.pitchAxis) < 0.006) st.pitchAxis = 0;
+            }
+
+            // Обновление виртуальной оси Крена (Roll Axis [-1..+1])
+            if (rollInput !== 0) {
+              if (st.rollAxis !== 0 && Math.sign(rollInput) !== Math.sign(st.rollAxis)) {
+                // Торможение при смене направления крена (перекладка элеронов)
+                st.rollAxis *= Math.pow(0.76, frameScale);
+                st.rollAxis += rollInput * axisReverseBrakeSpeed;
+              } else {
+                // Плавный разгон виртуальной ручки крена от центра к 100%
+                st.rollAxis += rollInput * axisAccelSpeed;
+              }
+              st.rollAxis = Math.max(-1, Math.min(1, st.rollAxis));
+            } else {
+              // Плавное торможение после отпускания клавиши крена
+              st.rollAxis *= axisReleaseDecay;
+              if (Math.abs(st.rollAxis) < 0.006) st.rollAxis = 0;
+            }
+
+            // Нелинейная кривая отклика (Sensitivity / Non-linearity Expo Curve):
+            // Малые отклонения в центре сглажены для снайперского прицеливания, а к краям идёт прогрессивный разгон по кривой
+            const applyNonLinearResponseCurve = (axisVal: number): number => {
+              const abs = Math.min(1, Math.abs(axisVal));
+              const curved = 0.16 * abs + 0.84 * Math.pow(abs, 2.35);
+              return Math.sign(axisVal) * curved;
+            };
+
+            const curvedPitch = applyNonLinearResponseCurve(st.pitchAxis);
+            const curvedRoll = applyNonLinearResponseCurve(st.rollAxis);
+
+            const maxPitchRate = 0.048 * effectiveMf;
+            const maxRollRate = 0.082 * effectiveMf;
+
+            const targetPitchRate = curvedPitch * maxPitchRate;
+            const targetRollRate = curvedRoll * maxRollRate;
+
+            const pitchBlend =
+              pitchInput === 0
+                ? 1 - Math.pow(inertiaDamping * 0.94, frameScale)
+                : pitchInput * st.pitchRate < 0
+                ? Math.min(0.38, 0.24 * frameScale)
+                : Math.min(0.32, 0.19 * frameScale);
+
+            const rollBlend =
+              rollInput === 0
+                ? 1 - Math.pow(inertiaDamping * 0.94, frameScale)
+                : rollInput * st.rollRate < 0
+                ? Math.min(0.38, 0.24 * frameScale)
+                : Math.min(0.32, 0.19 * frameScale);
+
+            st.pitchRate += (targetPitchRate - st.pitchRate) * pitchBlend;
+            st.rollRate += (targetRollRate - st.rollRate) * rollBlend;
+
+            if (pitchInput === 0 && Math.abs(st.pitchRate) < 0.00012) st.pitchRate = 0;
+            if (rollInput === 0 && Math.abs(st.rollRate) < 0.00012) st.rollRate = 0;
+
             st.bankAngle += st.rollRate;
             st.pitchAngle = Math.max(-1.2, Math.min(1.2, st.pitchAngle + st.pitchRate));
           }
           st.laserHeat = Math.max(0, st.laserHeat - 0.35);
 
-          // ЗАРЯДКА ЭНЕРГИЕЙ ОТ СТЕПЕНИ БЛИЗОСТИ К ЦЕНТРАЛЬНОЙ ЗВЕЗДЕ В ЦЕНТРЕ СФЕРЫ:
-          // На окраине сферы системы (дист = 30 000 ед.) зарядка минимальна (~3%),
-          // а в непосредственной близости к звезде (дист ~ 260 ед., звезда на пол-экрана) — 100% MAX!
+          // ЗАРЯДКА ЭНЕРГИЕЙ ОТ СТЕПЕНИ БЛИЗОСТИ К ЦЕНТРАЛЬНОЙ ЗВЕЗДЕ И ЕЁ СПЕКТРАЛЬНОГО КЛАССА:
+          // На окраине сферы системы (дист = 30 000 ед.) зарядка минимальна (~0-3%),
+          // а в непосредственной близости к звезде (дист ~ 100 ед.) — 100% * K_rad!
+          // ДЛЯ СОЛНЦА (G2 V) ЭТО КОЭФФИЦИЕНТ 1.00, У КАРЛИКА МЕНЬШЕ (< 1.0), У ГОЛУБОГО ГИГАНТА БОЛЬШЕ (> 1.0)!
           const currentStarDist = Math.max(
             180,
             Math.hypot(st.starPos.x, st.starPos.y, st.starPos.z)
           );
-          const solarProximityRatio = Math.max(
-            0.03,
-            Math.min(1, Math.pow(340 / currentStarDist, 0.72))
+
+          // Определение спектрального профиля звезды текущей системы
+          const activeStarRad = getStarRadiationProfile(
+            activeConstellationStarJumpLabelRef.current ||
+            activeSystemKeyRef.current ||
+            GALAXY_SYSTEMS[currentSystemId]?.name ||
+            'sys:0'
           );
-          const liveSolarFluxPct = Math.round(solarProximityRatio * 100);
+
+          const systemEdgeRadius = SYSTEM_SPHERE_RADIUS;
+          const baseProximityPct = Math.max(
+            0,
+            Math.min(100, 100 * (1 - currentStarDist / systemEdgeRadius))
+          );
+          // Эффективная скорость зарядки с учётом фотонного и гаммаквантового потенциала звезды:
+          const windRechargeRatePctMin = baseProximityPct * activeStarRad.totalRadCoeff;
+          const liveSolarFluxPct = Math.round(windRechargeRatePctMin);
           st.solarFluxPct = liveSolarFluxPct;
           st.frameCounter = (st.frameCounter + 1) % 6000;
           if (st.frameCounter % 12 === 0) {
@@ -5974,7 +10604,35 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               fluxPct: liveSolarFluxPct,
               starDist: Math.round(currentStarDist),
               etaToStar: formatFlightEta(currentStarDist, st.speed > 1 ? st.speed : MAX_SYSTEM_SPEED),
+              starRad: activeStarRad,
             });
+            if (st.planets && st.planets.length > 0) {
+              let nearP = st.planets[0];
+              let minPdist = Infinity;
+              for (const p of st.planets) {
+                const cosA = Math.cos(p.orbitAngle);
+                const sinA = Math.sin(p.orbitAngle);
+                const px =
+                  st.starPos.x + p.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+                const py =
+                  st.starPos.y + p.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+                const pz =
+                  st.starPos.z + p.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+                const d = Math.hypot(px, py, pz);
+                if (d < minPdist) {
+                  minPdist = d;
+                  nearP = p;
+                }
+              }
+              setNearestPlanetOrbitUi({
+                planetId: nearP.id,
+                cleanName: nearP.cleanName,
+                distanceUnits: Math.round(minPdist),
+                canLock: minPdist < 400,
+              });
+            } else {
+              setNearestPlanetOrbitUi(null);
+            }
           }
           // Плавный расход Продовольствия (автономное нахождение в космосе) и Воды (питьё и источник кислорода O₂)
           if (st.frameCounter % 180 === 0 && screenMode === 'FLIGHT') {
@@ -5982,17 +10640,277 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             setWaterOxygenStockPct((prev) => Math.max(10, prev - 1));
           }
 
-          // Скорость пополнения аккумулятора энергии и щитов напрямую зависит от близости к звезде
-          const solarEnergyGain = 0.04 + solarProximityRatio * 0.62;
-          st.energy = Math.min(100, st.energy + solarEnergyGain);
-          st.frontShield = Math.min(
-            100,
-            st.frontShield + 0.02 + solarProximityRatio * 0.14 + st.protectionFactor * 0.05
+          // Симуляция фотонно-квантового накопителя и авто-обороны Всей Сети Часовых (по принципу «Свой-Чужой»)
+          if (st.frameCounter % 60 === 0 && screenMode === 'FLIGHT') {
+            setSentinelNetwork((prevNet) => {
+              return prevNet.map((sent) => {
+                const updatedSent = updateSentinelSolarAccumulator(sent, sent.starDistanceUnits, 1.0);
+                if (updatedSent.aiMode !== 'AUTO_DEFENSE' || updatedSent.cooldownRemainingSeconds > 0) {
+                  return updatedSent;
+                }
+
+                const spec = SENTINEL_STRIKE_MODES[updatedSent.strikeMode];
+                if (updatedSent.batteryChargeGeu < spec.energyCostGeu) {
+                  return updatedSent;
+                }
+
+                // 1. Приоритет IFF: Огонь по карательным дронам диктатора («ЧУЖОЙ»)
+                if (st.dictatorDrones && st.dictatorDrones.length > 0) {
+                  const dr = st.dictatorDrones[0];
+                  dr.hp -= spec.damageUnits;
+                  const res = executeSentinelStrike(
+                    updatedSent,
+                    `Дрон #${dr.droneNumber} Диктатора «${dr.originPlanetName}»`,
+                    undefined,
+                    'ЧУЖОЙ : КАРАТЕЛЬНЫЙ ДРОН'
+                  );
+                  if (dr.hp <= 0) {
+                    st.dictatorDrones.shift();
+                    setDictatorSwarmUi(
+                      st.dictatorDrones.length > 0
+                        ? {
+                            activeCount: st.dictatorDrones.length,
+                            originPlanetName: dr.originPlanetName,
+                            droneSpeed: dr.speedUnitsPerSec,
+                          }
+                        : null
+                    );
+                    playZxBeep('EXPLODE');
+                    setFlightMessage(
+                      `🛰️ ЧАСОВОЙ [${updatedSent.locationLabelRu.toUpperCase()}]: ЛИКВИДИРОВАН КАРАТЕЛЬНЫЙ ДРОН #${dr.droneNumber} ДИКТАТОРА! ОСТАЛОСЬ: ${st.dictatorDrones.length}`
+                    );
+                  } else {
+                    playZxBeep('HIT');
+                    setFlightMessage(
+                      `🛰️ ЧАСОВОЙ [${updatedSent.locationLabelRu.toUpperCase()}]: ЗАЛП [${spec.codeName}] ПО ДРОНУ ДИКТАТОРА (УРОН: -${spec.damageUnits} ЕД.)!`
+                    );
+                  }
+                  return res.updatedTelemetry;
+                }
+
+                // 2. Проверка IFF по судам в секторе с учётом фильтров угроз и списка исключений «КРОМЕ»
+                const targetEntity = st.entities.find((e) => {
+                  if (e.hp <= 0) return false;
+                  const evalRes = evaluateTargetIffStatus(
+                    e.kind as any,
+                    e.karma ?? (e.kind === 'PIRATE' ? -50 : 0),
+                    e.clanName || e.label,
+                    e.clanNumber,
+                    updatedSent.targetThreatFilters,
+                    updatedSent.exceptionsConfig
+                  );
+                  return evalRes.shouldEngage;
+                });
+
+                if (targetEntity) {
+                  const evalRes = evaluateTargetIffStatus(
+                    targetEntity.kind as any,
+                    targetEntity.karma ?? (targetEntity.kind === 'PIRATE' ? -50 : 0),
+                    targetEntity.clanName || targetEntity.label,
+                    targetEntity.clanNumber,
+                    updatedSent.targetThreatFilters,
+                    updatedSent.exceptionsConfig
+                  );
+
+                  const targetPos = targetEntity.pos || { x: 0, y: 0, z: 0 };
+                  const distUnits = Math.max(
+                    300,
+                    Math.round(
+                      Math.hypot(
+                        updatedSent.worldPos.x - targetPos.x,
+                        updatedSent.worldPos.z - targetPos.z
+                      )
+                    )
+                  );
+
+                  // В режиме «Объёмное торможение двигателя» (не менее 3 часовых) — СТРЕЛЬБА ИСКЛЮЧЕНА!
+                  // Силовое поле воздействует прямо на двигатели корабля цели, уменьшая тягу и скорость в тоннах.
+                  if (updatedSent.engagementDirective === 'VOLUMETRIC_ENGINE_SUPPRESSION') {
+                    const fieldRadius = 2000;
+                    // Дистанция соответствия 100% у часовых и уменьшение до нуля в центре между ними
+                    const distToCenter = Math.min(fieldRadius, distUnits);
+                    const brakingRatio = Math.max(0, Math.min(1.0, distToCenter / fieldRadius));
+                    const brakeTons = Math.round((updatedSent.dryMassTons || 12.0) * brakingRatio * 10) / 10;
+                    
+                    if (targetEntity.vel) {
+                      const curSpeed = Math.sqrt(
+                        targetEntity.vel.x * targetEntity.vel.x +
+                        targetEntity.vel.y * targetEntity.vel.y +
+                        targetEntity.vel.z * targetEntity.vel.z
+                      );
+                      if (curSpeed > 0.2) {
+                        const dampFactor = Math.max(0.1, 1.0 - (brakingRatio * 0.4));
+                        targetEntity.vel.x *= dampFactor;
+                        targetEntity.vel.y *= dampFactor;
+                        targetEntity.vel.z *= dampFactor;
+                      }
+                    }
+                    
+                    playZxBeep('DOCK');
+                    setFlightMessage(
+                      `🧲 ЧАСОВОЙ [${updatedSent.locationLabelRu.toUpperCase()}]: ОБЪЁМНЫЙ ЗАХВАТ ДВИГАТЕЛЯ «${targetEntity.label}»! ТОРМОЖЕНИЕ: -${brakeTons.toFixed(1)} ТОНН ТЯГИ! (СТРЕЛЬБА ИСКЛЮЧЕНА)`
+                    );
+                    return {
+                      ...updatedSent,
+                      lastTargetName: targetEntity.label,
+                      lastEngagedIffClassification: `ОБЪЁМНОЕ ТОРМОЖЕНИЕ [${brakeTons.toFixed(1)} т]`,
+                    };
+                  }
+
+                  // В режиме «Только уничтожить» часовой молчит на дальней дистанции (> 6000 м),
+                  // чтобы не спугнуть преследователя раньше времени, и бьёт сразу на поражение внутри периметра!
+                  if (updatedSent.engagementDirective === 'DESTROY_ONLY' && distUnits > 6000) {
+                    return updatedSent;
+                  }
+
+                  const res = executeSentinelStrike(
+                    updatedSent,
+                    targetEntity.label || 'Неопознанная цель',
+                    undefined,
+                    evalRes.labelRu,
+                    distUnits
+                  );
+
+                  if (res.success) {
+                    targetEntity.hp -= res.strikeSpec.damageUnits;
+
+                    if (targetEntity.hp <= 0) {
+                      playZxBeep('EXPLODE');
+                      setFlightMessage(
+                        `💥 ЧАСОВОЙ [${updatedSent.locationLabelRu.toUpperCase()}]: ПРЕСЛЕДОВАТЕЛЬ/РЕЙДЕР ${targetEntity.label} ПОЛНОСТЬЮ ЛИКВИДИРОВАН В ЗОНЕ ПОРАЖЕНИЯ!`
+                      );
+                    } else if (res.isWarningShot) {
+                      playZxBeep('LASER');
+                      setFlightMessage(
+                        `🛡️ ЧАСОВОЙ [${updatedSent.locationLabelRu.toUpperCase()}]: ПРЕДУПРЕДИТЕЛЬНЫЙ ОТПУГИВАЮЩИЙ ЗАЛП [ИГЛА 35 КГ] ПО «${targetEntity.label}» НА ${distUnits}М!`
+                      );
+                    } else {
+                      playZxBeep('HIT');
+                      const swarmNotice = updatedSent.swarmClusterId
+                        ? ` [ОБЛАКО «${updatedSent.swarmClusterName || 'ЗАСАДА'}»]`
+                        : '';
+                      setFlightMessage(
+                        `⚡ ЧАСОВОЙ${swarmNotice} [${updatedSent.locationLabelRu.toUpperCase()}]: ЗАЛП [${res.strikeSpec.codeName}] ПО «${targetEntity.label}» (-${res.strikeSpec.damageUnits} ЕД., ${distUnits}М)!`
+                      );
+                    }
+
+                    return res.updatedTelemetry;
+                  }
+                }
+
+                return updatedSent;
+              });
+            });
+          }
+
+          // =========================================================================
+          // ГЛАВНАЯ ЭНЕРГЕТИЧЕСКАЯ УСТАНОВКА (ГЭУ) И ОНТОЛОГИЯ ИСТОЧНИКОВ ЭНЕРГИИ:
+          // 1. ВОЗОБНОВЛЯЕМЫЙ (БЕЗМАССОВЫЙ) ИСТОЧНИК — Фотонный и квантовый ветер звезды:
+          //    • Ёмкость аккумулятора возобновляемых источников равна массе корабля (totalShipMassTons).
+          //    • Скорость зарядки в 100 единицах рядом со звездой равна 100% * K_rad в минуту.
+          //    • На границе системы (R=30 000 ед.) скорость зарядки равна 0% в минуту.
+          //    • Для Солнца (G2V): K_rad = 1.00; для карликов: K_rad < 1.0; для голубых гигантов: K_rad > 1.0!
+          // 2. РЕАКТОР НА ТОПЛИВЕ — Урановый, плутониевый, граничное вещество, вакуумный (с катализатором):
+          //    • Включается автоматически, когда аккумулятор ветра разряжен (< 5%).
+          // 3. ПРЯМОЙ КОНВЕРТОР МАССЫ ТРЮМА — Самый примитивный вещественный преобразователь:
+          //    • Включается автоматически, если аккумулятор ветра пуст и топлива для реактора нет.
+          //    • Превращает любую массу трюма (золото, кремний, металлы) в энергию (КПД на порядок ниже).
+          // =========================================================================
+          const windRechargeStepUnits = (windRechargeRatePctMin / 100) * totalShipMassTons * (dtSec / 60);
+
+          // Обновление заряда аккумулятора квантового/фотонного ветра
+          const updatedWindAccumulator = Math.min(
+            totalShipMassTons,
+            windAccumulatorEnergy + windRechargeStepUnits
           );
-          st.aftShield = Math.min(
-            100,
-            st.aftShield + 0.02 + solarProximityRatio * 0.14 + st.protectionFactor * 0.05
-          );
+
+          // Потребление энергии бортовыми системами, щитами и двигателями
+          const baseEnergyDraw = 0.05 + (st.speed / MAX_SYSTEM_SPEED) * 0.12;
+
+          let effectiveActiveSource: 'WIND_ACCUMULATOR' | 'REACTOR' | 'CARGO_MASS_CONVERTER' | 'VACUUM_DOMINATOR' = 'WIND_ACCUMULATOR';
+          let netEnergySurplus = 0;
+
+          // Проверка Вакуумной Конвертации Доминаторов (Высшая механика: 1 кг Граничного вещества / 1 экв. энергии в минуту из вакуума)
+          if (isVacuumConversionActive && boundaryMatterFuelStockKg > 0.01) {
+            effectiveActiveSource = 'VACUUM_DOMINATOR';
+            // Расход граничного вещества как катализатора: 1 кг в 60 секунд (1/60 кг в сек)
+            const catalystConsumptionStep = (1 / 60) * dtSec;
+            setBoundaryMatterFuelStockKg((b) => Math.max(0, b - catalystConsumptionStep));
+            // Непрерывная генерация эквивалентной чистой энергии из вакуума
+            netEnergySurplus = 1.2;
+          } else if (updatedWindAccumulator >= baseEnergyDraw) {
+            // Приоритет 1: Питание от аккумулятора возобновляемого фотонного/квантового ветра
+            effectiveActiveSource = 'WIND_ACCUMULATOR';
+            const nextWind = Math.max(0, updatedWindAccumulator - baseEnergyDraw);
+            setWindAccumulatorEnergy(Number(nextWind.toFixed(2)));
+            netEnergySurplus = Math.min(1.0, windRechargeStepUnits * 2);
+          } else if (boundaryMatterFuelStockKg > 0.01) {
+            // Приоритет 2А: Граничный Реактор — 100% массы в чистую энергию (E = m · c², максимальный выход)
+            effectiveActiveSource = 'REACTOR';
+            if (st.frameCounter % 60 === 0) {
+              setBoundaryMatterFuelStockKg((b) => Math.max(0, b - 0.005));
+            }
+            netEnergySurplus = 1.0; // 100% превращение массы в энергию
+          } else if (uraniumFuelStockKg > 0.01 || plutoniumFuelStockKg > 0.01 || vacuumCatalystOmegaKg > 0.01) {
+            // Приоритет 2Б: Ядерный Реактор (деление U/Pu) — дефект массы Δm/m ~ 0.1% (E = Δm · c²)
+            effectiveActiveSource = 'REACTOR';
+            if (st.frameCounter % 60 === 0) {
+              if (plutoniumFuelStockKg > 0.01) {
+                setPlutoniumFuelStockKg((p) => Math.max(0, p - 0.015));
+              } else {
+                setUraniumFuelStockKg((u) => Math.max(0, u - 0.02));
+              }
+            }
+            netEnergySurplus = 0.8;
+          } else if (usedCargoTons > 0.01) {
+            // Приоритет 3: Аварийный Конвертор массы трюма — дефект массы на порядок ниже ядерного (E = 0.0001 · m · c²)
+            effectiveActiveSource = 'CARGO_MASS_CONVERTER';
+            if (st.frameCounter % 180 === 0) {
+              setCargoMassConvertedKg((prev) => prev + 1);
+            }
+            netEnergySurplus = 0.25;
+          } else {
+            // Все источники истощены
+            effectiveActiveSource = 'WIND_ACCUMULATOR';
+            netEnergySurplus = -0.05;
+          }
+
+          if (st.frameCounter % 30 === 0 && effectiveActiveSource !== geuActiveSource) {
+            setGeuActiveSource(effectiveActiveSource);
+          }
+
+          // Потолок силы щита (FS и AS) определяется режимом Конвертора (NumLock):
+          // • В обычном режиме (Конвертор ВЫКЛ): потолок щита = 100% (равномерный баланс 50/50 массы корабля).
+          // • В режиме Конвертора (Конвертор ВКЛ): потолок щита = 100% - converterPct (т.е. 200 - скорость):
+          //   - При Форсаже 200 ед./с (+100% скорость): потолок щита = 0% (-100% щита).
+          //   - При снижении скорости ниже 100 ед./с: освободившаяся мощность двигателей усиливает щит свыше 100%!
+          //   - При полной остановке (0 ед./с): потолок щита = 200% (+100% к силе щита)!
+          const maxShieldCap = st.converterActive
+            ? Math.max(0, Math.min(200, 100 - st.converterPct))
+            : 100;
+          const shieldRegenStep =
+            (0.02 + (windRechargeRatePctMin / 100) * 0.14 + st.protectionFactor * 0.05 + netEnergySurplus * 0.08) *
+            (st.converterActive && st.converterPct < 0 ? 2.2 : 1);
+          st.energy = Math.max(0, Math.min(100, st.energy + netEnergySurplus));
+          if (st.shipDisintegrationTimer <= 0) {
+            // Плавное восстановление рабочей емкости Грави-Конвертора до массы корабля
+            if ((st.gravConverterTons ?? totalShipMassTons) < totalShipMassTons) {
+              const capRegenStep = (shieldRegenStep / 100) * totalShipMassTons * 0.08;
+              st.gravConverterTons = Math.min(
+                totalShipMassTons,
+                Number(((st.gravConverterTons ?? totalShipMassTons) + capRegenStep).toFixed(2))
+              );
+            }
+            const capRatio = totalShipMassTons > 0 ? (st.gravConverterTons ?? totalShipMassTons) / totalShipMassTons : 1;
+            st.frontShield = Math.min(maxShieldCap, Math.min(maxShieldCap * capRatio, st.frontShield + shieldRegenStep));
+            st.aftShield = Math.min(maxShieldCap, Math.min(maxShieldCap * capRatio, st.aftShield + shieldRegenStep));
+            if (st.frameCounter % 30 === 0) {
+              setGravConverterTons(st.gravConverterTons ?? totalShipMassTons);
+            }
+          } else {
+            st.frontShield = 0;
+            st.aftShield = 0;
+          }
 
           // Чёрный фон ZX Spectrum
           ctx.fillStyle = '#000000';
@@ -6011,28 +10929,338 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               ctx.stroke();
             }
             ctx.fillStyle = '#ffff00';
-            ctx.font = 'bold 18px monospace';
+            ctx.font = 'bold 16px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(
-              `>>> HYPERSPACE JUMP TO ${GALAXY_SYSTEMS[st.hyperspaceTargetId].name} <<<`,
-              cx,
-              cy
-            );
+            const jumpBannerTitle =
+              activeConstellationStarJumpLabelRef.current ||
+              GALAXY_SYSTEMS[st.hyperspaceTargetId].name;
+            ctx.fillText(`>>> ГИПЕРПРЫЖОК: ${jumpBannerTitle.toUpperCase()} <<<`, cx, cy);
 
             if (st.hyperspaceTimer === 0) {
               const nextSys = st.hyperspaceTargetId;
+              const customStarDone = activeConstellationStarJumpLabelRef.current;
+              const nextSystemKey =
+                pendingConstellationSystemKeyRef.current || `sys:${nextSys}`;
+              activeConstellationStarJumpLabelRef.current = null;
+              pendingConstellationSystemKeyRef.current = null;
               setCurrentSystemId(nextSys);
-              spawnSystemEntities(nextSys);
-              setFlightMessage(`ARRIVED IN ${GALAXY_SYSTEMS[nextSys].name} · SCANNER ACTIVE`);
+              spawnSystemEntities(nextSys, nextSystemKey);
+              const sysAssign = getStarSystemFullAssignment(nextSystemKey);
+              const focusTarget = pendingFocusAfterJumpRef.current;
+              pendingFocusAfterJumpRef.current = null;
+              if (focusTarget) {
+                const targetObj = st.planets.find((p) => {
+                  if (focusTarget === 'DEATH_STAR') return Boolean(p.isDeathStar);
+                  if (focusTarget === 'TORUS_SHIP') return Boolean(p.isTorusShip);
+                  if (focusTarget === 'STARGATE') return Boolean(p.isStargate);
+                  const ord =
+                    focusTarget === 'PLANET_1'
+                      ? 1
+                      : focusTarget === 'PLANET_2'
+                      ? 2
+                      : focusTarget === 'PLANET_3'
+                      ? 3
+                      : 4;
+                  return p.orbitOrder === ord;
+                });
+                if (targetObj) {
+                  const cosA = Math.cos(targetObj.orbitAngle);
+                  const sinA = Math.sin(targetObj.orbitAngle);
+                  const offsetX =
+                    targetObj.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+                  const offsetY =
+                    targetObj.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+                  const offsetZ =
+                    targetObj.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+                  const closeDist = Math.round(targetObj.radius3D * 2.05);
+                  st.starPos = {
+                    x: -offsetX,
+                    y: -offsetY,
+                    z: closeDist - offsetZ,
+                  };
+                }
+              }
+              setFlightMessage(
+                customStarDone
+                  ? `★ ПРИБЫТИЕ К ЗВЕЗДЕ «${customStarDone.toUpperCase()}»: ПЛАНЕТЫ «${sysAssign.planets[0].officialName}» («${sysAssign.planets[0].folkName}») .. «${sysAssign.planets[3].officialName}» («${sysAssign.planets[3].folkName}») · ЗВЕЗДА СМЕРТИ «${sysAssign.deathStar.folkName}» · СТАНЦИЯ «${sysAssign.spaceStation.folkName}»`
+                  : `★ СИСТЕМА ${sysAssign.starName.toUpperCase()}: 4 УНИКАЛЬНЫЕ ПЛАНЕТЫ, ЗВЕЗДА СМЕРТИ «${sysAssign.deathStar.folkName}» И СТАНЦИЯ «${sysAssign.spaceStation.folkName}»`
+              );
             }
           } else if (screenMode === 'FLIGHT') {
+            // =========================================================================
+            // 0. ТРЁХОБРУЧЕВЫЙ ГИРОСКОП ОГНЕВОЙ РУБКИ И БЕСШОВНАЯ МЕШ-СИСТЕМА КАМЕР/ОРУДИЙ (360° БЕЗ ОГРАНИЧЕНИЙ):
+            // • Огневая рубка находится внутри корабля, кресло управления — 3-обручевый гироскоп,
+            //   а камеры и орудия в разных частях корабля объединены в единую Меш-систему (синтезированная модель космоса).
+            // • Манёвренность рубки НЕ ограничена ни углами (полная сфера 360° × 360°), ни массой корабля!
+            // • Когда указатель мыши дотрагивается до края 3D-экрана — Огневая Рубка поворачивается в эту сторону,
+            //   а зелёный «Путевой центр» (вектор движения корабля st.shipForward) и 3D-космос смещаются в противоположную.
+            // • Клавиша Ctrl плавно автоматически возвращает рубку в стандартное положение (Путевой центр посередине экрана).
+            // =========================================================================
+            const rotateVecAroundAxis3D = (v: Vec3, axis: Vec3, angleRad: number): Vec3 => {
+              if (Math.abs(angleRad) < 1e-8) return v;
+              const c = Math.cos(angleRad);
+              const s = Math.sin(angleRad);
+              const dot = axis.x * v.x + axis.y * v.y + axis.z * v.z;
+              const cxV = axis.y * v.z - axis.z * v.y;
+              const cyV = axis.z * v.x - axis.x * v.z;
+              const czV = axis.x * v.y - axis.y * v.x;
+              return {
+                x: v.x * c + cxV * s + axis.x * dot * (1 - c),
+                y: v.y * c + cyV * s + axis.y * dot * (1 - c),
+                z: v.z * c + czV * s + axis.z * dot * (1 - c),
+              };
+            };
+
+            const orthonormalizeBasis3D = (
+              rVec: Vec3,
+              uVec: Vec3,
+              fVec: Vec3
+            ): {r: Vec3; u: Vec3; f: Vec3} => {
+              const fLen = Math.hypot(fVec.x, fVec.y, fVec.z) || 1;
+              const f: Vec3 = {x: fVec.x / fLen, y: fVec.y / fLen, z: fVec.z / fLen};
+              const dotUF = uVec.x * f.x + uVec.y * f.y + uVec.z * f.z;
+              const uRaw: Vec3 = {
+                x: uVec.x - dotUF * f.x,
+                y: uVec.y - dotUF * f.y,
+                z: uVec.z - dotUF * f.z,
+              };
+              const uLen = Math.hypot(uRaw.x, uRaw.y, uRaw.z) || 1;
+              const u: Vec3 = {x: uRaw.x / uLen, y: uRaw.y / uLen, z: uRaw.z / uLen};
+              // r = u × f (в правой тройке View-Space: X=(1,0,0), Y=(0,1,0), Z=(0,0,1) -> Y × Z = (1,0,0) = X)
+              const r: Vec3 = {
+                x: u.y * f.z - u.z * f.y,
+                y: u.z * f.x - u.x * f.z,
+                z: u.x * f.y - u.y * f.x,
+              };
+              const rLen = Math.hypot(r.x, r.y, r.z) || 1;
+              return {
+                r: {x: r.x / rLen, y: r.y / rLen, z: r.z / rLen},
+                u,
+                f,
+              };
+            };
+
+            const EDGE_ZONE_X = 62;
+            const EDGE_ZONE_Y = 46;
+            let edgeYawInput = 0;
+            let edgePitchInput = 0;
+
+            // Когда табличка объекта открыта (компактная [I] или полная [,]) или курсор находится на табличке,
+            // движение курсора к краю экрана НЕ вызывает вращение Огневой Рубки!
+            const isPlacardLockingCabin =
+              activeObjectProfileRef.current !== null ||
+              isHoveringObjectCardRef.current ||
+              isHoveringAutopilotCardRef.current;
+
+            if (isPlacardLockingCabin) {
+              st.cabinYawRate = 0;
+              st.cabinPitchRate = 0;
+            } else if (st.cabinMouseIn3DWindow) {
+              if (st.cabinRawMouseX < EDGE_ZONE_X) {
+                const norm = Math.max(0, Math.min(1, (EDGE_ZONE_X - st.cabinRawMouseX) / EDGE_ZONE_X));
+                edgeYawInput = -(0.32 + 0.68 * norm * norm);
+              } else if (st.cabinRawMouseX > width - EDGE_ZONE_X) {
+                const norm = Math.max(
+                  0,
+                  Math.min(1, (st.cabinRawMouseX - (width - EDGE_ZONE_X)) / EDGE_ZONE_X)
+                );
+                edgeYawInput = +(0.32 + 0.68 * norm * norm);
+              }
+
+              if (st.cabinRawMouseY < EDGE_ZONE_Y) {
+                const norm = Math.max(0, Math.min(1, (EDGE_ZONE_Y - st.cabinRawMouseY) / EDGE_ZONE_Y));
+                edgePitchInput = +(0.32 + 0.68 * norm * norm);
+              } else if (st.cabinRawMouseY > height - EDGE_ZONE_Y) {
+                const norm = Math.max(
+                  0,
+                  Math.min(1, (st.cabinRawMouseY - (height - EDGE_ZONE_Y)) / EDGE_ZONE_Y)
+                );
+                edgePitchInput = -(0.32 + 0.68 * norm * norm);
+              }
+            }
+
+            if (edgeYawInput !== 0 || edgePitchInput !== 0) {
+              // Касание края экрана мышью мгновенно берёт управление 3-обручевым гироскопом на себя
+              st.cabinAutoCentering = false;
+            }
+
+            // Угловая скорость 3-обручевого гироскопа Меш-Рубки НЕ ограничена массой корабля (1.68 рад/с ≈ 96°/с)
+            const MAX_CABIN_GYRO_RAD_PER_SEC = 1.68;
+            const targetCabinYawStep = edgeYawInput * MAX_CABIN_GYRO_RAD_PER_SEC * dtSec;
+            const targetCabinPitchStep = edgePitchInput * MAX_CABIN_GYRO_RAD_PER_SEC * dtSec;
+            const cabinSmooth = Math.min(1, dtSec * 14);
+            st.cabinYawRate += (targetCabinYawStep - st.cabinYawRate) * cabinSmooth;
+            st.cabinPitchRate += (targetCabinPitchStep - st.cabinPitchRate) * cabinSmooth;
+            if (edgeYawInput === 0 && Math.abs(st.cabinYawRate) < 1e-5) st.cabinYawRate = 0;
+            if (edgePitchInput === 0 && Math.abs(st.cabinPitchRate) < 1e-5) st.cabinPitchRate = 0;
+
+            if (Math.abs(st.cabinYawRate) > 1e-6 || Math.abs(st.cabinPitchRate) > 1e-6) {
+              const cosCY = Math.cos(st.cabinYawRate);
+              const sinCY = Math.sin(st.cabinYawRate);
+              const cosCP = Math.cos(st.cabinPitchRate);
+              const sinCP = Math.sin(st.cabinPitchRate);
+
+              // Когда рубка поворачивается в сторону края экрана (cabinYawRate / cabinPitchRate),
+              // весь 3D-мир И Путевой центр корабля (shipForward/shipUp/shipRight) смещаются в ПРОТИВОПОЛОЖНУЮ сторону!
+              const rotateByCabinGyro = (v: Vec3): Vec3 => {
+                const x1 = v.x * cosCY - v.z * sinCY;
+                const y1 = v.y;
+                const z1 = v.x * sinCY + v.z * cosCY;
+                const y2 = y1 * cosCP - z1 * sinCP;
+                const z2 = y1 * sinCP + z1 * cosCP;
+                return {x: x1, y: y2, z: z2};
+              };
+
+              st.shipForward = rotateByCabinGyro(st.shipForward);
+              st.shipUp = rotateByCabinGyro(st.shipUp);
+              st.shipRight = rotateByCabinGyro(st.shipRight);
+              st.eclipticU = rotateByCabinGyro(st.eclipticU);
+              st.eclipticV = rotateByCabinGyro(st.eclipticV);
+              st.eclipticN = rotateByCabinGyro(st.eclipticN);
+              st.starPos = rotateByCabinGyro(st.starPos);
+              if (activeAutopilot) {
+                activeAutopilot.camPos = rotateByCabinGyro(activeAutopilot.camPos);
+              }
+              for (let i = 0; i < st.stars.length; i++) {
+                st.stars[i] = rotateByCabinGyro(st.stars[i]);
+              }
+              for (let i = 0; i < st.debris.length; i++) {
+                st.debris[i].pos = rotateByCabinGyro(st.debris[i].pos);
+                st.debris[i].vel = rotateByCabinGyro(st.debris[i].vel);
+              }
+            } else if (st.cabinAutoCentering) {
+              // ПЛАВНЫЙ АВТОМАТИЧЕСКИЙ ВОЗВРАТ ОГНЕВОЙ РУБКИ ПО КЛАВИШЕ CTRL:
+              // Плавно совмещаем истинный нос корабля (st.shipForward) с центром экрана (0, 0, 1)
+              // и выравниваем горизонт гироскопа (st.shipUp -> (0, 1, 0), st.shipRight -> (1, 0, 0))
+              const cosFwd = Math.max(-1, Math.min(1, st.shipForward.z));
+              const fwdAngleErr = Math.acos(cosFwd);
+
+              if (fwdAngleErr > 0.0012) {
+                // Ось вращения, ведущая Путевой центр строго по прямой к середине экрана: shipForward × (0, 0, 1)
+                let axX = st.shipForward.y;
+                let axY = -st.shipForward.x;
+                let axZ = 0;
+                let axLen = Math.hypot(axX, axY, axZ);
+                if (axLen < 1e-5) {
+                  // Если рубка развёрнута ровно на 180° назад — поворачиваем вокруг вертикальной оси корабля st.shipUp
+                  axX = st.shipUp.x;
+                  axY = st.shipUp.y;
+                  axZ = st.shipUp.z;
+                  axLen = Math.hypot(axX, axY, axZ) || 1;
+                }
+                const unitAx: Vec3 = {x: axX / axLen, y: axY / axLen, z: axZ / axLen};
+                const stepAngle = Math.min(fwdAngleErr, (1.45 + fwdAngleErr * 4.2) * dtSec);
+
+                const rotCenter = (v: Vec3): Vec3 => rotateVecAroundAxis3D(v, unitAx, stepAngle);
+                st.shipForward = rotCenter(st.shipForward);
+                st.shipUp = rotCenter(st.shipUp);
+                st.shipRight = rotCenter(st.shipRight);
+                st.eclipticU = rotCenter(st.eclipticU);
+                st.eclipticV = rotCenter(st.eclipticV);
+                st.eclipticN = rotCenter(st.eclipticN);
+                st.starPos = rotCenter(st.starPos);
+                if (activeAutopilot) {
+                  activeAutopilot.camPos = rotCenter(activeAutopilot.camPos);
+                }
+                for (let i = 0; i < st.stars.length; i++) {
+                  st.stars[i] = rotCenter(st.stars[i]);
+                }
+                for (let i = 0; i < st.debris.length; i++) {
+                  st.debris[i].pos = rotCenter(st.debris[i].pos);
+                  st.debris[i].vel = rotCenter(st.debris[i].vel);
+                }
+              }
+
+              // Плавная доводка крена 3-го обруча гироскопа вокруг оси курса корабля
+              const rollErr = Math.atan2(st.shipRight.y, st.shipRight.x);
+              if (st.shipForward.z > -0.85 && Math.abs(rollErr) > 0.0012) {
+                const stepRoll =
+                  -Math.sign(rollErr) *
+                  Math.min(Math.abs(rollErr), (1.7 + Math.abs(rollErr) * 4.5) * dtSec);
+                const rotRoll = (v: Vec3): Vec3 =>
+                  rotateVecAroundAxis3D(v, st.shipForward, stepRoll);
+                st.shipUp = rotRoll(st.shipUp);
+                st.shipRight = rotRoll(st.shipRight);
+                st.eclipticU = rotRoll(st.eclipticU);
+                st.eclipticV = rotRoll(st.eclipticV);
+                st.eclipticN = rotRoll(st.eclipticN);
+                st.starPos = rotRoll(st.starPos);
+                if (activeAutopilot) {
+                  activeAutopilot.camPos = rotRoll(activeAutopilot.camPos);
+                }
+                for (let i = 0; i < st.stars.length; i++) {
+                  st.stars[i] = rotRoll(st.stars[i]);
+                }
+                for (let i = 0; i < st.debris.length; i++) {
+                  st.debris[i].pos = rotRoll(st.debris[i].pos);
+                  st.debris[i].vel = rotRoll(st.debris[i].vel);
+                }
+              }
+
+              const remFwdErr = Math.acos(Math.max(-1, Math.min(1, st.shipForward.z)));
+              const remRollErr = Math.abs(Math.atan2(st.shipRight.y, st.shipRight.x));
+              if (remFwdErr <= 0.0016 && remRollErr <= 0.0016) {
+                st.shipForward = {x: 0, y: 0, z: 1};
+                st.shipUp = {x: 0, y: 1, z: 0};
+                st.shipRight = {x: 1, y: 0, z: 0};
+                st.cabinAutoCentering = false;
+              }
+            }
+
+            // Поддерживаем строгую ортогональность базиса корабля в View-Space
+            const normShipBasis = orthonormalizeBasis3D(st.shipRight, st.shipUp, st.shipForward);
+            st.shipRight = normShipBasis.r;
+            st.shipUp = normShipBasis.u;
+            st.shipForward = normShipBasis.f;
+
+            // Вспомогательное вращение любого вектора мира в собственном базисе корпуса корабля (вокруг Путевого центра)
+            const rotateWorldVecInShipBasis = (
+              v: Vec3,
+              cosR: number,
+              sinR: number,
+              cosP: number,
+              sinP: number,
+              cosY: number = 1,
+              sinY: number = 0
+            ): Vec3 => {
+              const rx = st.shipRight.x,
+                ry = st.shipRight.y,
+                rz = st.shipRight.z;
+              const ux = st.shipUp.x,
+                uy = st.shipUp.y,
+                uz = st.shipUp.z;
+              const fx = st.shipForward.x,
+                fy = st.shipForward.y,
+                fz = st.shipForward.z;
+              // 1) Проекция на оси корпуса корабля
+              const lx = v.x * rx + v.y * ry + v.z * rz;
+              const ly = v.x * ux + v.y * uy + v.z * uz;
+              const lz = v.x * fx + v.y * fy + v.z * fz;
+              // 2) Рысканье (для Автопилота), Крен и Тангаж относительно носа корабля (Путевого центра)
+              const xYaw = lx * cosY - lz * sinY;
+              const zYaw = lx * sinY + lz * cosY;
+              const xRoll = xYaw * cosR - ly * sinR;
+              const yRoll = xYaw * sinR + ly * cosR;
+              const yPitch = yRoll * cosP - zYaw * sinP;
+              const zPitch = yRoll * sinP + zYaw * cosP;
+              // 3) Возврат в View-Space Меш-Рубки
+              return {
+                x: xRoll * rx + yPitch * ux + zPitch * fx,
+                y: xRoll * ry + yPitch * uy + zPitch * fy,
+                z: xRoll * rz + yPitch * uz + zPitch * fz,
+              };
+            };
+
             if (activeAutopilot) {
-              // АВТОПИЛОТ (Q): Плавное помещение захваченного объекта строго в центр экрана (cx, cy -> x=0, y=0)
-              // и движение корабля в его сторону!
-              const tx = activeAutopilot.camPos.x;
-              const ty = activeAutopilot.camPos.y;
-              const tz = activeAutopilot.camPos.z;
-              const dist3D = Math.max(1, Math.hypot(tx, ty, tz));
+              // АВТОПИЛОТ (Q): Плавное наведение Путевого центра корабля (st.shipForward) на захваченный объект
+              // и движение корабля в его сторону (при этом Меш-Рубку можно свободно вращать на 360°!)
+              const camT = activeAutopilot.camPos;
+              const tx =
+                camT.x * st.shipRight.x + camT.y * st.shipRight.y + camT.z * st.shipRight.z;
+              const ty = camT.x * st.shipUp.x + camT.y * st.shipUp.y + camT.z * st.shipUp.z;
+              const tz =
+                camT.x * st.shipForward.x + camT.y * st.shipForward.y + camT.z * st.shipForward.z;
+              const dist3D = Math.max(1, Math.hypot(camT.x, camT.y, camT.z));
 
               const yawErr = Math.atan2(tx, Math.max(15, tz));
               const pitchErr = Math.atan2(ty, Math.max(15, Math.hypot(tx, tz)));
@@ -6045,14 +11273,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               const cosP = Math.cos(dPitch);
               const sinP = Math.sin(dPitch);
 
-              const rotateAutopilotVec = (v: Vec3): Vec3 => {
-                const x1 = v.x * cosY - v.z * sinY;
-                const y1 = v.y;
-                const z1 = v.x * sinY + v.z * cosY;
-                const y2 = y1 * cosP - z1 * sinP;
-                const z2 = y1 * sinP + z1 * cosP;
-                return {x: x1, y: y2, z: z2};
-              };
+              const rotateAutopilotVec = (v: Vec3): Vec3 =>
+                rotateWorldVecInShipBasis(v, 1, 0, cosP, sinP, cosY, sinY);
 
               st.eclipticU = rotateAutopilotVec(st.eclipticU);
               st.eclipticV = rotateAutopilotVec(st.eclipticV);
@@ -6063,9 +11285,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               const rotTargetLen = Math.max(1, Math.hypot(rotTarget.x, rotTarget.y, rotTarget.z));
 
               const remainDist = Math.max(0, dist3D - activeAutopilot.standoffDist);
+              const isMovingTrajectoryTarget = Boolean(
+                activeAutopilot.entityId ||
+                  (activeAutopilot.planetId &&
+                    st.planets.some((p) => p.id === activeAutopilot.planetId && p.isStargate))
+              );
               const approachStep =
                 remainDist > 1.5
-                  ? Math.min(st.speed * dtSec, remainDist * Math.min(1, dtSec * 3.8))
+                  ? isMovingTrajectoryTarget
+                    ? Math.min(st.speed * dtSec, remainDist)
+                    : Math.min(st.speed * dtSec, remainDist * Math.min(1, dtSec * 3.8))
                   : 0;
 
               st.starPos = {
@@ -6079,26 +11308,21 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               const cosPitch = Math.cos(st.pitchRate);
               const sinPitch = Math.sin(st.pitchRate);
 
-              const rotateCamVec = (v: Vec3): Vec3 => {
-                const x1 = v.x * cosRoll - v.y * sinRoll;
-                const y1 = v.x * sinRoll + v.y * cosRoll;
-                const y2 = y1 * cosPitch - v.z * sinPitch;
-                const z2 = y1 * sinPitch + v.z * cosPitch;
-                return {x: x1, y: y2, z: z2};
-              };
+              const rotateCamVec = (v: Vec3): Vec3 =>
+                rotateWorldVecInShipBasis(v, cosRoll, sinRoll, cosPitch, sinPitch);
 
-              // Вращаем 3D-базис плоскости эклиптики и позицию Центральной Звезды
+              // Вращаем 3D-базис плоскости эклиптики и позицию Центральной Звезды вокруг осей корпуса корабля
               st.eclipticU = rotateCamVec(st.eclipticU);
               st.eclipticV = rotateCamVec(st.eclipticV);
               st.eclipticN = rotateCamVec(st.eclipticN);
 
               const rotStar = rotateCamVec(st.starPos);
-              // Точное смещение по реальному времени dtSec: при st.speed = 100 ед/с корабль проходит 6000 ед за 60 сек (1 мин) и 30000 ед за 300 сек (5 мин)!
+              // Корабль движется строго по направлению своего зелёного «Путевого центра» (st.shipForward)!
               const forwardStep = st.speed * dtSec;
               st.starPos = {
-                x: rotStar.x,
-                y: rotStar.y,
-                z: rotStar.z - forwardStep,
+                x: rotStar.x - st.shipForward.x * forwardStep,
+                y: rotStar.y - st.shipForward.y * forwardStep,
+                z: rotStar.z - st.shipForward.z * forwardStep,
               };
             }
 
@@ -6148,8 +11372,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 isHoveringPopupRef.current ||
                 Boolean(isAutopilotTargetingThisPlanet);
 
-              if (!isAutopilotTargetingThisPlanet) {
-                planet.orbitAngle += planet.orbitSpeed * (dtSec * 60);
+              if (!isAutopilotTargetingThisPlanet || planet.isStargate) {
+                // Планета (и Звёздные Врата) движется по своей орбите ровно с ЧЕТВЕРТЬЮ (1/4) линейной скорости своего автоматического модуля (25 ед/с от 100 ед/с):
+                // поскольку радиус орбит у планет разный (6000, 12000, 18000, 24000 ед.), угловая скорость ω = V_orbit / R разная,
+                // и расстояние между планетами постоянно меняется!
+                const planetOrbitLinearSpd = MAX_SYSTEM_SPEED * 0.25;
+                planet.orbitAngle += (planetOrbitLinearSpd / planet.orbitRadius) * dtSec;
               }
 
               if (lockedPlanet && planet.id === lockedPlanet.id) {
@@ -6183,6 +11411,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               }
             }
 
+            const currentSphereScale = SYSTEM_SPHERE_RADIUS;
+
             if (lockedPlanet && lockedPlanetCamPos) {
               const newCosA = Math.cos(lockedPlanet.orbitAngle);
               const newSinA = Math.sin(lockedPlanet.orbitAngle);
@@ -6201,10 +11431,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     (newCosA * st.eclipticU.z + newSinA * st.eclipticV.z),
               };
             } else {
-              // ОГРАНИЧЕНИЕ ЗОНЫ СИСТЕМЫ СФЕРОЙ (R = 30 000 вокруг Центральной Звезды):
+              // ОГРАНИЧЕНИЕ ЗОНЫ СИСТЕМЫ СФЕРОЙ (R = 100 000 ед. вокруг Центральной Звезды):
               const distFromStarCenter = Math.hypot(st.starPos.x, st.starPos.y, st.starPos.z);
-              if (distFromStarCenter > SYSTEM_SPHERE_RADIUS) {
-                const clampRatio = SYSTEM_SPHERE_RADIUS / distFromStarCenter;
+              if (distFromStarCenter > currentSphereScale) {
+                const clampRatio = currentSphereScale / distFromStarCenter;
                 st.starPos.x *= clampRatio;
                 st.starPos.y *= clampRatio;
                 st.starPos.z *= clampRatio;
@@ -6213,10 +11443,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
             ctx.save();
             ctx.beginPath();
-            ctx.rect(0, 0, width, viewH);
+            ctx.rect(0, 0, width, height);
             ctx.clip();
 
-            // 1. РЕНДЕР ОГРАНИЧИВАЮЩЕЙ 3D-СФЕРЫ СИСТЕМЫ (R = 30 000 вокруг Центральной Звезды)
+            // 1. РЕНДЕР ОГРАНИЧИВАЮЩЕЙ 3D-СФЕРЫ СИСТЕМЫ (масштаб R = 100 000 ед. вокруг Центральной Звезды)
             // Тонкая сферическая сетка меридианов и параллелей границы звёздной системы
             const sphereLatitudes = [-45, 0, 45];
             const sphereSegments = 120;
@@ -6243,13 +11473,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 const dirZ =
                   cLat * (cLon * st.eclipticU.z + sLon * st.eclipticV.z) + sLat * st.eclipticN.z;
 
-                const bx = st.starPos.x + dirX * SYSTEM_SPHERE_RADIUS;
-                const by = st.starPos.y + dirY * SYSTEM_SPHERE_RADIUS;
-                const bz = st.starPos.z + dirZ * SYSTEM_SPHERE_RADIUS;
+                const bx = st.starPos.x + dirX * currentSphereScale;
+                const by = st.starPos.y + dirY * currentSphereScale;
+                const bz = st.starPos.z + dirZ * currentSphereScale;
                 if (bz > 60) {
                   const bsx = cx + (bx * 380) / bz;
                   const bsy = cy - (by * 380) / bz;
-                  if (bsx > -1600 && bsx < width + 1600 && bsy > -1600 && bsy < viewH + 1600) {
+                  if (bsx > -1600 && bsx < width + 1600 && bsy > -1600 && bsy < height + 1600) {
                     if (!pen) {
                       ctx.moveTo(bsx, bsy);
                       pen = true;
@@ -6279,13 +11509,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 const theta = (s / sphereSegments) * Math.PI * 2;
                 const cT = Math.cos(theta);
                 const sT = Math.sin(theta);
-                const bx = st.starPos.x + (cT * mVecX + sT * st.eclipticN.x) * SYSTEM_SPHERE_RADIUS;
-                const by = st.starPos.y + (cT * mVecY + sT * st.eclipticN.y) * SYSTEM_SPHERE_RADIUS;
-                const bz = st.starPos.z + (cT * mVecZ + sT * st.eclipticN.z) * SYSTEM_SPHERE_RADIUS;
+                const bx = st.starPos.x + (cT * mVecX + sT * st.eclipticN.x) * currentSphereScale;
+                const by = st.starPos.y + (cT * mVecY + sT * st.eclipticN.y) * currentSphereScale;
+                const bz = st.starPos.z + (cT * mVecZ + sT * st.eclipticN.z) * currentSphereScale;
                 if (bz > 60) {
                   const bsx = cx + (bx * 380) / bz;
                   const bsy = cy - (by * 380) / bz;
-                  if (bsx > -1600 && bsx < width + 1600 && bsy > -1600 && bsy < viewH + 1600) {
+                  if (bsx > -1600 && bsx < width + 1600 && bsy > -1600 && bsy < height + 1600) {
                     if (!pen) {
                       ctx.moveTo(bsx, bsy);
                       pen = true;
@@ -6306,6 +11536,357 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             // 2. РЕНДЕР ЭКЛИПТИКИ СИСТЕМЫ: Еле заметные пунктирные орбиты 4 планет (R = 6000, 12000, 18000, 24000)
             const frameProjectedPlanetObjects: ProjectedPlanetObjectHit[] = [];
             const frameScreenTargets: ProjectedScreenTargetHit[] = [];
+
+            // =========================================================================
+            // 1B. ПРОЕКЦИЯ 10 ЗНАМЕНИТЫХ СОЗВЕЗДИЙ И СОСЕДНИХ ГАЛАКТИК (АНДРОМЕДА M31, LMC, SMC, M33)
+            // НА 3D-КУПОЛ НЕБЕСНОЙ СФЕРЫ (простые геометрические линии и точечные спрайты звёзд)
+            // =========================================================================
+            const skyDomeMode = constellationDisplayModeRef.current;
+            const CELESTIAL_DOME_DIST = 65000;
+
+            const projectSkyDomeLonLat = (
+              lonDeg: number,
+              latDeg: number
+            ): {sx: number; sy: number; dirX: number; dirY: number; dirZ: number; visible: boolean} => {
+              const lonRad = (lonDeg * Math.PI) / 180;
+              const latRad = (latDeg * Math.PI) / 180;
+              const cLat = Math.cos(latRad);
+              const sLat = Math.sin(latRad);
+              const cLon = Math.cos(lonRad);
+              const sLon = Math.sin(lonRad);
+
+              const dirX =
+                cLat * (cLon * st.eclipticU.x + sLon * st.eclipticV.x) + sLat * st.eclipticN.x;
+              const dirY =
+                cLat * (cLon * st.eclipticU.y + sLon * st.eclipticV.y) + sLat * st.eclipticN.y;
+              const dirZ =
+                cLat * (cLon * st.eclipticU.z + sLon * st.eclipticV.z) + sLat * st.eclipticN.z;
+
+              if (dirZ <= 0.10) {
+                return {sx: -9999, sy: -9999, dirX, dirY, dirZ, visible: false};
+              }
+              const sx = cx + (dirX * 380) / dirZ;
+              const sy = cy - (dirY * 380) / dirZ;
+              const visible = sx >= -350 && sx <= width + 350 && sy >= -350 && sy <= height + 350;
+              return {sx, sy, dirX, dirY, dirZ, visible};
+            };
+
+            // =========================================================================
+            // 1A. МЛЕЧНЫЙ ПУТЬ (СВЕТЯЩАЯСЯ ГАЛАКТИЧЕСКАЯ РЕКА, ЗВЁЗДНАЯ ПЫЛЬ И ЦЕНТРАЛЬНЫЙ БАЛДЖ)
+            // =========================================================================
+            for (let i = 0; i < CELESTIAL_MILKY_WAY_CLOUDS.length; i++) {
+              const cloud = CELESTIAL_MILKY_WAY_CLOUDS[i];
+              const pCloud = projectSkyDomeLonLat(cloud.lonDeg, cloud.latDeg);
+              if (!pCloud.visible) continue;
+
+              const perspective = Math.min(1.4, Math.max(0.7, 0.85 / pCloud.dirZ));
+              const r = cloud.radiusPx * perspective;
+
+              ctx.save();
+              ctx.translate(pCloud.sx, pCloud.sy);
+              ctx.rotate(cloud.tiltRad + st.bankAngle * 0.12);
+
+              const sX = cloud.scaleX ?? (cloud.isDustLane ? 1.6 : 1.35);
+              const sY = cloud.scaleY ?? 0.65;
+              ctx.scale(sX, sY);
+
+              const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+              if (cloud.isDustLane) {
+                // Мягчайшие полупрозрачные пылевые волокна (никаких чёрных резких кусков!)
+                grad.addColorStop(0, cloud.coreColor);
+                grad.addColorStop(0.45, cloud.midColor);
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+              } else {
+                grad.addColorStop(0, cloud.coreColor);
+                grad.addColorStop(0.35, cloud.midColor);
+                if (cloud.outerColor) {
+                  grad.addColorStop(0.7, cloud.outerColor);
+                }
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+              }
+
+              ctx.fillStyle = grad;
+              ctx.beginPath();
+              ctx.arc(0, 0, r, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+
+            // =========================================================================
+            // 1B. МИКРО-ЗВЁЗДЫ («БИТЫЕ ПИКСЕЛИ НА ЭКРАНЕ»): РОССЫПЬ 1450 ОСТРЫХ ПИКСЕЛЕЙ С МЕРЦАНИЕМ
+            // =========================================================================
+            const cosmicTimeSec = (st.frameCounter || 0) * 0.016;
+            ctx.save();
+            for (let i = 0; i < CELESTIAL_MICRO_STARS.length; i++) {
+              const ms = CELESTIAL_MICRO_STARS[i];
+              const pStar = projectSkyDomeLonLat(ms.lonDeg, ms.latDeg);
+              if (!pStar.visible) continue;
+
+              // Мягкая сцинтилляция (мерцание)
+              const twinkle = 0.82 + 0.18 * Math.sin(cosmicTimeSec * ms.twinkleSpeed + ms.twinklePhase);
+              const alpha = Math.max(0.18, Math.min(1.0, ms.baseBrightness * twinkle));
+
+              ctx.fillStyle = ms.color;
+              ctx.globalAlpha = alpha;
+
+              const px = Math.round(pStar.sx);
+              const py = Math.round(pStar.sy);
+
+              // Резкий битый пиксель на космическом экране
+              ctx.fillRect(px, py, ms.size, ms.size);
+            }
+            ctx.restore();
+
+            // В режиме названий отмечаем трассу Млечного Пути
+            if (skyDomeMode === 'LABELS_AND_LINES') {
+              const pMw = projectSkyDomeLonLat(45, 10);
+              if (pMw.visible) {
+                ctx.save();
+                ctx.fillStyle = 'rgba(251, 191, 36, 0.78)';
+                ctx.font = 'bold 8.5px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('🌌 МЛЕЧНЫЙ ПУТЬ (Milky Way · Рукав Ориона)', pMw.sx, pMw.sy);
+                ctx.restore();
+              }
+            }
+
+            // А) Рендер соседних галактик (Галактика Андромеды M31 + спутники, Большое и Малое Магеллановы Облака, Треугольник M33)
+            ctx.save();
+            for (const gal of NEIGHBORING_CELESTIAL_GALAXIES) {
+              const pGal = projectSkyDomeLonLat(gal.lonDeg, gal.latDeg);
+              if (!pGal.visible) continue;
+
+              const perspectiveScale = Math.min(1.35, Math.max(0.75, 0.85 / pGal.dirZ));
+              const majR = gal.majorRadiusPx * perspectiveScale;
+              const minR = gal.minorRadiusPx * perspectiveScale;
+
+              ctx.save();
+              ctx.translate(pGal.sx, pGal.sy);
+              ctx.rotate(gal.tiltRad + st.bankAngle * 0.15);
+
+              if (gal.kind === 'SPIRAL') {
+                // Внешний и внутренний наклонные геометрические контуры спиральной галактики
+                ctx.strokeStyle = gal.armColor;
+                ctx.globalAlpha = 0.42;
+                ctx.lineWidth = 1.1;
+                ctx.setLineDash([3, 4]);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, majR, minR, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.globalAlpha = 0.65;
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, majR * 0.52, minR * 0.52, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Два геометрических спиральных рукава из точечных спрайтов звёзд
+                for (let arm = 0; arm < 2; arm++) {
+                  const armOffset = arm * Math.PI;
+                  for (let k = 1; k <= 14; k++) {
+                    const t = k / 14;
+                    const theta = armOffset + t * Math.PI * 1.65;
+                    const rx = Math.cos(theta) * majR * t;
+                    const ry = Math.sin(theta) * minR * t;
+                    ctx.fillStyle = k < 5 ? gal.coreColor : gal.armColor;
+                    ctx.globalAlpha = 0.88 - t * 0.45;
+                    const ptSize = k < 4 ? 2.2 : 1.6;
+                    ctx.fillRect(rx - ptSize / 2, ry - ptSize / 2, ptSize, ptSize);
+                  }
+                }
+
+                // Спутники Андромеды (M32 и M110) как малые эллиптические кластеры рядом
+                if (gal.id === 'galaxy-andromeda-m31') {
+                  ctx.globalAlpha = 0.75;
+                  ctx.strokeStyle = '#e9d5ff';
+                  ctx.beginPath();
+                  ctx.arc(majR * 0.62, -minR * 1.15, 3.2, 0, Math.PI * 2);
+                  ctx.stroke();
+                  ctx.beginPath();
+                  ctx.arc(-majR * 0.48, minR * 1.35, 2.6, 0, Math.PI * 2);
+                  ctx.stroke();
+                }
+              } else {
+                // Малые соседние карликовые галактики (Большое и Малое Магеллановы Облака):
+                // геометрический контур облака + осевая звёздная перемычка + россыпь точечных спрайтов
+                ctx.strokeStyle = gal.armColor;
+                ctx.globalAlpha = 0.38;
+                ctx.lineWidth = 1.0;
+                ctx.setLineDash([2, 4]);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, majR, minR, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Центральная перемычка карликовой галактики
+                ctx.globalAlpha = 0.55;
+                ctx.beginPath();
+                ctx.moveTo(-majR * 0.55, -minR * 0.15);
+                ctx.lineTo(majR * 0.55, minR * 0.15);
+                ctx.stroke();
+
+                for (let k = 0; k < 18; k++) {
+                  const ang = k * 2.39996; // золотой угол для естественного распределения звёздного облака
+                  const dist = Math.sqrt((k + 0.5) / 18);
+                  const px = Math.cos(ang) * majR * 0.85 * dist;
+                  const py = Math.sin(ang) * minR * 0.85 * dist;
+                  ctx.fillStyle = k % 3 === 0 ? gal.coreColor : gal.armColor;
+                  ctx.globalAlpha = 0.82 - dist * 0.35;
+                  const sSize = k < 4 ? 2.1 : 1.5;
+                  ctx.fillRect(px - sSize / 2, py - sSize / 2, sSize, sSize);
+                }
+              }
+
+              // Яркое ядро галактики (обозначаем звёздочкой ★)
+              drawCelestialStarShape(ctx, 0, 0, 2.2, gal.coreColor, true);
+              ctx.restore();
+
+              if (skyDomeMode === 'LABELS_AND_LINES') {
+                ctx.save();
+                ctx.fillStyle = gal.coreColor;
+                ctx.globalAlpha = 0.82;
+                ctx.font = 'bold 9px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(
+                  `✦ ${gal.nameRu.toUpperCase()} (${gal.code})`,
+                  pGal.sx,
+                  pGal.sy - minR - 7
+                );
+                ctx.restore();
+              }
+
+              // Регистрируем галактику для инспектора (Курсор + I) и наведения автопилота (Курсор + Q)
+              if (pGal.sx >= 0 && pGal.sx <= width && pGal.sy >= 0 && pGal.sy <= height) {
+                frameScreenTargets.push({
+                  id: gal.id,
+                  canvasX: pGal.sx,
+                  canvasY: pGal.sy,
+                  hitRadius: Math.max(24, majR + 8),
+                  priority: 2,
+                  camPos: {
+                    x: pGal.dirX * CELESTIAL_DOME_DIST,
+                    y: pGal.dirY * CELESTIAL_DOME_DIST,
+                    z: pGal.dirZ * CELESTIAL_DOME_DIST,
+                  },
+                  standoffDist: CELESTIAL_DOME_DIST,
+                  targetMassTons: 999999,
+                  targetMassLabel: `Галактика (${gal.distanceLabel})`,
+                  profile: {
+                    id: gal.id,
+                    kind: 'STAR',
+                    systemTag: gal.code,
+                    color: gal.coreColor,
+                    name: gal.nameRu,
+                    nickname: `${gal.code} · ${gal.distanceLabel}`,
+                    description: gal.description,
+                    groupsTitle: 'Астрономический каталог Местной группы галактик',
+                    groupsDescription:
+                      'Внегалактический навигационный ориентир на 3D-куполе небесной сферы.',
+                    businessesTitle: `Удалённость: ${gal.distanceLabel}`,
+                    businessesDescription:
+                      'Проекция глубокого космоса вращается синхронно с тангажом и креном корабля.',
+                    karmaPlus: 100,
+                    karmaMinus: 0,
+                    distanceUnits: CELESTIAL_DOME_DIST,
+                    coordsLabel: `Долгота ${gal.lonDeg}° · Широта ${gal.latDeg}° (${gal.distanceLabel})`,
+                  },
+                });
+              }
+            }
+
+            // Б) Рендер 10 самых знаменитых созвездий:
+            // • Трассировка (соединительные линии) в созвездиях полностью убрана.
+            // • Все звёзды обозначаются именно звёздочками (★), чтобы отличать их от круглых планет своей системы.
+            // • В карточку созвездия включены все звёзды системы и возле каждой доступна функция «Гиперпрыжок».
+            for (const con of FAMOUS_CELESTIAL_CONSTELLATIONS) {
+              const projectedStars = con.stars.map((stDef, sIdx) => ({
+                ...stDef,
+                sIdx,
+                proj: projectSkyDomeLonLat(stDef.lonDeg, stDef.latDeg),
+              }));
+
+              let sumX = 0;
+              let sumY = 0;
+              let visCount = 0;
+
+              for (const sItem of projectedStars) {
+                const {proj} = sItem;
+                if (!proj.visible) continue;
+                sumX += proj.sx;
+                sumY += proj.sy;
+                visCount += 1;
+
+                // Отрисовываем каждую звезду созвездия именно пятиконечной звёздочкой (★)
+                drawCelestialStarShape(
+                  ctx,
+                  proj.sx,
+                  proj.sy,
+                  sItem.radius,
+                  sItem.color,
+                  sItem.isAlpha
+                );
+
+                // Регистрируем КАЖДУЮ видимую звезду созвездия для открытия карточки созвездия (Курсор + I)
+                // со списком всех звёзд системы и кнопкой «Гиперпрыжок» возле каждой звезды!
+                if (proj.sx >= 0 && proj.sx <= width && proj.sy >= 0 && proj.sy <= height) {
+                  frameScreenTargets.push({
+                    id: `${con.id}-star-${sItem.sIdx}`,
+                    canvasX: proj.sx,
+                    canvasY: proj.sy,
+                    hitRadius: 24,
+                    priority: sItem.isAlpha ? 3 : 2,
+                    camPos: {
+                      x: proj.dirX * CELESTIAL_DOME_DIST,
+                      y: proj.dirY * CELESTIAL_DOME_DIST,
+                      z: proj.dirZ * CELESTIAL_DOME_DIST,
+                    },
+                    standoffDist: CELESTIAL_DOME_DIST,
+                    targetMassTons: 888888,
+                    targetMassLabel: `${sItem.name} (${con.nameRu})`,
+                    profile: {
+                      id: con.id,
+                      kind: 'STAR',
+                      systemTag: con.nameLat.toUpperCase(),
+                      color: sItem.color,
+                      name: `Созвездие ${con.nameRu}`,
+                      nickname: `${con.nameLat} · Звезда: ${sItem.name}`,
+                      description: con.description,
+                      groupsTitle: `Астрономический сектор: ${con.nameRu} (${con.nameLat})`,
+                      groupsDescription: `Звёзд в системе созвездия: ${con.stars.length} · Выберите любую звезду в списке выше для гиперпрыжка.`,
+                      businessesTitle: `Главная звезда (α): ${con.alphaStar}`,
+                      businessesDescription:
+                        'Каждая звезда созвездия связана с навигационным маяком гиперпространства G. Bell.',
+                      constellationStars: buildConstellationStarsJumpList(con, sItem.sIdx),
+                      karmaPlus: 50,
+                      karmaMinus: 0,
+                      distanceUnits: CELESTIAL_DOME_DIST,
+                      coordsLabel: `${sItem.name} · ${con.nameLat} (${sItem.distanceLightYears})`,
+                    },
+                  });
+                }
+              }
+
+              // Подпись созвездия в режиме Планетария (без линий трассировки)
+              const alphaStarItem =
+                projectedStars.find((s) => s.isAlpha && s.proj.visible) ||
+                projectedStars.find((s) => s.proj.visible);
+
+              if (visCount > 0 && alphaStarItem && skyDomeMode === 'LABELS_AND_LINES') {
+                const centerSx = sumX / visCount;
+                const centerSy = sumY / visCount;
+                ctx.save();
+                ctx.fillStyle = 'rgba(186, 230, 253, 0.82)';
+                ctx.font = 'bold 9px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(
+                  `${con.nameRu.toUpperCase()} (${con.nameLat})`,
+                  centerSx,
+                  centerSy - 12
+                );
+                ctx.restore();
+              }
+            }
+            ctx.restore();
 
             for (const planet of st.planets) {
               const orbitSegments = 180;
@@ -6334,7 +11915,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 if (oz > 40) {
                   const osx = cx + (ox * 380) / oz;
                   const osy = cy - (oy * 380) / oz;
-                  if (osx > -1600 && osx < width + 1600 && osy > -1600 && osy < viewH + 1600) {
+                  if (osx > -1600 && osx < width + 1600 && osy > -1600 && osy < height + 1600) {
                     if (!penDown) {
                       ctx.moveTo(osx, osy);
                       penDown = true;
@@ -6353,8 +11934,19 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             }
 
             // 3. РЕНДЕР ПОЯСА АСТЕРОИДОВ (R = 26 600 .. 27 500 за 4-й планетой Марс-IV) БЕЗ ТЕКСТОВЫХ ПОДПИСЕЙ НА ЭКРАНЕ:
+            const nowRenderMs = Date.now();
             for (let i = 0; i < st.asteroids.length; i++) {
               const ast = st.asteroids[i];
+              if (ast.respawnAtMs !== undefined) {
+                if (nowRenderMs >= ast.respawnAtMs) {
+                  ast.respawnAtMs = undefined;
+                  ast.revealed = false;
+                  ast.color = '#94a3b8';
+                } else {
+                  // Пока не прошло 5 минут с момента уничтожения/захвата, астероид скрыт и сохраняет координаты места уничтожения
+                  continue;
+                }
+              }
               const isAutopilotTargetingThisAsteroid =
                 Boolean(activeAutopilot && activeAutopilot.asteroidId === ast.id);
               if (!isAutopilotTargetingThisAsteroid) {
@@ -6380,7 +11972,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               if (az > 30) {
                 const asx = cx + (ax * 380) / az;
                 const asy = cy - (ay * 380) / az;
-                if (asx >= 0 && asx <= width && asy >= 0 && asy <= viewH) {
+                if (asx >= 0 && asx <= width && asy >= 0 && asy <= height) {
                   const astDist = Math.hypot(ax, ay, az);
                   const astScreenR = Math.max(1.3, Math.min(28, (ast.size3D * 380) / az));
                   const renderColor = ast.revealed ? ast.color : '#94a3b8';
@@ -6517,13 +12109,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 const sy = cy - (item.pos.y * 380) / sz;
 
                 const rawStarRadius = (135 * 380) / sz;
-                const starRadius = Math.max(3.0, Math.min(viewH * 0.47, rawStarRadius));
+                const starRadius = Math.max(3.0, Math.min(height * 0.47, rawStarRadius));
 
                 if (
                   sx + starRadius * 2.2 >= -120 &&
                   sx - starRadius * 2.2 <= width + 120 &&
                   sy + starRadius * 2.2 >= -120 &&
-                  sy - starRadius * 2.2 <= viewH + 120
+                  sy - starRadius * 2.2 <= height + 120
                 ) {
                   const haloGrad = ctx.createRadialGradient(
                     sx,
@@ -6633,26 +12225,1489 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 const psy = cy - (item.pos.y * 380) / pz;
 
                 const rawPlanetR = (p.radius3D * 380) / pz;
-                const planetR = Math.max(3.2, Math.min(viewH * 0.47, rawPlanetR));
+                const planetR = Math.max(3.2, Math.min(height * 0.47, rawPlanetR));
 
                 if (
                   psx + planetR * 1.4 >= -120 &&
                   psx - planetR * 1.4 <= width + 120 &&
                   psy + planetR * 1.4 >= -120 &&
-                  psy - planetR * 1.4 <= viewH + 120
+                  psy - planetR * 1.4 <= height + 120
                 ) {
+                  const cosSpin = Math.cos(p.spinAngle);
+                  const sinSpin = Math.sin(p.spinAngle);
+                  const pU: Vec3 = {
+                    x: cosSpin * st.eclipticU.x + sinSpin * st.eclipticV.x,
+                    y: cosSpin * st.eclipticU.y + sinSpin * st.eclipticV.y,
+                    z: cosSpin * st.eclipticU.z + sinSpin * st.eclipticV.z,
+                  };
+                  const pV: Vec3 = {
+                    x: -sinSpin * st.eclipticU.x + cosSpin * st.eclipticV.x,
+                    y: -sinSpin * st.eclipticU.y + cosSpin * st.eclipticV.y,
+                    z: -sinSpin * st.eclipticU.z + cosSpin * st.eclipticV.z,
+                  };
+                  const pN = st.eclipticN;
+
+                  // Для гигантского Корабля-Тора («Бублика») формируем наклонённый 3D-базис (tU, tV, tAxis),
+                  // чтобы с любого ракурса чётко читалось сквозное отверстие бублика, 3D-сечение тора
+                  // и 4 внутренних луча-перехода, сходящихся в центре бублика!
+                  const torusPitchTilt = 0.42; // ~24°
+                  const torusYawTilt = -0.26; // ~-15°
+                  const cPT = Math.cos(torusPitchTilt);
+                  const sPT = Math.sin(torusPitchTilt);
+                  const cYT = Math.cos(torusYawTilt);
+                  const sYT = Math.sin(torusYawTilt);
+
+                  const tA1 = st.eclipticU;
+                  const tA2: Vec3 = {
+                    x: cPT * st.eclipticN.x + sPT * st.eclipticV.x,
+                    y: cPT * st.eclipticN.y + sPT * st.eclipticV.y,
+                    z: cPT * st.eclipticN.z + sPT * st.eclipticV.z,
+                  };
+                  const tA3: Vec3 = {
+                    x: -sPT * st.eclipticN.x + cPT * st.eclipticV.x,
+                    y: -sPT * st.eclipticN.y + cPT * st.eclipticV.y,
+                    z: -sPT * st.eclipticN.z + cPT * st.eclipticV.z,
+                  };
+                  const tB1: Vec3 = {
+                    x: cYT * tA1.x + sYT * tA3.x,
+                    y: cYT * tA1.y + sYT * tA3.y,
+                    z: cYT * tA1.z + sYT * tA3.z,
+                  };
+                  const tB2 = tA2;
+                  const tAxis: Vec3 = {
+                    x: -sYT * tA1.x + cYT * tA3.x,
+                    y: -sYT * tA1.y + cYT * tA3.y,
+                    z: -sYT * tA1.z + cYT * tA3.z,
+                  };
+                  const tU: Vec3 = {
+                    x: cosSpin * tB1.x + sinSpin * tB2.x,
+                    y: cosSpin * tB1.y + sinSpin * tB2.y,
+                    z: cosSpin * tB1.z + sinSpin * tB2.z,
+                  };
+                  const tV: Vec3 = {
+                    x: -sinSpin * tB1.x + cosSpin * tB2.x,
+                    y: -sinSpin * tB1.y + cosSpin * tB2.y,
+                    z: -sinSpin * tB1.z + cosSpin * tB2.z,
+                  };
+
+                  // Для невращающихся «Звёздных Врат» (p.isStargate) ориентируем плоскость Врат (gU, gV)
+                  // СТРОГО ПЕРПЕНДИКУЛЯРНО линии их орбиты (чтобы они летели ПЛОСКОСТЬЮ вперёд по своей орбите, а не торцом!):
+                  // • gU — радиальный вектор от Солнца через центр Врат (в плоскости эклиптики, перпендикулярно орбите)
+                  // • gV — вертикальная ось нормали к плоскости эклиптики (st.eclipticN, главный шеврон всегда в зените)
+                  // • gAxis — касательный вектор скорости движения Врат по орбите (линия орбиты проходит прямо сквозь центр портала!)
+                  // Никакого осевого вращения (spinSpeed = 0) и никаких наклонов осей — при погоне по орбите Врата всегда стоят к вам плоскостью!
+                  const cosGateOrb = Math.cos(p.orbitAngle);
+                  const sinGateOrb = Math.sin(p.orbitAngle);
+                  const gU: Vec3 = {
+                    x: cosGateOrb * st.eclipticU.x + sinGateOrb * st.eclipticV.x,
+                    y: cosGateOrb * st.eclipticU.y + sinGateOrb * st.eclipticV.y,
+                    z: cosGateOrb * st.eclipticU.z + sinGateOrb * st.eclipticV.z,
+                  };
+                  const gV: Vec3 = st.eclipticN;
+                  const gAxis: Vec3 = {
+                    x: -sinGateOrb * st.eclipticU.x + cosGateOrb * st.eclipticV.x,
+                    y: -sinGateOrb * st.eclipticU.y + cosGateOrb * st.eclipticV.y,
+                    z: -sinGateOrb * st.eclipticU.z + cosGateOrb * st.eclipticV.z,
+                  };
+
+                  // Ортонормированный 3D-базис (bRight, bUp, bForward) для флагманского стандартного корабля «Буран / Шаттл» (p.isBuranShuttle):
+                  // Выстроен в изометрическом ракурсе 3/4 (нос влево-вперёд к камере, спина с грузовым отсеком, килем и 3 соплами развёрнута к зрителю),
+                  // чтобы сразу читались двойное дельта-крыло, остекление кабины, шпангоуты фюзеляжа, высокий киль и 3 маршевых сопла!
+                  const bForward: Vec3 = {
+                    x: -0.613 * pU.x - 0.215 * pN.x - 0.76 * pV.x,
+                    y: -0.613 * pU.y - 0.215 * pN.y - 0.76 * pV.y,
+                    z: -0.613 * pU.z - 0.215 * pN.z - 0.76 * pV.z,
+                  };
+                  const bUp: Vec3 = {
+                    x: -0.036 * pU.x + 0.969 * pN.x - 0.245 * pV.x,
+                    y: -0.036 * pU.y + 0.969 * pN.y - 0.245 * pV.y,
+                    z: -0.036 * pU.z + 0.969 * pN.z - 0.245 * pV.z,
+                  };
+                  const bRight: Vec3 = {
+                    x: -0.789 * pU.x + 0.123 * pN.x + 0.602 * pV.x,
+                    y: -0.789 * pU.y + 0.123 * pN.y + 0.602 * pV.y,
+                    z: -0.789 * pU.z + 0.123 * pN.z + 0.602 * pV.z,
+                  };
+
                   if (rawPlanetR < 8.5) {
-                    // На большой дистанции — чистая цветная точка и прицельное кольцо без каких-либо подписей
-                    ctx.fillStyle = p.color;
+                    if (p.isTorusShip) {
+                      // Иконка Корабля-Бублика на большой дистанции: двойное кольцо тора + 4 внутренних луча к центру
+                      ctx.strokeStyle = '#22d3ee';
+                      ctx.lineWidth = 1.4;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, 6.8, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.strokeStyle = '#fbbf24';
+                      ctx.lineWidth = 1.0;
+                      ctx.beginPath();
+                      ctx.moveTo(psx - 5.5, psy);
+                      ctx.lineTo(psx + 5.5, psy);
+                      ctx.moveTo(psx, psy - 5.5);
+                      ctx.lineTo(psx, psy + 5.5);
+                      ctx.stroke();
+                      ctx.fillStyle = '#38bdf8';
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, 1.8, 0, Math.PI * 2);
+                      ctx.fill();
+                    } else if (p.isStargate) {
+                      // Иконка невращающихся Звёздных Врат на большой дистанции: кольцо с 9 засечками-шевронами и лазурным порталом
+                      ctx.strokeStyle = '#a855f7';
+                      ctx.lineWidth = 1.5;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, 7.0, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.fillStyle = 'rgba(34, 211, 238, 0.45)';
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, 4.5, 0, Math.PI * 2);
+                      ctx.fill();
+                      ctx.strokeStyle = '#fbbf24';
+                      ctx.lineWidth = 1.1;
+                      for (let c = 0; c < 9; c++) {
+                        const ca = Math.PI / 2 + (c * Math.PI * 2) / 9;
+                        ctx.beginPath();
+                        ctx.moveTo(psx + Math.cos(ca) * 5.2, psy - Math.sin(ca) * 5.2);
+                        ctx.lineTo(psx + Math.cos(ca) * 8.2, psy - Math.sin(ca) * 8.2);
+                        ctx.stroke();
+                      }
+                    } else if (p.isBuranShuttle) {
+                      // Иконка ракетоплана «Буран / Шаттл» на большой дистанции: дельта-силуэт с килем
+                      ctx.strokeStyle = '#38bdf8';
+                      ctx.fillStyle = '#0f172a';
+                      ctx.lineWidth = 1.4;
+                      ctx.beginPath();
+                      ctx.moveTo(psx, psy - 6.8);
+                      ctx.lineTo(psx - 6.5, psy + 4.8);
+                      ctx.lineTo(psx + 6.5, psy + 4.8);
+                      ctx.closePath();
+                      ctx.fill();
+                      ctx.stroke();
+                      ctx.strokeStyle = '#fbbf24';
+                      ctx.beginPath();
+                      ctx.moveTo(psx, psy - 2.5);
+                      ctx.lineTo(psx, psy + 6.5);
+                      ctx.stroke();
+                    } else {
+                      // На большой дистанции — чистая цветная точка и прицельное кольцо без каких-либо подписей
+                      ctx.fillStyle = p.isDeathStar ? '#cbd5e1' : p.color;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, p.isDeathStar ? 4.0 : 3.6, 0, Math.PI * 2);
+                      ctx.fill();
+
+                      ctx.strokeStyle = p.isDeathStar ? '#4ade80' : p.color;
+                      ctx.lineWidth = 1.1;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, 6.8, 0, Math.PI * 2);
+                      ctx.stroke();
+                    }
+                  } else if (p.isTorusShip) {
+                    // =========================================================================
+                    // КОСМИЧЕСКИЙ КОРАБЛЬ РАЗМЕРОМ С ПЛАНЕТУ В ВИДЕ «БУБЛИКА» (ТОРА)
+                    // С 4 ВНУТРЕННИМИ ЛУЧАМИ-ПЕРЕХОДАМИ, СХОДЯЩИМИСЯ ПО ЦЕНТРУ БУБЛИКА:
+                    // • Вращается вокруг центральной оси (tAxis), создавая центробежную силу (1G) во внешнем кольце
+                    // • Находится на орбите Земли (R = 18 000 ед.) строго в противофазе (+180°) относительно Солнца
+                    // • Полноценная 3D-геометрия тора: сквозное отверстие в центре, 24 поперечных кольца-шпангоута
+                    //   сечения трубки, 10 кольцевых параллелей тора, 4 внутренних цилиндрических луча-перехода
+                    //   с кольцевыми переборками и движущимися лифтами-капсулами и центральный узел стыковки 0G!
+                    // =========================================================================
+                    const R_maj = 0.74; // Большой радиус тора (от центра бублика до центра сечения трубки)
+                    const r_tube = 0.25; // Малый радиус трубки бублика (внешний край = 0.99, внутреннее окно = 0.49)
+
+                    const projectTorus3D = (lx: number, ly: number, lz: number) => {
+                      const wx = lx * tU.x + ly * tV.x + lz * tAxis.x;
+                      const wy = lx * tU.y + ly * tV.y + lz * tAxis.y;
+                      const wz = lx * tU.z + ly * tV.z + lz * tAxis.z;
+                      return {
+                        x: psx + wx * planetR,
+                        y: psy - wy * planetR,
+                        z: wz,
+                      };
+                    };
+
+                    // Вспомогательная отрисовка половины тора (isBackHalf = true для дальней половины Z > 0, false для ближней Z <= 0),
+                    // чтобы 4 внутренних луча-перехода корректно перекрывались кольцом бублика в 3D!
+                    const renderTorusHalf = (isBackHalf: boolean) => {
+                      const thetaSteps = planetR > 35 ? 48 : 28;
+                      const tubePixR = Math.max(2, r_tube * planetR);
+
+                      // 1) Тёмный броневой объём трубки бублика (с сохранением сквозного пустого окна по центру!)
+                      ctx.fillStyle = '#040c1a';
+                      ctx.globalAlpha = 0.94;
+                      for (let s = 0; s < thetaSteps; s++) {
+                        const theta = (s / thetaSteps) * Math.PI * 2;
+                        const cPt = projectTorus3D(
+                          R_maj * Math.cos(theta),
+                          R_maj * Math.sin(theta),
+                          0
+                        );
+                        if (isBackHalf ? cPt.z <= 0 : cPt.z > 0) continue;
+                        ctx.beginPath();
+                        ctx.arc(cPt.x, cPt.y, tubePixR * 0.97, 0, Math.PI * 2);
+                        ctx.fill();
+                      }
+
+                      // 2) Кольцевые параллели тора (10 линий вдоль бублика, включая внешний пояс центробежной гравитации 1G и внутренний обод)
+                      const phiParallelsDeg = [0, 36, 72, 108, 144, 180, 216, 252, 288, 324];
+                      for (const phiDeg of phiParallelsDeg) {
+                        const phiRad = (phiDeg * Math.PI) / 180;
+                        const cosPhi = Math.cos(phiRad);
+                        const sinPhi = Math.sin(phiRad);
+                        const rho = R_maj + r_tube * cosPhi;
+                        const hZ = r_tube * sinPhi;
+                        const isOuterGravityDeck = phiDeg === 0;
+                        const isInnerHoleRim = phiDeg === 180;
+
+                        for (let s = 0; s < thetaSteps; s++) {
+                          const th1 = (s / thetaSteps) * Math.PI * 2;
+                          const th2 = ((s + 1) / thetaSteps) * Math.PI * 2;
+                          const midTh = (th1 + th2) * 0.5;
+
+                          const cMid = projectTorus3D(
+                            R_maj * Math.cos(midTh),
+                            R_maj * Math.sin(midTh),
+                            0
+                          );
+                          if (isBackHalf ? cMid.z <= 0 : cMid.z > 0) continue;
+
+                          const p1 = projectTorus3D(
+                            rho * Math.cos(th1),
+                            rho * Math.sin(th1),
+                            hZ
+                          );
+                          const p2 = projectTorus3D(
+                            rho * Math.cos(th2),
+                            rho * Math.sin(th2),
+                            hZ
+                          );
+
+                          // Нормаль поверхности трубки тора в точке midTh, phiRad
+                          const normZ =
+                            cosPhi * (Math.cos(midTh) * tU.z + Math.sin(midTh) * tV.z) +
+                            sinPhi * tAxis.z;
+                          const isFrontSurface = normZ <= 0.12;
+
+                          if (isFrontSurface) {
+                            ctx.strokeStyle = isOuterGravityDeck
+                              ? '#22d3ee'
+                              : isInnerHoleRim
+                              ? '#f8fafc'
+                              : '#38bdf8';
+                            ctx.globalAlpha = isOuterGravityDeck
+                              ? 0.96
+                              : isInnerHoleRim
+                              ? 0.9
+                              : 0.58;
+                            ctx.lineWidth = isOuterGravityDeck
+                              ? 1.9
+                              : isInnerHoleRim
+                              ? 1.5
+                              : 0.95;
+                          } else {
+                            ctx.strokeStyle = '#475569';
+                            ctx.globalAlpha = 0.22;
+                            ctx.lineWidth = 0.75;
+                          }
+
+                          ctx.beginPath();
+                          ctx.moveTo(p1.x, p1.y);
+                          ctx.lineTo(p2.x, p2.y);
+                          ctx.stroke();
+                        }
+                      }
+
+                      // 3) Поперечные кольца-меридианы (шпангоуты кругового сечения трубки бублика — 24 кольца)
+                      const numPoloidalRibs = planetR > 28 ? 24 : 12;
+                      const ribSteps = planetR > 35 ? 20 : 12;
+
+                      for (let m = 0; m < numPoloidalRibs; m++) {
+                        const theta = (m / numPoloidalRibs) * Math.PI * 2;
+                        const cosTh = Math.cos(theta);
+                        const sinTh = Math.sin(theta);
+                        const cCenter = projectTorus3D(R_maj * cosTh, R_maj * sinTh, 0);
+                        if (isBackHalf ? cCenter.z <= 0 : cCenter.z > 0) continue;
+
+                        // Каждое 6-е кольцо (0°, 90°, 180°, 270°) — силовой узел стыковки одного из 4 внутренних лучей-переходов!
+                        const isSpokeJunctionRib = m % (numPoloidalRibs / 4) === 0;
+
+                        for (let rs = 0; rs < ribSteps; rs++) {
+                          const phi1 = (rs / ribSteps) * Math.PI * 2;
+                          const phi2 = ((rs + 1) / ribSteps) * Math.PI * 2;
+                          const midPhi = (phi1 + phi2) * 0.5;
+
+                          const rho1 = R_maj + r_tube * Math.cos(phi1);
+                          const z1 = r_tube * Math.sin(phi1);
+                          const rho2 = R_maj + r_tube * Math.cos(phi2);
+                          const z2 = r_tube * Math.sin(phi2);
+
+                          const pt1 = projectTorus3D(rho1 * cosTh, rho1 * sinTh, z1);
+                          const pt2 = projectTorus3D(rho2 * cosTh, rho2 * sinTh, z2);
+
+                          const normZ =
+                            Math.cos(midPhi) * (cosTh * tU.z + sinTh * tV.z) +
+                            Math.sin(midPhi) * tAxis.z;
+                          const isFrontRib = normZ <= 0.12;
+
+                          if (isFrontRib) {
+                            ctx.strokeStyle = isSpokeJunctionRib ? '#fbbf24' : '#7dd3fc';
+                            ctx.globalAlpha = isSpokeJunctionRib ? 0.95 : 0.65;
+                            ctx.lineWidth = isSpokeJunctionRib ? 1.6 : 1.0;
+                          } else {
+                            ctx.strokeStyle = isSpokeJunctionRib ? '#d97706' : '#334155';
+                            ctx.globalAlpha = 0.24;
+                            ctx.lineWidth = 0.75;
+                          }
+
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+
+                        // Световые иллюминаторы жилых палуб центробежной гравитации на внешнем ободе бублика
+                        if (planetR > 32 && m % 2 === 0) {
+                          const outerDeckPt = projectTorus3D(
+                            (R_maj + r_tube * 0.92) * cosTh,
+                            (R_maj + r_tube * 0.92) * sinTh,
+                            0
+                          );
+                          const outerNormZ = cosTh * tU.z + sinTh * tV.z;
+                          if (outerNormZ <= 0.1) {
+                            ctx.fillStyle = isSpokeJunctionRib ? '#fbbf24' : '#38bdf8';
+                            ctx.globalAlpha = 0.9;
+                            ctx.beginPath();
+                            ctx.arc(
+                              outerDeckPt.x,
+                              outerDeckPt.y,
+                              isSpokeJunctionRib ? 2.2 : 1.4,
+                              0,
+                              Math.PI * 2
+                            );
+                            ctx.fill();
+                          }
+                        }
+                      }
+                    };
+
+                    // А) Сначала рисуем дальнюю половину кольца бублика (Z > 0)
+                    renderTorusHalf(true);
+
+                    // Б) РИСУЕМ 4 ВНУТРЕННИХ ЛУЧА-ПЕРЕХОДА, КОТОРЫЕ ВСТРЕЧАЮТСЯ ПО ЦЕНТРУ БУБЛИКА,
+                    // И ЦЕНТРАЛЬНЫЙ СТЫКОВОЧНЫЙ УЗЕЛ НЕВЕСОМОСТИ (0G) В ЦЕНТРЕ (0, 0, 0)!
+                    const spokeRadius = 0.056; // Радиус цилиндрического туннеля каждого из 4 лучей-переходов
+                    const spokeInnerEnd = R_maj - r_tube + 0.02; // Точка входа луча во внутреннюю стенку бублика (0.51)
+                    const hubRadius = 0.11; // Радиус центрального узла, где встречаются 4 луча
+
+                    for (let k = 0; k < 4; k++) {
+                      const spokeAngle = (k * Math.PI) / 2; // 0°, 90°, 180°, 270°
+                      const cosK = Math.cos(spokeAngle);
+                      const sinK = Math.sin(spokeAngle);
+                      // Поперечный вектор в плоскости бублика, перпендикулярный лучу k
+                      const perpX = -sinK;
+                      const perpY = cosK;
+
+                      const pHubCenter = projectTorus3D(0, 0, 0);
+                      const pTorusWall = projectTorus3D(
+                        spokeInnerEnd * cosK,
+                        spokeInnerEnd * sinK,
+                        0
+                      );
+
+                      // 1. Тёмный бронированный корпус цилиндрического луча-перехода
+                      ctx.strokeStyle = '#061326';
+                      ctx.globalAlpha = 0.95;
+                      ctx.lineWidth = Math.max(3, spokeRadius * 2 * planetR);
+                      ctx.lineCap = 'round';
+                      ctx.beginPath();
+                      ctx.moveTo(pHubCenter.x, pHubCenter.y);
+                      ctx.lineTo(pTorusWall.x, pTorusWall.y);
+                      ctx.stroke();
+
+                      // 2. Четыре продольные силовые рельсы-фермы каждого луча-перехода в 3D
+                      const railOffsets: Array<[number, number, string, number]> = [
+                        [1, 0, '#94a3b8', 0.82],
+                        [-1, 0, '#94a3b8', 0.82],
+                        [0, 1, '#e2e8f0', 0.92],
+                        [0, -1, '#64748b', 0.68],
+                      ];
+                      for (const [sOff, zOff, railColor, railAlpha] of railOffsets) {
+                        const rStart = hubRadius * 0.75;
+                        const rEnd = spokeInnerEnd;
+                        const ptStart = projectTorus3D(
+                          rStart * cosK + sOff * spokeRadius * perpX,
+                          rStart * sinK + sOff * spokeRadius * perpY,
+                          zOff * spokeRadius
+                        );
+                        const ptEnd = projectTorus3D(
+                          rEnd * cosK + sOff * spokeRadius * perpX,
+                          rEnd * sinK + sOff * spokeRadius * perpY,
+                          zOff * spokeRadius
+                        );
+                        ctx.strokeStyle = railColor;
+                        ctx.globalAlpha = railAlpha;
+                        ctx.lineWidth = 1.15;
+                        ctx.beginPath();
+                        ctx.moveTo(ptStart.x, ptStart.y);
+                        ctx.lineTo(ptEnd.x, ptEnd.y);
+                        ctx.stroke();
+                      }
+
+                      // 3. Осевая энергетическая/лифтовая магистраль внутри луча-перехода (сходится ровно в центре 0,0,0!)
+                      ctx.strokeStyle = '#22d3ee';
+                      ctx.globalAlpha = 0.9;
+                      ctx.lineWidth = 1.4;
+                      ctx.beginPath();
+                      ctx.moveTo(pHubCenter.x, pHubCenter.y);
+                      ctx.lineTo(pTorusWall.x, pTorusWall.y);
+                      ctx.stroke();
+
+                      // 4. Кольцевые 3D-переборки (шпангоуты) вдоль каждого из 4 лучей-переходов
+                      // и расширенный стыковочный раструб у внутренней стенки бублика
+                      const ringStations = [0.16, 0.25, 0.34, 0.42, 0.49];
+                      const ringSegs = 12;
+                      for (let stIdx = 0; stIdx < ringStations.length; stIdx++) {
+                        const rDist = ringStations[stIdx];
+                        const isCollar = stIdx === ringStations.length - 1;
+                        const ringRad = isCollar ? spokeRadius * 1.48 : spokeRadius;
+
+                        ctx.strokeStyle = isCollar ? '#fbbf24' : '#38bdf8';
+                        ctx.globalAlpha = isCollar ? 0.96 : 0.78;
+                        ctx.lineWidth = isCollar ? 1.6 : 1.0;
+                        ctx.beginPath();
+                        for (let rs = 0; rs <= ringSegs; rs++) {
+                          const a = (rs / ringSegs) * Math.PI * 2;
+                          const ca = Math.cos(a);
+                          const sa = Math.sin(a);
+                          const rPt = projectTorus3D(
+                            rDist * cosK + ringRad * ca * perpX,
+                            rDist * sinK + ringRad * ca * perpY,
+                            ringRad * sa
+                          );
+                          if (rs === 0) ctx.moveTo(rPt.x, rPt.y);
+                          else ctx.lineTo(rPt.x, rPt.y);
+                        }
+                        ctx.stroke();
+                      }
+
+                      // 5. Движущаяся по лучу-переходу лифт-капсула (между центром невесомости 0G и кольцом центробежной силы 1G)
+                      if (planetR > 24) {
+                        const podPhase =
+                          0.5 + 0.5 * Math.sin(st.frameCounter * 0.045 + k * 1.57);
+                        const podR = hubRadius + 0.03 + podPhase * (spokeInnerEnd - hubRadius - 0.06);
+                        const podPt = projectTorus3D(podR * cosK, podR * sinK, 0);
+                        ctx.fillStyle = '#fde047';
+                        ctx.globalAlpha = 0.98;
+                        ctx.beginPath();
+                        ctx.arc(
+                          podPt.x,
+                          podPt.y,
+                          Math.max(1.8, Math.min(4.2, planetR * 0.028)),
+                          0,
+                          Math.PI * 2
+                        );
+                        ctx.fill();
+                      }
+                    }
+
+                    // В) ЦЕНТРАЛЬНЫЙ УЗЕЛ ВСТРЕЧИ 4 ЛУЧЕЙ-ПЕРЕХОДОВ ПО ЦЕНТРУ БУБЛИКА (0, 0, 0)
+                    const centerHubPt = projectTorus3D(0, 0, 0);
+                    const hubPixR = Math.max(4, hubRadius * planetR);
+
+                    ctx.fillStyle = '#061529';
+                    ctx.globalAlpha = 0.98;
                     ctx.beginPath();
-                    ctx.arc(psx, psy, 3.6, 0, Math.PI * 2);
+                    ctx.arc(centerHubPt.x, centerHubPt.y, hubPixR, 0, Math.PI * 2);
                     ctx.fill();
 
-                    ctx.strokeStyle = p.color;
+                    // Экваториальное и меридиональные кольца центрального узла, где сходятся все 4 луча
+                    const hubRingSegs = 20;
+                    ctx.strokeStyle = '#f8fafc';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    for (let s = 0; s <= hubRingSegs; s++) {
+                      const a = (s / hubRingSegs) * Math.PI * 2;
+                      const pt = projectTorus3D(
+                        hubRadius * Math.cos(a),
+                        hubRadius * Math.sin(a),
+                        0
+                      );
+                      if (s === 0) ctx.moveTo(pt.x, pt.y);
+                      else ctx.lineTo(pt.x, pt.y);
+                    }
+                    ctx.stroke();
+
+                    ctx.strokeStyle = '#22d3ee';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    for (let s = 0; s <= hubRingSegs; s++) {
+                      const a = (s / hubRingSegs) * Math.PI * 2;
+                      const pt = projectTorus3D(
+                        hubRadius * Math.cos(a),
+                        0,
+                        hubRadius * Math.sin(a)
+                      );
+                      if (s === 0) ctx.moveTo(pt.x, pt.y);
+                      else ctx.lineTo(pt.x, pt.y);
+                    }
+                    ctx.stroke();
+
+                    // Пульсирующее ядро в самом центре пересечения 4 лучей бублика + осевой шпиль стыковки
+                    const corePulseR =
+                      Math.max(2.5, hubPixR * 0.42) + Math.sin(st.frameCounter * 0.1) * 1.1;
+                    ctx.fillStyle = '#22d3ee';
+                    ctx.beginPath();
+                    ctx.arc(centerHubPt.x, centerHubPt.y, corePulseR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const spireTop = projectTorus3D(0, 0, hubRadius * 1.85);
+                    const spireBot = projectTorus3D(0, 0, -hubRadius * 1.85);
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(spireBot.x, spireBot.y);
+                    ctx.lineTo(spireTop.x, spireTop.y);
+                    ctx.stroke();
+
+                    // Г) Рисуем ближнюю половину кольца бублика (Z <= 0) поверх внутренних элементов для честной 3D-перспективы
+                    renderTorusHalf(false);
+
+                    ctx.globalAlpha = 1.0;
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isStargate) {
+                    // =========================================================================
+                    // НЕВРАЩАЮЩИЕСЯ «ЗВЁЗДНЫЕ ВРАТА» В НАШЕМ СТИЛЕ РАЗМЕРОМ С ПЛАНЕТУ
+                    // НА ОРБИТЕ ВЕНЕРЫ (R = 12 000 ЕД.) СТРОГО В ПРОТИВОФАЗЕ (+180°) ОТНОСИТЕЛЬНО СОЛНЦА:
+                    // • Полностью статичная ориентация (НЕ вращаются вокруг оси, spinSpeed = 0)
+                    // • Построены в нашем фирменном 3D-стиле меридианов и параллелей:
+                    //   1) Монолитное 3D-кольцо Врат (R_outer = 1.0, R_portal = 0.70, толщина ±0.10) с 36 радиальными
+                    //      3D-шпангоутами (меридианами сечения кольца), 4 концентрическими дорожками-параллелями и 36 статичными рунами-глифами
+                    //   2) 9 объёмных V-образных замков-шевронов по периметру (главный 9-й шеврон строго в зените 90°),
+                    //      направленных остриём к центру портала, с янтарно-лазурными энергокристаллами
+                    //   3) Активный 3D «Горизонт Событий» (квантовая мембрана червоточины внутри окна R <= 0.70),
+                    //      выполненный из 6 концентрических волновых параллелей и 18 радиальных меридианов, сходящихся
+                    //      к центральному квантовому вихрю!
+                    // =========================================================================
+                    const R_outer = 1.0;
+                    const R_chevTrack = 0.91;
+                    const R_glyphTrack = 0.79;
+                    const R_portal = 0.7;
+                    const halfZ = 0.1;
+
+                    const projectGate3D = (lx: number, ly: number, lz: number) => {
+                      const wx = lx * gU.x + ly * gV.x + lz * gAxis.x;
+                      const wy = lx * gU.y + ly * gV.y + lz * gAxis.y;
+                      const wz = lx * gU.z + ly * gV.z + lz * gAxis.z;
+                      return {
+                        x: psx + wx * planetR,
+                        y: psy - wy * planetR,
+                        z: wz,
+                      };
+                    };
+
+                    // А) АКТИВНЫЙ «ГОРИЗОНТ СОБЫТИЙ» ЧЕРВОТОЧИНЫ В НАШЕМ СТИЛЕ МЕРИДИАНОВ И ПАРАЛЛЕЛЕЙ (R <= 0.70):
+                    // 1. Полупрозрачное лазурно-индиговое свечение квантовой мембраны в окне портала
+                    const portalCenterPt = projectGate3D(0, 0, 0);
+                    const portalPixR = Math.max(4, R_portal * planetR);
+                    const horizonGrad = ctx.createRadialGradient(
+                      portalCenterPt.x,
+                      portalCenterPt.y,
+                      portalPixR * 0.05,
+                      portalCenterPt.x,
+                      portalCenterPt.y,
+                      portalPixR
+                    );
+                    horizonGrad.addColorStop(0, 'rgba(224, 242, 254, 0.92)');
+                    horizonGrad.addColorStop(0.28, 'rgba(34, 211, 238, 0.52)');
+                    horizonGrad.addColorStop(0.68, 'rgba(99, 102, 241, 0.34)');
+                    horizonGrad.addColorStop(1, 'rgba(4, 12, 28, 0.92)');
+
+                    ctx.save();
+                    ctx.fillStyle = horizonGrad;
+                    ctx.beginPath();
+                    const portalRimSteps = 48;
+                    for (let s = 0; s <= portalRimSteps; s++) {
+                      const a = (s / portalRimSteps) * Math.PI * 2;
+                      const pt = projectGate3D(R_portal * Math.cos(a), R_portal * Math.sin(a), 0);
+                      if (s === 0) ctx.moveTo(pt.x, pt.y);
+                      else ctx.lineTo(pt.x, pt.y);
+                    }
+                    ctx.fill();
+                    ctx.restore();
+
+                    // 2. Концентрические волновые ПАРАЛЛЕЛИ Горизонта Событий (стоячая квантовая рябь червоточины в 3D без вращения!)
+                    const horizonParallels = [0.12, 0.23, 0.35, 0.47, 0.59, 0.68];
+                    const hSegs = planetR > 35 ? 48 : 28;
+                    for (let pIdx = 0; pIdx < horizonParallels.length; pIdx++) {
+                      const rH = horizonParallels[pIdx];
+                      // Стоячая радиальная 3D-волна глубины мембраны (колеблется вдоль оси Z портала, но НЕ вращается!)
+                      const waveZ =
+                        0.055 *
+                        Math.sin(rH * 14.0 - st.frameCounter * 0.065) *
+                        (1 - rH * 0.45);
+                      ctx.strokeStyle =
+                        pIdx % 2 === 0 ? '#38bdf8' : pIdx === 0 ? '#f8fafc' : '#818cf8';
+                      ctx.globalAlpha = pIdx === 0 ? 0.95 : 0.72;
+                      ctx.lineWidth = pIdx === 0 || pIdx === horizonParallels.length - 1 ? 1.4 : 1.0;
+                      ctx.beginPath();
+                      for (let s = 0; s <= hSegs; s++) {
+                        const a = (s / hSegs) * Math.PI * 2;
+                        const rippleZ =
+                          waveZ +
+                          0.012 * Math.cos(a * 9) * Math.sin(st.frameCounter * 0.05 + pIdx);
+                        const pt = projectGate3D(
+                          rH * Math.cos(a),
+                          rH * Math.sin(a),
+                          rippleZ
+                        );
+                        if (s === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                      }
+                      ctx.stroke();
+                    }
+
+                    // 3. 18 радиальных МЕРИДИАНОВ Горизонта Событий (строго невращающиеся лучи, сходящиеся к сингулярности в центре!)
+                    const numHorizonMeridians = 18;
+                    const radialSteps = 8;
+                    for (let m = 0; m < numHorizonMeridians; m++) {
+                      const mAngle = Math.PI / 2 + (m * Math.PI * 2) / numHorizonMeridians;
+                      const cosM = Math.cos(mAngle);
+                      const sinM = Math.sin(mAngle);
+                      const isChevronAlignedRay = m % 2 === 0; // Каждый чётный меридиан направлен точно в один из 9 шевронов!
+
+                      ctx.strokeStyle = isChevronAlignedRay ? '#22d3ee' : '#a855f7';
+                      ctx.globalAlpha = isChevronAlignedRay ? 0.84 : 0.52;
+                      ctx.lineWidth = isChevronAlignedRay ? 1.25 : 0.85;
+                      ctx.beginPath();
+                      for (let rs = 0; rs <= radialSteps; rs++) {
+                        const rFrac = (rs / radialSteps) * R_portal;
+                        const zCurve =
+                          0.055 *
+                          Math.sin(rFrac * 14.0 - st.frameCounter * 0.065) *
+                          (1 - rFrac * 0.45);
+                        const pt = projectGate3D(rFrac * cosM, rFrac * sinM, zCurve);
+                        if (rs === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                      }
+                      ctx.stroke();
+                    }
+
+                    // 4. Центральный квантовый узел-сингулярность Горизонта Событий (всплеск «Кавош» в центре Врат)
+                    const vortexSpikeZ =
+                      0.16 + 0.04 * Math.sin(st.frameCounter * 0.08);
+                    const vFront = projectGate3D(0, 0, -vortexSpikeZ);
+                    const vBack = projectGate3D(0, 0, vortexSpikeZ);
+                    ctx.strokeStyle = '#e0f2fe';
+                    ctx.globalAlpha = 0.95;
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(vBack.x, vBack.y);
+                    ctx.lineTo(vFront.x, vFront.y);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.beginPath();
+                    ctx.arc(
+                      portalCenterPt.x,
+                      portalCenterPt.y,
+                      Math.max(2.5, Math.min(6.5, planetR * 0.042)),
+                      0,
+                      Math.PI * 2
+                    );
+                    ctx.fill();
+
+                    // Б) МОНОЛИТНОЕ НЕВРАЩАЮЩЕЕСЯ 3D-КОЛЬЦО ЗВЁЗДНЫХ ВРАТ (R от 0.70 до 1.00):
+                    // 1. Тёмная броневая подложка кольца Врат (перекрывает звёзды фона под самим ободом)
+                    const R_ringMid = (R_outer + R_portal) * 0.5; // 0.85
+                    const r_ringHalf = (R_outer - R_portal) * 0.5; // 0.15
+                    const ringSubSteps = planetR > 35 ? 54 : 32;
+                    const ringTubePix = Math.max(2.5, r_ringHalf * planetR);
+                    ctx.fillStyle = '#050816';
+                    ctx.globalAlpha = 0.96;
+                    for (let s = 0; s < ringSubSteps; s++) {
+                      const th = (s / ringSubSteps) * Math.PI * 2;
+                      const cPt = projectGate3D(
+                        R_ringMid * Math.cos(th),
+                        R_ringMid * Math.sin(th),
+                        0
+                      );
+                      ctx.beginPath();
+                      ctx.arc(cPt.x, cPt.y, ringTubePix * 0.96, 0, Math.PI * 2);
+                      ctx.fill();
+                    }
+
+                    // 2. Концентрические 3D-дорожки (параллели) на передней (z = -halfZ) и задней (z = +halfZ) гранях кольца Врат
+                    const ringTracks: Array<{
+                      r: number;
+                      z: number;
+                      color: string;
+                      alpha: number;
+                      width: number;
+                    }> = [
+                      // Задняя грань 3D-кольца Врат
+                      {r: R_outer, z: halfZ, color: '#6b21a8', alpha: 0.48, width: 1.0},
+                      {r: R_portal, z: halfZ, color: '#0284c7', alpha: 0.48, width: 1.0},
+                      // Передняя грань 3D-кольца Врат
+                      {r: R_outer, z: -halfZ, color: '#c084fc', alpha: 0.96, width: 2.0},
+                      {r: R_chevTrack, z: -halfZ * 0.85, color: '#38bdf8', alpha: 0.78, width: 1.15},
+                      {r: R_glyphTrack, z: -halfZ * 0.85, color: '#818cf8', alpha: 0.75, width: 1.1},
+                      {r: R_portal, z: -halfZ, color: '#22d3ee', alpha: 0.98, width: 2.1},
+                    ];
+
+                    for (const tr of ringTracks) {
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha;
+                      ctx.lineWidth = tr.width;
+                      ctx.beginPath();
+                      for (let s = 0; s <= ringSubSteps; s++) {
+                        const a = (s / ringSubSteps) * Math.PI * 2;
+                        const pt = projectGate3D(tr.r * Math.cos(a), tr.r * Math.sin(a), tr.z);
+                        if (s === 0) ctx.moveTo(pt.x, pt.y);
+                        else ctx.lineTo(pt.x, pt.y);
+                      }
+                      ctx.stroke();
+                    }
+
+                    // 3. 36 радиальных 3D-шпангоутов (меридианов сечения кольца Врат) + 36 статичных геометрических рун-глифов созвездий
+                    const numGateSegments = 36;
+                    for (let seg = 0; seg < numGateSegments; seg++) {
+                      const th = Math.PI / 2 + (seg * Math.PI * 2) / numGateSegments;
+                      const cosT = Math.cos(th);
+                      const sinT = Math.sin(th);
+                      const isChevronAxis = seg % 4 === 0; // Каждые 40° (36 / 9 = 4) — ось одного из 9 шевронов!
+
+                      const pOutFront = projectGate3D(R_outer * cosT, R_outer * sinT, -halfZ);
+                      const pOutBack = projectGate3D(R_outer * cosT, R_outer * sinT, halfZ);
+                      const pInFront = projectGate3D(R_portal * cosT, R_portal * sinT, -halfZ);
+                      const pInBack = projectGate3D(R_portal * cosT, R_portal * sinT, halfZ);
+
+                      // 3D-шпангоут (прямоугольное сечение кольца Врат)
+                      ctx.strokeStyle = isChevronAxis ? '#fbbf24' : '#94a3b8';
+                      ctx.globalAlpha = isChevronAxis ? 0.88 : 0.45;
+                      ctx.lineWidth = isChevronAxis ? 1.4 : 0.85;
+                      ctx.beginPath();
+                      ctx.moveTo(pInBack.x, pInBack.y);
+                      ctx.lineTo(pInFront.x, pInFront.y);
+                      ctx.lineTo(pOutFront.x, pOutFront.y);
+                      ctx.lineTo(pOutBack.x, pOutBack.y);
+                      ctx.closePath();
+                      ctx.stroke();
+
+                      // Статичные геометрические глифы созвездий в дорожке между R_glyphTrack и R_chevTrack (в секторах между шевронами)
+                      if (planetR > 30 && !isChevronAxis) {
+                        const midTh = th + Math.PI / numGateSegments;
+                        const cM = Math.cos(midTh);
+                        const sM = Math.sin(midTh);
+                        const rG = (R_chevTrack + R_glyphTrack) * 0.5;
+                        const glyphCenter = projectGate3D(rG * cM, rG * sM, -halfZ * 0.9);
+                        const gSize = Math.max(1.6, Math.min(4.5, planetR * 0.026));
+
+                        ctx.strokeStyle = seg % 2 === 0 ? '#38bdf8' : '#c084fc';
+                        ctx.globalAlpha = 0.82;
+                        ctx.lineWidth = 1.0;
+                        ctx.beginPath();
+                        if (seg % 3 === 0) {
+                          // Геометрическая руна-треугольник созвездия
+                          ctx.moveTo(glyphCenter.x, glyphCenter.y - gSize);
+                          ctx.lineTo(glyphCenter.x + gSize * 0.85, glyphCenter.y + gSize * 0.7);
+                          ctx.lineTo(glyphCenter.x - gSize * 0.85, glyphCenter.y + gSize * 0.7);
+                          ctx.closePath();
+                        } else if (seg % 3 === 1) {
+                          // Геометрическая руна-ромб
+                          ctx.moveTo(glyphCenter.x, glyphCenter.y - gSize);
+                          ctx.lineTo(glyphCenter.x + gSize, glyphCenter.y);
+                          ctx.lineTo(glyphCenter.x, glyphCenter.y + gSize);
+                          ctx.lineTo(glyphCenter.x - gSize, glyphCenter.y);
+                          ctx.closePath();
+                        } else {
+                          // Геометрическая руна-шеврон созвездия
+                          ctx.moveTo(glyphCenter.x - gSize, glyphCenter.y - gSize * 0.6);
+                          ctx.lineTo(glyphCenter.x, glyphCenter.y + gSize * 0.8);
+                          ctx.lineTo(glyphCenter.x + gSize, glyphCenter.y - gSize * 0.6);
+                          ctx.moveTo(glyphCenter.x, glyphCenter.y - gSize * 0.9);
+                          ctx.lineTo(glyphCenter.x, glyphCenter.y + gSize * 0.8);
+                        }
+                        ctx.stroke();
+                      }
+                    }
+
+                    // В) 9 КУЛЬТОВЫХ 3D ЗАМКОВ-ШЕВРОНОВ ПО ПЕРИМЕТРУ ЗВЁЗДНЫХ ВРАТ (СТРОГО НЕВРАЩАЮЩИЕСЯ!):
+                    // Каждый шеврон имеет V-образный клиновидный кожух, выступающий над кольцом (z = -halfZ * 1.35),
+                    // и светящееся янтарно-золотое ядро фиксации адреса червоточины!
+                    for (let c = 0; c < 9; c++) {
+                      const cAngle = Math.PI / 2 + (c * Math.PI * 2) / 9; // c=0 — верхний центральный 9-й Мастер-Шеврон (90°)!
+                      const dAng = 0.088; // Угловая полуширина шеврона
+                      const dAngInner = 0.042;
+                      const zChev = -halfZ * 1.32;
+                      const zChevBack = halfZ * 1.15;
+
+                      // Внешние крылья V-шеврона (выступают за внешний обод до R = 1.055)
+                      const pWingL = projectGate3D(
+                        1.055 * Math.cos(cAngle - dAng),
+                        1.055 * Math.sin(cAngle - dAng),
+                        zChev
+                      );
+                      const pWingR = projectGate3D(
+                        1.055 * Math.cos(cAngle + dAng),
+                        1.055 * Math.sin(cAngle + dAng),
+                        zChev
+                      );
+                      const pOuterNotch = projectGate3D(
+                        1.02 * Math.cos(cAngle),
+                        1.02 * Math.sin(cAngle),
+                        zChev
+                      );
+                      // Остриё V-шеврона, направленное внутрь к Горизонту Событий (R = 0.665)
+                      const pTip = projectGate3D(
+                        0.665 * Math.cos(cAngle),
+                        0.665 * Math.sin(cAngle),
+                        zChev
+                      );
+                      // Внутренний V-контур световода шеврона
+                      const pInnerL = projectGate3D(
+                        0.98 * Math.cos(cAngle - dAngInner),
+                        0.98 * Math.sin(cAngle - dAngInner),
+                        zChev - 0.01
+                      );
+                      const pInnerR = projectGate3D(
+                        0.98 * Math.cos(cAngle + dAngInner),
+                        0.98 * Math.sin(cAngle + dAngInner),
+                        zChev - 0.01
+                      );
+                      const pInnerTip = projectGate3D(
+                        0.735 * Math.cos(cAngle),
+                        0.735 * Math.sin(cAngle),
+                        zChev - 0.01
+                      );
+
+                      // Задние 3D-рёбра шеврона
+                      const pWingLBack = projectGate3D(
+                        1.055 * Math.cos(cAngle - dAng),
+                        1.055 * Math.sin(cAngle - dAng),
+                        zChevBack
+                      );
+                      const pWingRBack = projectGate3D(
+                        1.055 * Math.cos(cAngle + dAng),
+                        1.055 * Math.sin(cAngle + dAng),
+                        zChevBack
+                      );
+
+                      // Заливка бронекожуха шеврона
+                      ctx.fillStyle = '#0f172a';
+                      ctx.globalAlpha = 0.96;
+                      ctx.beginPath();
+                      ctx.moveTo(pWingL.x, pWingL.y);
+                      ctx.lineTo(pOuterNotch.x, pOuterNotch.y);
+                      ctx.lineTo(pWingR.x, pWingR.y);
+                      ctx.lineTo(pTip.x, pTip.y);
+                      ctx.closePath();
+                      ctx.fill();
+
+                      // Боковые 3D-грани шеврона
+                      ctx.strokeStyle = '#f59e0b';
+                      ctx.globalAlpha = 0.65;
+                      ctx.lineWidth = 1.1;
+                      ctx.beginPath();
+                      ctx.moveTo(pWingL.x, pWingL.y);
+                      ctx.lineTo(pWingLBack.x, pWingLBack.y);
+                      ctx.lineTo(pWingRBack.x, pWingRBack.y);
+                      ctx.lineTo(pWingR.x, pWingR.y);
+                      ctx.stroke();
+
+                      // Главный V-контур замка-шеврона
+                      ctx.strokeStyle = c === 0 ? '#fde047' : '#fbbf24';
+                      ctx.globalAlpha = 0.98;
+                      ctx.lineWidth = c === 0 ? 2.1 : 1.65;
+                      ctx.beginPath();
+                      ctx.moveTo(pWingL.x, pWingL.y);
+                      ctx.lineTo(pOuterNotch.x, pOuterNotch.y);
+                      ctx.lineTo(pWingR.x, pWingR.y);
+                      ctx.lineTo(pTip.x, pTip.y);
+                      ctx.closePath();
+                      ctx.stroke();
+
+                      // Внутренняя энергетическая V-стрела шеврона
+                      ctx.strokeStyle = c === 0 ? '#22d3ee' : '#f97316';
+                      ctx.globalAlpha = 0.95;
+                      ctx.lineWidth = 1.35;
+                      ctx.beginPath();
+                      ctx.moveTo(pInnerL.x, pInnerL.y);
+                      ctx.lineTo(pInnerTip.x, pInnerTip.y);
+                      ctx.lineTo(pInnerR.x, pInnerR.y);
+                      ctx.stroke();
+
+                      // Световое ядро активированного шеврона
+                      ctx.fillStyle = c === 0 ? '#22d3ee' : '#fde047';
+                      ctx.beginPath();
+                      ctx.arc(
+                        pInnerTip.x,
+                        pInnerTip.y,
+                        Math.max(1.8, Math.min(4.2, planetR * 0.028)),
+                        0,
+                        Math.PI * 2
+                      );
+                      ctx.fill();
+                    }
+
+                    ctx.globalAlpha = 1.0;
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isBuranShuttle) {
+                    // =========================================================================
+                    // ЭТАЛОННАЯ 3D-МОДЕЛЬ СТАНДАРТНОГО КОРАБЛЯ «БУРАН / ШАТТЛ»
+                    // (ДВОЙНОЕ ДЕЛЬТА-КРЫЛО, ТЕПЛОЗАЩИТНЫЙ ЭКРАН, КАБИНА, ГРУЗОВОЙ ОТСЕК С МЕРИДИАНАМИ-ШПАНГОУТАМИ,
+                    // ВЫСОКИЙ СТРЕЛОВИДНЫЙ КИЛЬ И 3 МАРШЕВЫХ СОПЛА ЖРД):
+                    // =========================================================================
+                    const projectBuranPlanet3D = (lx: number, ly: number, lz: number) => {
+                      const wx = lx * bRight.x + ly * bUp.x + lz * bForward.x;
+                      const wy = lx * bRight.y + ly * bUp.y + lz * bForward.y;
+                      const wz = lx * bRight.z + ly * bUp.z + lz * bForward.z;
+                      return {
+                        x: psx + wx * planetR,
+                        y: psy - wy * planetR,
+                        z: wz,
+                      };
+                    };
+
+                    // Вспомогательное прицельное кольцо габарита ракетоплана
+                    ctx.save();
+                    ctx.setLineDash([4, 6]);
+                    ctx.strokeStyle = 'rgba(56, 189, 248, 0.32)';
                     ctx.lineWidth = 1.1;
                     ctx.beginPath();
-                    ctx.arc(psx, psy, 6.8, 0, Math.PI * 2);
+                    ctx.arc(psx, psy, planetR * 0.96, 0, Math.PI * 2);
                     ctx.stroke();
+                    ctx.restore();
+
+                    drawBuranShuttle3D(
+                      ctx,
+                      projectBuranPlanet3D,
+                      planetR,
+                      p.color,
+                      st.frameCounter
+                    );
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isDeathStar) {
+                    // =========================================================================
+                    // БОЕВОЙ ПЛАНЕТОИД «ЗВЕЗДА СМЕРТИ» РАЗМЕРОМ С ПЛАНЕТУ:
+                    // Построен строго по тому же 3D-принципу, что и планета (вращающиеся меридианы и параллели),
+                    // но с характерными примитивными чертами Звезды Смерти:
+                    // 1) Двухбортный утопленный Экваториальный каньон (траншея с переборками и огнями доков)
+                    // 2) Вогнутый 3D-кратер Суперлазера в северном полушарии (концентрические кольца чаши,
+                    //    8 фокусирующих лучей-волноводов и пульсирующая изумрудная линза излучателя)
+                    // 3) Ступенчатые техногенные швы бронеплит по секторам сферы
+                    // =========================================================================
+                    const dsGrad = ctx.createRadialGradient(
+                      psx - planetR * 0.25,
+                      psy - planetR * 0.25,
+                      planetR * 0.1,
+                      psx,
+                      psy,
+                      planetR
+                    );
+                    dsGrad.addColorStop(0, '#0f172a');
+                    dsGrad.addColorStop(0.7, '#050b14');
+                    dsGrad.addColorStop(1, '#020617');
+                    ctx.fillStyle = dsGrad;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const cosSpin = Math.cos(p.spinAngle);
+                    const sinSpin = Math.sin(p.spinAngle);
+                    const pU: Vec3 = {
+                      x: cosSpin * st.eclipticU.x + sinSpin * st.eclipticV.x,
+                      y: cosSpin * st.eclipticU.y + sinSpin * st.eclipticV.y,
+                      z: cosSpin * st.eclipticU.z + sinSpin * st.eclipticV.z,
+                    };
+                    const pV: Vec3 = {
+                      x: -sinSpin * st.eclipticU.x + cosSpin * st.eclipticV.x,
+                      y: -sinSpin * st.eclipticU.y + cosSpin * st.eclipticV.y,
+                      z: -sinSpin * st.eclipticU.z + cosSpin * st.eclipticV.z,
+                    };
+                    const pN = st.eclipticN;
+
+                    const projectSphereNormal = (
+                      nx: number,
+                      ny: number,
+                      nz: number,
+                      radiusScale = 1.0
+                    ) => ({
+                      x: psx + nx * planetR * radiusScale,
+                      y: psy - ny * planetR * radiusScale,
+                      front: nz <= 0.05,
+                    });
+
+                    // 3D-ось и ортонормированный базис вогнутого кратера Суперлазера в северном полушарии
+                    const dishLat = (27 * Math.PI) / 180;
+                    const dishLon = -Math.PI / 2 - 0.38;
+                    const dishAngRadius = (24 * Math.PI) / 180;
+                    const cosDishEdge = Math.cos(dishAngRadius);
+
+                    const dishAxis: Vec3 = {
+                      x:
+                        Math.cos(dishLat) *
+                          (Math.cos(dishLon) * pU.x + Math.sin(dishLon) * pV.x) +
+                        Math.sin(dishLat) * pN.x,
+                      y:
+                        Math.cos(dishLat) *
+                          (Math.cos(dishLon) * pU.y + Math.sin(dishLon) * pV.y) +
+                        Math.sin(dishLat) * pN.y,
+                      z:
+                        Math.cos(dishLat) *
+                          (Math.cos(dishLon) * pU.z + Math.sin(dishLon) * pV.z) +
+                        Math.sin(dishLat) * pN.z,
+                    };
+                    const dishT1: Vec3 = {
+                      x: -Math.sin(dishLon) * pU.x + Math.cos(dishLon) * pV.x,
+                      y: -Math.sin(dishLon) * pU.y + Math.cos(dishLon) * pV.y,
+                      z: -Math.sin(dishLon) * pU.z + Math.cos(dishLon) * pV.z,
+                    };
+                    const dishT2: Vec3 = {
+                      x:
+                        -Math.sin(dishLat) *
+                          (Math.cos(dishLon) * pU.x + Math.sin(dishLon) * pV.x) +
+                        Math.cos(dishLat) * pN.x,
+                      y:
+                        -Math.sin(dishLat) *
+                          (Math.cos(dishLon) * pU.y + Math.sin(dishLon) * pV.y) +
+                        Math.cos(dishLat) * pN.y,
+                      z:
+                        -Math.sin(dishLat) *
+                          (Math.cos(dishLon) * pU.z + Math.sin(dishLon) * pV.z) +
+                        Math.cos(dishLat) * pN.z,
+                    };
+
+                    const isInsideDishCone = (nx: number, ny: number, nz: number) =>
+                      nx * dishAxis.x + ny * dishAxis.y + nz * dishAxis.z > cosDishEdge;
+
+                    // 1. ПАРАЛЛЕЛИ (ШИРОТЫ) ЗВЕЗДЫ СМЕРТИ + СТУПЕНЧАТЫЕ БРОНЕПЛИТЫ
+                    const dsLatitudesDeg =
+                      planetR > 16
+                        ? [-72, -54, -36, -18, 18, 36, 54, 72]
+                        : [-45, -20, 20, 45];
+                    const latSteps = planetR > 40 ? 44 : 24;
+
+                    for (const latDeg of dsLatitudesDeg) {
+                      const latRad = (latDeg * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+
+                      for (let s = 0; s < latSteps; s++) {
+                        const lon1 = (s / latSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / latSteps) * Math.PI * 2;
+
+                        const n1x =
+                          cosLat * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) + sinLat * pN.x;
+                        const n1y =
+                          cosLat * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) + sinLat * pN.y;
+                        const n1z =
+                          cosLat * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) + sinLat * pN.z;
+
+                        const n2x =
+                          cosLat * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) + sinLat * pN.x;
+                        const n2y =
+                          cosLat * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) + sinLat * pN.y;
+                        const n2z =
+                          cosLat * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) + sinLat * pN.z;
+
+                        // Не рисуем обычные параллели поверх кратера Суперлазера
+                        if (isInsideDishCone(n1x, n1y, n1z) || isInsideDishCone(n2x, n2y, n2z)) {
+                          continue;
+                        }
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = Math.abs(latDeg) === 18 ? '#cbd5e1' : '#94a3b8';
+                          ctx.globalAlpha = Math.abs(latDeg) === 18 ? 0.78 : 0.58;
+                          ctx.lineWidth = 1.0;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        } else if (planetR > 28 && s % 2 === 0) {
+                          ctx.strokeStyle = '#64748b';
+                          ctx.globalAlpha = 0.16;
+                          ctx.lineWidth = 0.75;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // Ступенчатые техногенные швы бронеплит (примитивная черта секционной обшивки Звезды Смерти)
+                    if (planetR > 26) {
+                      const armorSeamLats = [-45, -27, -10, 10, 27, 45, 63];
+                      for (const seamLatDeg of armorSeamLats) {
+                        const latRad = (seamLatDeg * Math.PI) / 180;
+                        const cosLat = Math.cos(latRad);
+                        const sinLat = Math.sin(latRad);
+                        for (let s = 0; s < 32; s++) {
+                          if ((s + Math.abs(seamLatDeg)) % 3 !== 0) continue;
+                          const lon1 = (s / 32) * Math.PI * 2;
+                          const lon2 = ((s + 0.65) / 32) * Math.PI * 2;
+                          const n1x =
+                            cosLat * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) +
+                            sinLat * pN.x;
+                          const n1y =
+                            cosLat * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) +
+                            sinLat * pN.y;
+                          const n1z =
+                            cosLat * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) +
+                            sinLat * pN.z;
+                          const n2x =
+                            cosLat * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) +
+                            sinLat * pN.x;
+                          const n2y =
+                            cosLat * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) +
+                            sinLat * pN.y;
+                          const n2z =
+                            cosLat * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) +
+                            sinLat * pN.z;
+                          if (
+                            isInsideDishCone(n1x, n1y, n1z) ||
+                            isInsideDishCone(n2x, n2y, n2z)
+                          ) {
+                            continue;
+                          }
+                          const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                          const pt2 = projectSphereNormal(n2x, n2y, n2z);
+                          if (pt1.front && pt2.front) {
+                            ctx.strokeStyle = '#38bdf8';
+                            ctx.globalAlpha = 0.42;
+                            ctx.lineWidth = 0.9;
+                            ctx.beginPath();
+                            ctx.moveTo(pt1.x, pt1.y);
+                            ctx.lineTo(pt2.x, pt2.y);
+                            ctx.stroke();
+                          }
+                        }
+                      }
+                    }
+
+                    // 2. МЕРИДИАНЫ ЗВЕЗДЫ СМЕРТИ (прерываются на экваториальной траншее и кратере Суперлазера)
+                    const numMeridians = planetR > 20 ? 16 : 8;
+                    const merSteps = planetR > 40 ? 28 : 16;
+
+                    for (let m = 0; m < numMeridians; m++) {
+                      const lonRad = (m / numMeridians) * Math.PI * 2;
+                      const cosLon = Math.cos(lonRad);
+                      const sinLon = Math.sin(lonRad);
+                      const isPrimeMeridian = m % 4 === 0;
+
+                      const mDirX = cosLon * pU.x + sinLon * pV.x;
+                      const mDirY = cosLon * pU.y + sinLon * pV.y;
+                      const mDirZ = cosLon * pU.z + sinLon * pV.z;
+
+                      for (let s = 0; s < merSteps; s++) {
+                        const lat1 = -Math.PI / 2 + (s / merSteps) * Math.PI;
+                        const lat2 = -Math.PI / 2 + ((s + 1) / merSteps) * Math.PI;
+
+                        // Пропускаем полосу внутри экваториальной траншеи (-4.2° .. +4.2°)
+                        const midLatDeg = (((lat1 + lat2) * 0.5) * 180) / Math.PI;
+                        if (Math.abs(midLatDeg) < 4.2) continue;
+
+                        const n1x = Math.cos(lat1) * mDirX + Math.sin(lat1) * pN.x;
+                        const n1y = Math.cos(lat1) * mDirY + Math.sin(lat1) * pN.y;
+                        const n1z = Math.cos(lat1) * mDirZ + Math.sin(lat1) * pN.z;
+
+                        const n2x = Math.cos(lat2) * mDirX + Math.sin(lat2) * pN.x;
+                        const n2y = Math.cos(lat2) * mDirY + Math.sin(lat2) * pN.y;
+                        const n2z = Math.cos(lat2) * mDirZ + Math.sin(lat2) * pN.z;
+
+                        if (isInsideDishCone(n1x, n1y, n1z) || isInsideDishCone(n2x, n2y, n2z)) {
+                          continue;
+                        }
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = isPrimeMeridian ? '#e2e8f0' : '#94a3b8';
+                          ctx.globalAlpha = isPrimeMeridian ? 0.78 : 0.52;
+                          ctx.lineWidth = isPrimeMeridian ? 1.2 : 0.9;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        } else if (planetR > 28 && s % 2 === 0) {
+                          ctx.strokeStyle = '#64748b';
+                          ctx.globalAlpha = 0.14;
+                          ctx.lineWidth = 0.7;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 3. ПРИМИТИВНАЯ ЧЕРТА №1: ЭКВАТОРИАЛЬНЫЙ КАНЬОН (ДВОЙНАЯ УТОПЛЕННАЯ ТРАНШЕЯ)
+                    const trenchHalfDeg = 4.2;
+                    const trenchTopRad = (trenchHalfDeg * Math.PI) / 180;
+                    const trenchBotRad = (-trenchHalfDeg * Math.PI) / 180;
+                    const trenchSteps = planetR > 35 ? 48 : 24;
+                    const trenchFloorScale = 0.942;
+
+                    for (let s = 0; s < trenchSteps; s++) {
+                      const lon1 = (s / trenchSteps) * Math.PI * 2;
+                      const lon2 = ((s + 1) / trenchSteps) * Math.PI * 2;
+                      const c1 = Math.cos(lon1);
+                      const s1 = Math.sin(lon1);
+                      const c2 = Math.cos(lon2);
+                      const s2 = Math.sin(lon2);
+
+                      const eq1x = c1 * pU.x + s1 * pV.x;
+                      const eq1y = c1 * pU.y + s1 * pV.y;
+                      const eq1z = c1 * pU.z + s1 * pV.z;
+
+                      const eq2x = c2 * pU.x + s2 * pV.x;
+                      const eq2y = c2 * pU.y + s2 * pV.y;
+                      const eq2z = c2 * pU.z + s2 * pV.z;
+
+                      // Верхняя и нижняя кромки каньона
+                      const top1 = projectSphereNormal(
+                        Math.cos(trenchTopRad) * eq1x + Math.sin(trenchTopRad) * pN.x,
+                        Math.cos(trenchTopRad) * eq1y + Math.sin(trenchTopRad) * pN.y,
+                        Math.cos(trenchTopRad) * eq1z + Math.sin(trenchTopRad) * pN.z,
+                        1.0
+                      );
+                      const top2 = projectSphereNormal(
+                        Math.cos(trenchTopRad) * eq2x + Math.sin(trenchTopRad) * pN.x,
+                        Math.cos(trenchTopRad) * eq2y + Math.sin(trenchTopRad) * pN.y,
+                        Math.cos(trenchTopRad) * eq2z + Math.sin(trenchTopRad) * pN.z,
+                        1.0
+                      );
+                      const bot1 = projectSphereNormal(
+                        Math.cos(trenchBotRad) * eq1x + Math.sin(trenchBotRad) * pN.x,
+                        Math.cos(trenchBotRad) * eq1y + Math.sin(trenchBotRad) * pN.y,
+                        Math.cos(trenchBotRad) * eq1z + Math.sin(trenchBotRad) * pN.z,
+                        1.0
+                      );
+                      const bot2 = projectSphereNormal(
+                        Math.cos(trenchBotRad) * eq2x + Math.sin(trenchBotRad) * pN.x,
+                        Math.cos(trenchBotRad) * eq2y + Math.sin(trenchBotRad) * pN.y,
+                        Math.cos(trenchBotRad) * eq2z + Math.sin(trenchBotRad) * pN.z,
+                        1.0
+                      );
+                      // Утопленное дно экваториальной траншеи (r = 0.942 * planetR)
+                      const mid1 = projectSphereNormal(eq1x, eq1y, eq1z, trenchFloorScale);
+                      const mid2 = projectSphereNormal(eq2x, eq2y, eq2z, trenchFloorScale);
+
+                      if (top1.front || top2.front) {
+                        ctx.strokeStyle = '#f8fafc';
+                        ctx.globalAlpha = 0.95;
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        ctx.moveTo(top1.x, top1.y);
+                        ctx.lineTo(top2.x, top2.y);
+                        ctx.moveTo(bot1.x, bot1.y);
+                        ctx.lineTo(bot2.x, bot2.y);
+                        ctx.stroke();
+
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.globalAlpha = 0.82;
+                        ctx.lineWidth = 1.1;
+                        ctx.beginPath();
+                        ctx.moveTo(mid1.x, mid1.y);
+                        ctx.lineTo(mid2.x, mid2.y);
+                        ctx.stroke();
+
+                        // Вертикальные переборки внутри экваториальной траншеи и огни ангаров
+                        if (planetR > 22 && s % 2 === 0) {
+                          ctx.strokeStyle = '#94a3b8';
+                          ctx.globalAlpha = 0.75;
+                          ctx.lineWidth = 0.95;
+                          ctx.beginPath();
+                          ctx.moveTo(top1.x, top1.y);
+                          ctx.lineTo(mid1.x, mid1.y);
+                          ctx.lineTo(bot1.x, bot1.y);
+                          ctx.stroke();
+
+                          if (s % 4 === 0 && planetR > 36) {
+                            ctx.fillStyle = s % 8 === 0 ? '#f43f5e' : '#fde047';
+                            ctx.globalAlpha = 0.9;
+                            ctx.beginPath();
+                            ctx.arc(mid1.x, mid1.y, 1.5, 0, Math.PI * 2);
+                            ctx.fill();
+                          }
+                        }
+                      }
+                    }
+
+                    // 4. ПРИМИТИВНАЯ ЧЕРТА №2: ВОГНУТЫЙ КРАТЕР СУПЕРЛАЗЕРА В СЕВЕРНОМ ПОЛУШАРИИ
+                    const projectDishPoint = (alphaRad: number, phiRad: number) => {
+                      const sinA = Math.sin(alphaRad);
+                      const cosA = Math.cos(alphaRad);
+                      const cosP = Math.cos(phiRad);
+                      const sinP = Math.sin(phiRad);
+                      const nx =
+                        cosA * dishAxis.x + sinA * (cosP * dishT1.x + sinP * dishT2.x);
+                      const ny =
+                        cosA * dishAxis.y + sinA * (cosP * dishT1.y + sinP * dishT2.y);
+                      const nz =
+                        cosA * dishAxis.z + sinA * (cosP * dishT1.z + sinP * dishT2.z);
+                      // Вогнутость чаши внутрь 3D-сферы (на кромке 1.0, в фокусе чаши 0.84)
+                      const recess =
+                        1 - 0.16 * Math.cos((alphaRad / dishAngRadius) * (Math.PI / 2));
+                      return projectSphereNormal(nx, ny, nz, recess);
+                    };
+
+                    const dishRingFractions = [1.0, 0.72, 0.45, 0.2];
+                    const dishCircleSteps = planetR > 35 ? 40 : 24;
+
+                    for (let rIdx = 0; rIdx < dishRingFractions.length; rIdx++) {
+                      const frac = dishRingFractions[rIdx];
+                      const alpha = dishAngRadius * frac;
+                      const isOuterRim = rIdx === 0;
+                      const isInnerCoreRing = rIdx === dishRingFractions.length - 1;
+
+                      for (let s = 0; s < dishCircleSteps; s++) {
+                        const phi1 = (s / dishCircleSteps) * Math.PI * 2;
+                        const phi2 = ((s + 1) / dishCircleSteps) * Math.PI * 2;
+                        const pt1 = projectDishPoint(alpha, phi1);
+                        const pt2 = projectDishPoint(alpha, phi2);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = isOuterRim
+                            ? '#f8fafc'
+                            : isInnerCoreRing
+                            ? '#4ade80'
+                            : '#cbd5e1';
+                          ctx.globalAlpha = isOuterRim ? 0.96 : isInnerCoreRing ? 0.92 : 0.78;
+                          ctx.lineWidth = isOuterRim ? 1.9 : isInnerCoreRing ? 1.4 : 1.1;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 8 радиальных фокусирующих лучей-волноводов внутри чаши Суперлазера + сходящиеся зелёные импульсы
+                    const dishCenterPt = projectDishPoint(0, 0);
+                    const numDishStruts = 8;
+                    const strutRadialSteps = 6;
+                    for (let k = 0; k < numDishStruts; k++) {
+                      const phi = (k / numDishStruts) * Math.PI * 2;
+                      for (let rStep = 0; rStep < strutRadialSteps; rStep++) {
+                        const a1 = dishAngRadius * (1 - rStep / strutRadialSteps);
+                        const a2 = dishAngRadius * (1 - (rStep + 1) / strutRadialSteps);
+                        const p1 = projectDishPoint(a1, phi);
+                        const p2 = projectDishPoint(a2, phi);
+                        if (p1.front || p2.front) {
+                          ctx.strokeStyle = rStep >= strutRadialSteps - 2 ? '#4ade80' : '#94a3b8';
+                          ctx.globalAlpha = rStep >= strutRadialSteps - 2 ? 0.9 : 0.75;
+                          ctx.lineWidth = rStep >= strutRadialSteps - 2 ? 1.25 : 1.0;
+                          ctx.beginPath();
+                          ctx.moveTo(p1.x, p1.y);
+                          ctx.lineTo(p2.x, p2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // Центральная фокусирующая линза (глаз Суперлазера)
+                    if (dishCenterPt.front) {
+                      const pulseLensR =
+                        Math.max(2.5, Math.min(8, planetR * 0.055)) +
+                        Math.sin(st.frameCounter * 0.12) * 1.2;
+                      ctx.fillStyle = '#22c55e';
+                      ctx.globalAlpha = 0.95;
+                      ctx.beginPath();
+                      ctx.arc(dishCenterPt.x, dishCenterPt.y, pulseLensR, 0, Math.PI * 2);
+                      ctx.fill();
+
+                      ctx.strokeStyle = '#bbf7d0';
+                      ctx.lineWidth = 1.4;
+                      ctx.beginPath();
+                      ctx.arc(
+                        dishCenterPt.x,
+                        dishCenterPt.y,
+                        pulseLensR * 1.65,
+                        0,
+                        Math.PI * 2
+                      );
+                      ctx.stroke();
+                    }
+
+                    ctx.globalAlpha = 1.0;
+
+                    // Внешний броневой контур сферы Звезды Смерти
+                    ctx.strokeStyle = '#cbd5e1';
+                    ctx.lineWidth = planetR > 35 ? 2.2 : 1.5;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Имперские осевые башни полюсов реактора
+                    const northPolePt = projectSphereNormal(pN.x, pN.y, pN.z);
+                    const southPolePt = projectSphereNormal(-pN.x, -pN.y, -pN.z);
+                    const axisSpike = Math.max(4, Math.min(18, planetR * 0.14));
+                    const northTipX = psx + pN.x * (planetR + axisSpike);
+                    const northTipY = psy - pN.y * (planetR + axisSpike);
+                    const southTipX = psx - pN.x * (planetR + axisSpike);
+                    const southTipY = psy + pN.y * (planetR + axisSpike);
+
+                    ctx.strokeStyle = '#f43f5e';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(northPolePt.x, northPolePt.y);
+                    ctx.lineTo(northTipX, northTipY);
+                    ctx.moveTo(southPolePt.x, southPolePt.y);
+                    ctx.lineTo(southTipX, southTipY);
+                    ctx.stroke();
+
+                    const poleMarkerR = Math.max(2, Math.min(6, planetR * 0.055));
+                    ctx.fillStyle = '#f43f5e';
+                    ctx.beginPath();
+                    ctx.arc(northPolePt.x, northPolePt.y, poleMarkerR, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#4ade80';
+                    ctx.beginPath();
+                    ctx.arc(southPolePt.x, southPolePt.y, poleMarkerR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
                   } else {
                     // Полноценная 3D-сфера с меридианами, широтами (параллелями) и полюсами без текстовых надписей
                     ctx.fillStyle = '#020710';
@@ -6824,27 +13879,108 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       ctx.stroke();
                       ctx.restore();
                     }
+                  }
 
-                    // =========================================================================
-                    // 4C. ОБЪЕКТЫ ЭКОСИСТЕМЫ GOBELL НА ПОВЕРХНОСТИ 3D-СФЕРЫ ПЛАНЕТЫ (БЕЗ ТЕКСТА):
-                    // Чистые геометрические значки (Группы, Бизнеса и Объявлений).
-                    // При наведении курсора мыши никаких всплывающих окон и текстов нет —
-                    // карточка открывается ТОЛЬКО при наведении курсора мыши и нажатой клавише I!
-                    // =========================================================================
-                    if (planetR >= 18 && p.gobellObjects && p.gobellObjects.length > 0) {
-                      const projectedMap = new Map<
-                        string,
-                        {
-                          obj: PlanetGoBellObject;
-                          ox: number;
-                          oy: number;
-                          nx: number;
-                          ny: number;
-                          nz: number;
+                  // =========================================================================
+                  // 4C. ОБЪЕКТЫ ЭКОСИСТЕМЫ GOBELL НА ПОВЕРХНОСТИ 3D-СФЕРЫ ПЛАНЕТЫ ИЛИ КОРАБЛЯ-БУБЛИКА (БЕЗ ТЕКСТА):
+                  // Чистые геометрические значки (Группы, Бизнеса и Объявлений).
+                  // При наведении курсора мыши никаких всплывающих окон и текстов нет —
+                  // карточка открывается ТОЛЬКО при наведении курсора мыши и нажатой клавише I!
+                  // =========================================================================
+                  if (
+                    rawPlanetR >= 8.5 &&
+                    planetR >= 18 &&
+                    p.gobellObjects &&
+                    p.gobellObjects.length > 0
+                  ) {
+                    const projectedMap = new Map<
+                      string,
+                      {
+                        obj: PlanetGoBellObject;
+                        ox: number;
+                        oy: number;
+                        nx: number;
+                        ny: number;
+                        nz: number;
+                      }
+                    >();
+
+                    for (const gbObj of p.gobellObjects) {
+                      let nx = 0;
+                      let ny = 0;
+                      let nz = 0;
+
+                      if (p.isTorusShip) {
+                        // На Корабле-Бублике размещаем маркеры Группы, Бизнеса и 4 Объявлений прямо вдоль кольца центробежной силы (R_maj = 0.74),
+                        // чтобы центральное окно бублика и схождение 4 лучей-переходов в центре оставались полностью открытыми!
+                        const torusAngle =
+                          gbObj.kind === 'GROUP'
+                            ? Math.PI * 0.25
+                            : gbObj.kind === 'BUSINESS'
+                            ? Math.PI * 1.25
+                            : (((gbObj.slotId || 1) - 1) * Math.PI) / 2;
+                        const cT = Math.cos(torusAngle);
+                        const sT = Math.sin(torusAngle);
+                        const R_maj = 0.74;
+                        nx = R_maj * (cT * tU.x + sT * tV.x);
+                        ny = R_maj * (cT * tU.y + sT * tV.y);
+                        nz = R_maj * (cT * tU.z + sT * tV.z);
+                      } else if (p.isStargate) {
+                        // На невращающихся Звёздных Вратах размещаем маркеры Группы, Бизнеса и 4 Объявлений строго на внешнем кольце Врат (R = 0.85),
+                        // чтобы центральный Горизонт Событий и верхний Мастер-Шеврон (90°) оставались полностью открытыми!
+                        const gateAngle =
+                          gbObj.kind === 'GROUP'
+                            ? Math.PI / 2 - (Math.PI * 2) / 9 // Правый верхний шеврон (50°)
+                            : gbObj.kind === 'BUSINESS'
+                            ? Math.PI / 2 + (Math.PI * 2) / 9 // Левый верхний шеврон (130°)
+                            : gbObj.slotId === 1
+                            ? Math.PI / 2 - (2 * Math.PI * 2) / 9 // 10°
+                            : gbObj.slotId === 2
+                            ? Math.PI / 2 + (2 * Math.PI * 2) / 9 // 170°
+                            : gbObj.slotId === 3
+                            ? Math.PI / 2 - (3 * Math.PI * 2) / 9 // -30°
+                            : Math.PI / 2 + (3 * Math.PI * 2) / 9; // 210°
+                        const cG = Math.cos(gateAngle);
+                        const sG = Math.sin(gateAngle);
+                        const R_gateMarker = 0.85;
+                        nx = R_gateMarker * (cG * gU.x + sG * gV.x);
+                        ny = R_gateMarker * (cG * gU.y + sG * gV.y);
+                        nz = R_gateMarker * (cG * gU.z + sG * gV.z);
+                      } else if (p.isBuranShuttle) {
+                        // Размещаем маркеры Группы, Бизнеса и 4 Объявлений на узлах конструкции ракетоплана «Буран / Шаттл»:
+                        // Кабина, Грузовой отсек, Левое и Правое дельта-крыло, Вертикальный киль и Кормовой блок двигателей
+                        let lx = 0;
+                        let ly = 0.22;
+                        let lz = 0.48;
+                        if (gbObj.kind === 'GROUP') {
+                          lx = 0;
+                          ly = 0.22;
+                          lz = 0.52; // Носовая кабина / шлюз
+                        } else if (gbObj.kind === 'BUSINESS') {
+                          lx = 0;
+                          ly = 0.24;
+                          lz = -0.06; // Центральный грузовой отсек
+                        } else if (gbObj.slotId === 1) {
+                          lx = -0.68;
+                          ly = -0.06;
+                          lz = -0.46; // Левое дельта-крыло
+                        } else if (gbObj.slotId === 2) {
+                          lx = 0.68;
+                          ly = -0.06;
+                          lz = -0.46; // Правое дельта-крыло
+                        } else if (gbObj.slotId === 3) {
+                          lx = 0;
+                          ly = 0.56;
+                          lz = -0.68; // Высокий вертикальный киль
+                        } else {
+                          lx = 0;
+                          ly = -0.04;
+                          lz = -0.82; // Блок из 3 маршевых сопел ЖРД
                         }
-                      >();
-
-                      for (const gbObj of p.gobellObjects) {
+                        nx = lx * bRight.x + ly * bUp.x + lz * bForward.x;
+                        ny = lx * bRight.y + ly * bUp.y + lz * bForward.y;
+                        nz = lx * bRight.z + ly * bUp.z + lz * bForward.z;
+                      } else {
                         const latRad = (gbObj.latDeg * Math.PI) / 180;
                         const lonRad = (gbObj.lonOffsetDeg * Math.PI) / 180;
                         const cosLat = Math.cos(latRad);
@@ -6856,22 +13992,23 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         const eqY = sinLon * pU.y - cosLon * pV.y;
                         const eqZ = sinLon * pU.z - cosLon * pV.z;
 
-                        const nx = cosLat * eqX + sinLat * pN.x;
-                        const ny = cosLat * eqY + sinLat * pN.y;
-                        const nz = cosLat * eqZ + sinLat * pN.z;
-
-                        const ox = psx + nx * planetR;
-                        const oy = psy - ny * planetR;
-
-                        projectedMap.set(gbObj.id, {obj: gbObj, ox, oy, nx, ny, nz});
-                        frameProjectedPlanetObjects.push({
-                          obj: gbObj,
-                          planetName: p.name,
-                          canvasX: ox,
-                          canvasY: oy,
-                          hitRadius: Math.max(15, Math.min(28, planetR * 0.13)),
-                        });
+                        nx = cosLat * eqX + sinLat * pN.x;
+                        ny = cosLat * eqY + sinLat * pN.y;
+                        nz = cosLat * eqZ + sinLat * pN.z;
                       }
+
+                      const ox = psx + nx * planetR;
+                      const oy = psy - ny * planetR;
+
+                      projectedMap.set(gbObj.id, {obj: gbObj, ox, oy, nx, ny, nz});
+                      frameProjectedPlanetObjects.push({
+                        obj: gbObj,
+                        planetName: p.name,
+                        canvasX: ox,
+                        canvasY: oy,
+                        hitRadius: Math.max(15, Math.min(28, planetR * 0.13)),
+                      });
+                    }
 
                       const businessProj = Array.from(projectedMap.values()).find(
                         (entry) => entry.obj.kind === 'BUSINESS'
@@ -7096,7 +14233,6 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         });
                       }
                     }
-                  }
 
                   // Регистрируем саму Планету в списке объектов для вызова её карточки по клавише I
                   const planetGroupObj = p.gobellObjects?.find((o) => o.kind === 'GROUP');
@@ -7114,6 +14250,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
                   const pOrder =
                     planetGroupObj?.planetOrder ||
+                    p.orbitOrder ||
                     (p.cleanName === 'Меркурий'
                       ? 1
                       : p.cleanName === 'Венера'
@@ -7127,6 +14264,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     2: 'Источник алюминия и лёгких авиакосмических сплавов в системе (корпуса и крылья кораблей).',
                     3: 'Источник продовольствия и воды (кислорода O₂ для жизнеобеспечения экипажей и колоний в системе).',
                     4: 'Источник титана и сверхпрочной брони в системе · опорный форпост у Пояса Астероидов.',
+                    5: 'Орбитальная боевая станция-планетоид Диктатора размером с планету на орбите Марса в противофазе относительно Солнца: меридианы и параллели бронекорпуса, утопленный экваториальный каньон и вогнутый кратер Суперлазера.',
+                    6: 'Гигантский космический корабль размером с планету в виде бублика (тора) с искусственной центробежной силой (1G) и 4 внутренними лучами-переходами, которые встречаются по центру бублика. Движется по орбите Земли строго в противофазе (180°) относительно Солнца.',
+                    7: 'Невращающиеся «Звёздные Врата» в нашем стиле размером с планету на орбите Венеры строго в противофазе (180°) относительно Солнца: монолитное 3D-кольцо с 9 замками-шевронами, 36 статичными рунами созвездий и квантовым Горизонтом Событий из меридианов и параллелей.',
+                    8: 'Эталонная 3D-модель стандартного космического корабля типа «Буран / Шаттл» на орбите Меркурия в противофазе относительно Солнца: двойное дельтавидное крыло с чёрной теплозащитой, остекление кабины пилотов, цилиндрический грузовой отсек с меридианами-шпангоутами, высокий стреловидный киль и 3 маршевых сопла ЖРД.',
                   };
 
                   const planetMassTonsByOrder: Record<number, number> = {
@@ -7134,13 +14275,33 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     2: 4867000,
                     3: 5972000,
                     4: 641700,
+                    5: 920000,
+                    6: 750000,
+                    7: 680000,
+                    8: 105,
                   };
                   const planetMassLabelByOrder: Record<number, string> = {
                     1: '3.29×10²⁰ т (Меркурий)',
                     2: '4.87×10²¹ т (Венера)',
                     3: '5.97×10²¹ т (Земля)',
                     4: '6.42×10²⁰ т (Марс)',
+                    5: '9.20×10²⁰ т (Звезда Смерти)',
+                    6: '7.50×10²⁰ т (Корабль-Тор «Бублик»)',
+                    7: '6.80×10²⁰ т (Звёздные Врата)',
+                    8: '105 т (Корабль «Буран / Шаттл»)',
                   };
+
+                  const activeSysAssignForCard =
+                    pOrder >= 1 && pOrder <= 4
+                      ? getStarSystemFullAssignment(activeSystemKeyRef.current || 'sys:0')
+                      : null;
+                  const dictatorPlanetForCard =
+                    activeSysAssignForCard && pOrder >= 1 && pOrder <= 4
+                      ? activeSysAssignForCard.planets[(pOrder - 1) as 0 | 1 | 2 | 3]
+                      : undefined;
+                  const capturedRecForCard = dictatorPlanetForCard
+                    ? capturedPlanetsMapRef.current[dictatorPlanetForCard.index]
+                    : undefined;
 
                   frameScreenTargets.push({
                     id: p.id,
@@ -7157,9 +14318,15 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       id: p.id,
                       kind: 'PLANET',
                       systemTag: `PLANET-${pOrder}`,
-                      color: p.color,
-                      name: p.cleanName,
-                      nickname: 'планета',
+                      color: capturedRecForCard?.isCaptured
+                        ? capturedRecForCard.clanColor || p.color
+                        : p.color,
+                      name: capturedRecForCard?.isCaptured
+                        ? `${capturedRecForCard.customName} - бывший ${capturedRecForCard.formerName}`
+                        : p.cleanName,
+                      nickname: capturedRecForCard?.isCaptured
+                        ? `${capturedRecForCard.clanIcon} ${capturedRecForCard.clanOrUnionName}`
+                        : dictatorPlanetForCard?.factionBadge || 'планета',
                       description:
                         planetDescriptionByOrder[pOrder] || 'Источник ресурсов в звёздной системе.',
                       groupsTitle: `правительство (${p.cleanName} · #${
@@ -7182,6 +14349,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       coordsLabel: `Орбита R=${p.orbitRadius} ед.`,
                       planetOrder: pOrder,
                       planetCleanName: p.cleanName,
+                      dictatorPlanetIndex: dictatorPlanetForCard?.index,
+                      officialPlanetName: dictatorPlanetForCard?.officialName,
+                      folkPlanetName: dictatorPlanetForCard?.folkName,
+                      starSystemTitle: activeSysAssignForCard
+                        ? `${activeSysAssignForCard.starName} (${activeSysAssignForCard.constellationNameRu})`
+                        : undefined,
                     },
                   });
                 }
@@ -7216,7 +14389,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               const bx = cx + wx * bScale;
               const by = cy - wy * bScale;
 
-              if (bx < -60 || bx > width + 60 || by < -60 || by > viewH + 60) continue;
+              if (bx < -60 || bx > width + 60 || by < -60 || by > height + 60) continue;
 
               const drawR = Math.max(9, Math.min(22, (380 / Math.max(120, dist3D)) * 15));
               const pulse = 1 + 0.2 * Math.sin(st.frameCounter * 0.14 + sSlot.slotId);
@@ -7268,14 +14441,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   name: 'канал фиксации',
                   nickname: `аукцион слота #${sSlot.slotId} (${sSlot.fixedPointLabel})`,
                   description: sSlot.text,
-                  groupsTitle: 'подпространственная сеть GoBell (#SUBSPACE-NET)',
+                  groupsTitle: 'подпространственная сеть G. Bell (#SUBSPACE-NET)',
                   groupsDescription:
                     'Фиксация информационных маяков в любой точке звёздной системы и распределение доходов пула аукциона.',
                   businessesTitle: sSlot.inAuctionPool
                     ? `пул аукциона Monetize (доля ${myAuctionPoolSharePct}%)`
                     : `точка фиксации: ${sSlot.fixedPointLabel}`,
                   businessesDescription:
-                    'Аналог аукциона слота объявления GoBell в открытом космосе.',
+                    'Аналог аукциона слота объявления G. Bell в открытом космосе.',
                   karmaPlus: 25,
                   karmaMinus: 0,
                   distanceUnits: Math.round(dist3D),
@@ -7309,7 +14482,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               isOldSys,
               (itemLabel, destPlanetName) => {
                 absorbedList.push(`${itemLabel.split('[')[0].trim()} → ${destPlanetName}`);
-              }
+              },
+              st.planets.filter((p) => p.orbitOrder <= 4)
             );
 
             if (absorbedList.length > 0) {
@@ -7328,7 +14502,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
             // Вспомогательная функция точных 3D-координат и радиуса планеты по её индексу (0..3)
             const getPlanet3DNode = (idx: number): {pos: Vec3; radius3D: number} => {
-              const p = st.planets[idx];
+              const p = st.planets.find((pl) => pl.orbitOrder === idx + 1);
               const orbitR = p ? p.orbitRadius : PLANET_ORBIT_STEP * (idx + 1);
               const orbitA = p ? p.orbitAngle : -Math.PI / 2 + (idx % 2 === 0 ? -0.11 : 0.11);
               const radius3D = p ? p.radius3D : 110;
@@ -7358,6 +14532,167 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             const posedEntities: ComputedEntityRoutePose[] = [];
 
             for (const ent of st.entities) {
+              // 4 корабля «Буран / Шаттл» в Поясе Астероидов (и сброшенный ими после уничтожения груз/обломки):
+              // равномерно распределены по Поясу Астероидов (R ≈ 27 000), летят на половине скорости (50 ед/с),
+              // стреляют по астероидам и собирают металлы!
+              if (ent.isBuranMiner || ent.isBeltOrbitDrop) {
+                const beltR = ent.beltOrbitRadius || 27000;
+                const beltA = ent.beltOrbitAngle ?? -Math.PI / 2;
+                const beltY = ent.beltYOffset ?? 0;
+                const cA = Math.cos(beltA);
+                const sA = Math.sin(beltA);
+                const tCos = -Math.sin(beltA);
+                const tSin = Math.cos(beltA);
+
+                ent.pos = {
+                  x:
+                    st.starPos.x +
+                    beltR * (cA * st.eclipticU.x + sA * st.eclipticV.x) +
+                    beltY * st.eclipticN.x,
+                  y:
+                    st.starPos.y +
+                    beltR * (cA * st.eclipticU.y + sA * st.eclipticV.y) +
+                    beltY * st.eclipticN.y,
+                  z:
+                    st.starPos.z +
+                    beltR * (cA * st.eclipticU.z + sA * st.eclipticV.z) +
+                    beltY * st.eclipticN.z,
+                };
+                ent.rot = {x: 0, y: 0, z: 0};
+                ent.rotSpeed = {x: 0, y: 0, z: 0};
+
+                const forwardVec: Vec3 = {
+                  x: tCos * st.eclipticU.x + tSin * st.eclipticV.x,
+                  y: tCos * st.eclipticU.y + tSin * st.eclipticV.y,
+                  z: tCos * st.eclipticU.z + tSin * st.eclipticV.z,
+                };
+                const rawRx = st.eclipticN.y * forwardVec.z - st.eclipticN.z * forwardVec.y;
+                const rawRy = st.eclipticN.z * forwardVec.x - st.eclipticN.x * forwardVec.z;
+                const rawRz = st.eclipticN.x * forwardVec.y - st.eclipticN.y * forwardVec.x;
+                const rLen = Math.hypot(rawRx, rawRy, rawRz) || 1;
+                const rightVec: Vec3 = {
+                  x: rawRx / rLen,
+                  y: rawRy / rLen,
+                  z: rawRz / rLen,
+                };
+                const upVec: Vec3 = {
+                  x: forwardVec.y * rightVec.z - forwardVec.z * rightVec.y,
+                  y: forwardVec.z * rightVec.x - forwardVec.x * rightVec.z,
+                  z: forwardVec.x * rightVec.y - forwardVec.y * rightVec.x,
+                };
+
+                // Автоматическая стрельба корабля «Буран / Шаттл» по астероидам в Поясе Астероидов и сбор металлов:
+                if (ent.isBuranMiner) {
+                  ent.miningCooldownSec = (ent.miningCooldownSec ?? 1.8) - dtSec;
+                  const targetAstIdx = (ent.minerIndex ?? 0) % Math.max(1, st.asteroids.length);
+                  const targetAst = st.asteroids[targetAstIdx];
+                  const lookAheadDist = 145;
+                  let astCamPos: Vec3 = {
+                    x: ent.pos.x + forwardVec.x * lookAheadDist - rightVec.x * 10 + upVec.x * 4,
+                    y: ent.pos.y + forwardVec.y * lookAheadDist - rightVec.y * 10 + upVec.y * 4,
+                    z: ent.pos.z + forwardVec.z * lookAheadDist - rightVec.z * 10 + upVec.z * 4,
+                  };
+
+                  if (targetAst) {
+                    // Удерживаем целевой астероид сектора впереди по курсу «Бурана», чтобы он постоянно обстреливал реальные глыбы в 3D:
+                    const desiredAstAngle = beltA + lookAheadDist / beltR;
+                    if (
+                      targetAst.respawnAtMs !== undefined ||
+                      Math.abs(targetAst.orbitAngle - desiredAstAngle) > 0.015
+                    ) {
+                      targetAst.respawnAtMs = undefined;
+                      targetAst.orbitRadius = beltR - 10;
+                      targetAst.orbitAngle = desiredAstAngle;
+                      targetAst.yOffset = beltY + 4;
+                      targetAst.isValuable = true;
+                      targetAst.elementSymbol = ent.lootElement || 'Ti';
+                      targetAst.revealed = true;
+                      targetAst.color =
+                        ASTEROID_PERIODIC_ELEMENTS[targetAst.elementSymbol]?.color || '#38bdf8';
+                    }
+                    const caAst = Math.cos(targetAst.orbitAngle);
+                    const saAst = Math.sin(targetAst.orbitAngle);
+                    astCamPos = {
+                      x:
+                        st.starPos.x +
+                        targetAst.orbitRadius * (caAst * st.eclipticU.x + saAst * st.eclipticV.x) +
+                        targetAst.yOffset * st.eclipticN.x,
+                      y:
+                        st.starPos.y +
+                        targetAst.orbitRadius * (caAst * st.eclipticU.y + saAst * st.eclipticV.y) +
+                        targetAst.yOffset * st.eclipticN.y,
+                      z:
+                        st.starPos.z +
+                        targetAst.orbitRadius * (caAst * st.eclipticU.z + saAst * st.eclipticV.z) +
+                        targetAst.yOffset * st.eclipticN.z,
+                    };
+                  }
+
+                  ent.miningTargetAstPos = astCamPos;
+
+                  if (ent.miningCooldownSec <= 0) {
+                    ent.miningCooldownSec = 2.2 + ((ent.minerIndex ?? 0) % 2) * 0.4;
+                    ent.miningLaserTimer = 28;
+                    const nextTons = Math.min(25, (ent.minedMetalsTons ?? 1) + 1);
+                    ent.minedMetalsTons = nextTons;
+                    const nextMetalSym: AsteroidElementSymbol = isOldSys
+                      ? 'Omega'
+                      : BURAN_MINER_METALS_POOL[
+                          ((ent.minerIndex ?? 0) * 3 + nextTons) % BURAN_MINER_METALS_POOL.length
+                        ];
+                    ent.lootElement = nextMetalSym;
+                    ent.label = buildBuranMinerLabel(ent);
+
+                    if (targetAst) {
+                      targetAst.isValuable = true;
+                      targetAst.elementSymbol = nextMetalSym;
+                      targetAst.revealed = true;
+                      targetAst.color =
+                        ASTEROID_PERIODIC_ELEMENTS[nextMetalSym]?.color || '#38bdf8';
+                    }
+
+                    // Если «Буран» находится вблизи игрока — добавляем искры раскалённого металла от обстреливаемого астероида:
+                    if (astCamPos.z > 25 && astCamPos.z < 1800) {
+                      const sparkColor =
+                        ASTEROID_PERIODIC_ELEMENTS[nextMetalSym]?.color || '#fde047';
+                      for (let sp = 0; sp < 5; sp++) {
+                        st.debris.push({
+                          pos: {...astCamPos},
+                          vel: {
+                            x: (Math.random() - 0.5) * 10,
+                            y: (Math.random() - 0.5) * 10,
+                            z: (Math.random() - 0.5) * 10,
+                          },
+                          ttl: 16,
+                          color: sp % 2 === 0 ? sparkColor : '#fde047',
+                        });
+                      }
+                    }
+                  }
+                }
+
+                const routeStartPt: Vec3 = {
+                  x: ent.pos.x - forwardVec.x * 260,
+                  y: ent.pos.y - forwardVec.y * 260,
+                  z: ent.pos.z - forwardVec.z * 260,
+                };
+                const routeEndPt: Vec3 = {
+                  x: ent.pos.x + forwardVec.x * 260,
+                  y: ent.pos.y + forwardVec.y * 260,
+                  z: ent.pos.z + forwardVec.z * 260,
+                };
+
+                posedEntities.push({
+                  ent,
+                  forwardVec,
+                  rightVec,
+                  upVec,
+                  routeStartPt,
+                  routeEndPt,
+                });
+                continue;
+              }
+
               const homeIdx = ent.homePlanetIdx ?? ent.trajFromPlanetIdx ?? 0;
               const homeCfg = PLANET_LOGISTICS_CONFIG[homeIdx] || PLANET_LOGISTICS_CONFIG[0];
               const targetListIdx = (ent.cycleTargetListIdx ?? 0) % 3;
@@ -7498,15 +14833,16 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   setCredits((c) => c + 350);
                   setEarnedGoBellKarma((k) => k + 2);
                   onEarnKarmaAndBonus?.(2, 350, 'Спасение капсулы SOS в открытом космосе');
-                  setFlightMessage('★ SOS CAPSULE RESCUED! +350 CR & +2 GOBELL KARMA ★');
+                  setFlightMessage('★ SOS CAPSULE RESCUED! +350 CR & +2 G. BELL KARMA ★');
                   st.entities = st.entities.filter((e) => e.id !== ent.id);
                   continue;
                 } else if (usedCargoTonsForPhysics < maxCargoCapacity) {
                   const origin = ent.lootOrigin || 'AFTER_BATTLE';
                   const sym = ent.lootElement || 'Pt';
                   const shipName = ent.destroyedShipName || ent.label;
+                  const tonsToCollect = ent.minedMetalsTons || 1;
                   st.entities = st.entities.filter((e) => e.id !== ent.id);
-                  collectSpaceLootItem(origin, sym, shipName);
+                  collectSpaceLootItem(origin, sym, shipName, tonsToCollect);
                   continue;
                 }
               }
@@ -7541,7 +14877,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   if (rz > 35) {
                     const sx = cx + (rx * 380) / rz;
                     const sy = cy - (ry * 380) / rz;
-                    if (sx > -1600 && sx < width + 1600 && sy > -1600 && sy < viewH + 1600) {
+                    if (sx > -1600 && sx < width + 1600 && sy > -1600 && sy < height + 1600) {
                       if (!penDown) {
                         ctx.moveTo(sx, sy);
                         penDown = true;
@@ -7573,7 +14909,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 entScreenX < -220 ||
                 entScreenX > width + 220 ||
                 entScreenY < -220 ||
-                entScreenY > viewH + 220
+                entScreenY > height + 220
               ) {
                 continue;
               }
@@ -7599,49 +14935,140 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   : 0.28;
 
               const apparentHalfSizePx = (55 * meshWorldScale * 380) / ent.pos.z;
+              const isStandardBuranShuttleEntity =
+                ent.kind !== 'STATION' &&
+                ent.kind !== 'THARGOID' &&
+                ent.kind !== 'CARGO' &&
+                ent.kind !== 'SOS_POD' &&
+                ent.kind !== 'SPACE_DEBRIS';
 
-              // Начисто убрано вращение вокруг осей: вершины ориентированы строго по вектору маршрута (rightVec, upVec, forwardVec)
-              const projected: {x: number; y: number}[] = mesh.vertices.map((v) => {
-                const vx = v.x * meshWorldScale;
-                const vy = v.y * meshWorldScale;
-                const vz = v.z * meshWorldScale;
-                const wx =
-                  ent.pos.x +
-                  rightVec.x * vx +
-                  upVec.x * vy +
-                  forwardVec.x * vz;
-                const wy =
-                  ent.pos.y +
-                  rightVec.y * vx +
-                  upVec.y * vy +
-                  forwardVec.y * vz;
-                const wz = Math.max(
-                  20,
-                  ent.pos.z +
-                    rightVec.z * vx +
-                    upVec.z * vy +
-                    forwardVec.z * vz
-                );
-                const scale = 380 / wz;
-                return {
-                  x: cx + wx * scale,
-                  y: cy - wy * scale,
+              if (isStandardBuranShuttleEntity && (apparentHalfSizePx >= 5.5 || ent.isBuranMiner)) {
+                // Полноценная 3D-модель стандартного корабля-ракетоплана «Буран / Шаттл» на межпланетном маршруте и в Поясе Астероидов:
+                // ориентирована строго вдоль вектора движения (rightVec, upVec, forwardVec)
+                const buranWorldRadius = ent.isBuranMiner ? 38 : 24;
+                const projectEntBuran3D = (lx: number, ly: number, lz: number) => {
+                  const wx =
+                    ent.pos.x +
+                    (rightVec.x * lx + upVec.x * ly + forwardVec.x * lz) * buranWorldRadius;
+                  const wy =
+                    ent.pos.y +
+                    (rightVec.y * lx + upVec.y * ly + forwardVec.y * lz) * buranWorldRadius;
+                  const wz = Math.max(
+                    20,
+                    ent.pos.z +
+                      (rightVec.z * lx + upVec.z * ly + forwardVec.z * lz) * buranWorldRadius
+                  );
+                  const scale = 380 / wz;
+                  return {
+                    x: cx + wx * scale,
+                    y: cy - wy * scale,
+                    z: wz,
+                  };
                 };
-              });
+                drawBuranShuttle3D(
+                  ctx,
+                  projectEntBuran3D,
+                  Math.max(ent.isBuranMiner ? 12 : 4, (buranWorldRadius * 380) / ent.pos.z),
+                  ent.color,
+                  st.frameCounter
+                );
 
-              ctx.strokeStyle = ent.color;
-              ctx.lineWidth =
-                apparentHalfSizePx > 22 ? 1.6 : apparentHalfSizePx > 7 ? 1.25 : 1.0;
-              ctx.beginPath();
-              for (const [i1, i2] of mesh.edges) {
-                const p1 = projected[i1];
-                const p2 = projected[i2];
-                if (p1 && p2) {
-                  ctx.moveTo(p1.x, p1.y);
-                  ctx.lineTo(p2.x, p2.y);
+                // Если это корабль «Буран / Шаттл» в Поясе Астероидов — рисуем его лазерный залп по астероиду и луч сбора металлов:
+                if (ent.isBuranMiner && ent.miningTargetAstPos && ent.miningTargetAstPos.z > 25) {
+                  const astScale = 380 / ent.miningTargetAstPos.z;
+                  const astSx = cx + ent.miningTargetAstPos.x * astScale;
+                  const astSy = cy - ent.miningTargetAstPos.y * astScale;
+                  const nosePt = projectEntBuran3D(0, 0.02, 0.98);
+                  const bayPt = projectEntBuran3D(0, 0.16, -0.05);
+                  const metalSym = ent.lootElement || 'Ti';
+                  const metalColor = ASTEROID_PERIODIC_ELEMENTS[metalSym]?.color || '#38bdf8';
+
+                  if ((ent.miningLaserTimer ?? 0) > 0) {
+                    ent.miningLaserTimer = (ent.miningLaserTimer ?? 1) - 1;
+                    ctx.save();
+                    // 1) Импульсный горнодобывающий лазер из носовой турели «Бурана» по астероиду
+                    ctx.strokeStyle = '#ff0055';
+                    ctx.lineWidth = 2.4;
+                    ctx.beginPath();
+                    ctx.moveTo(nosePt.x, nosePt.y);
+                    ctx.lineTo(astSx, astSy);
+                    ctx.stroke();
+
+                    ctx.strokeStyle = '#fde047';
+                    ctx.lineWidth = 1.1;
+                    ctx.beginPath();
+                    ctx.moveTo(nosePt.x, nosePt.y);
+                    ctx.lineTo(astSx, astSy);
+                    ctx.stroke();
+
+                    // 2) Гравитационный трактор-луч втягивания отколотых металлов в открытый грузовой отсек «Бурана»
+                    ctx.setLineDash([4, 4]);
+                    ctx.strokeStyle = metalColor;
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(astSx, astSy);
+                    ctx.lineTo(bayPt.x, bayPt.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Движущийся по лучу контейнер/слиток металла от астероида в грузовой отсек
+                    const pullT = 1 - (ent.miningLaserTimer ?? 0) / 28;
+                    const nuggetX = astSx + (bayPt.x - astSx) * pullT;
+                    const nuggetY = astSy + (bayPt.y - astSy) * pullT;
+                    ctx.fillStyle = metalColor;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    ctx.arc(nuggetX, nuggetY, 3.6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                  }
                 }
+              } else {
+                // Начисто убрано вращение вокруг осей: вершины ориентированы строго по вектору маршрута (rightVec, upVec, forwardVec)
+                const projected: {x: number; y: number}[] = mesh.vertices.map((v) => {
+                  const vx = v.x * meshWorldScale;
+                  const vy = v.y * meshWorldScale;
+                  const vz = v.z * meshWorldScale;
+                  const wx =
+                    ent.pos.x +
+                    rightVec.x * vx +
+                    upVec.x * vy +
+                    forwardVec.x * vz;
+                  const wy =
+                    ent.pos.y +
+                    rightVec.y * vx +
+                    upVec.y * vy +
+                    forwardVec.y * vz;
+                  const wz = Math.max(
+                    20,
+                    ent.pos.z +
+                      rightVec.z * vx +
+                      upVec.z * vy +
+                      forwardVec.z * vz
+                  );
+                  const scale = 380 / wz;
+                  return {
+                    x: cx + wx * scale,
+                    y: cy - wy * scale,
+                  };
+                });
+
+                ctx.strokeStyle = ent.color;
+                ctx.lineWidth =
+                  apparentHalfSizePx > 22 ? 1.6 : apparentHalfSizePx > 7 ? 1.25 : 1.0;
+                ctx.beginPath();
+                for (const [i1, i2] of mesh.edges) {
+                  const p1 = projected[i1];
+                  const p2 = projected[i2];
+                  if (p1 && p2) {
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                  }
+                }
+                ctx.stroke();
               }
-              ctx.stroke();
 
               // Если модуль/груз далеко на маршруте (проекция меньше 3.5 пикс.) — подсвечиваем его чёткой масштабной точкой на траектории
               if (apparentHalfSizePx < 3.5) {
@@ -7719,6 +15146,51 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   shipMaxMassTons: Number(((ent.maxMassKg ?? 50000) / 1000).toFixed(0)),
                   playerHitTons: Number(((ent.playerHitMassKg ?? 0) / 1000).toFixed(2)),
                 };
+              } else if (ent.isBuranMiner) {
+                const minerNum = (ent.minerIndex ?? 0) + 1;
+                const metalSym = ent.lootElement || 'Ti';
+                const metalMeta =
+                  ASTEROID_PERIODIC_ELEMENTS[metalSym] || ASTEROID_PERIODIC_ELEMENTS.Ti;
+                const minedTons = Math.max(1, ent.minedMetalsTons ?? 1);
+                const sectorDeg = Math.round(
+                  (((ent.beltOrbitAngle ?? 0) * 180) / Math.PI + 360) % 360
+                );
+                objProfile = {
+                  id: ent.id,
+                  kind: 'COMBAT_SHIP',
+                  systemTag: `BURAN-BELT-#${minerNum}`,
+                  color: ent.color,
+                  name: `Буран / Шаттл #${minerNum}`,
+                  nickname: `добытчик металлов в Поясе Астероидов (сектор ${sectorDeg}° · V=½ скорости)`,
+                  description: `Стандартный ракетоплан «Буран / Шаттл» #${minerNum}/4, равномерно распределённый в Поясе Астероидов (R=${
+                    ent.beltOrbitRadius || 27000
+                  } ед.). Летит на половине скорости (50 ед/с), ведёт лазерный обстрел астероидов и собирает металлы в грузовой отсек. На корабле нет никаких контактов. Его можно уничтожить, и после него (как и после челноков) остаётся его груз металлов (${minedTons}т ${
+                    metalMeta.displaySymbol
+                  }), который можно забрать!`,
+                  groupsTitle: 'автономный горнодобывающий флот Пояса Астероидов (без контактов)',
+                  groupsDescription:
+                    'Беспилотные/автономные ракетопланы «Буран / Шаттл» в Поясе Астероидов не выходят на радиосвязь и не имеют контактов.',
+                  businessesTitle: `собранный груз металлов в отсеке: ${minedTons}т [${metalMeta.displaySymbol}] ${metalMeta.nameRu}`,
+                  businessesDescription:
+                    'При уничтожении корабля весь накопленный в его отсеке груз металлов остаётся в Поясе Астероидов в виде контейнера, доступного для захвата (СКМ / C).',
+                  karmaPlus: 0,
+                  karmaMinus: 15,
+                  distanceUnits: trueDist,
+                  coordsLabel: `Пояс Астероидов R=${ent.beltOrbitRadius || 27000} · Сектор ${sectorDeg}°`,
+                  planetOrder: 4,
+                  planetCleanName: 'Пояс Астероидов',
+                  entityId: ent.id,
+                  routeFromPlanet: 'Пояс Астероидов',
+                  routeToPlanet: `Сектор #${minerNum}/4 (${sectorDeg}°)`,
+                  routePhaseLabel: 'Полёт на ½ скорости (50 ед/с) · Обстрел астероидов',
+                  routeProgressPct: (minerNum * 25) % 100,
+                  cargoResourceLabel: `${minedTons}т [${metalMeta.displaySymbol}] ${metalMeta.nameRu}`,
+                  elementSymbol: metalSym,
+                  shipMassTons: Number(((ent.massKg ?? 50000) / 1000).toFixed(1)),
+                  shipMaxMassTons: Number(((ent.maxMassKg ?? 50000) / 1000).toFixed(0)),
+                  playerHitTons: Number(((ent.playerHitMassKg ?? 0) / 1000).toFixed(2)),
+                  noContactsAllowed: true,
+                };
               } else if (ent.kind === 'CARGO') {
                 objProfile = {
                   id: ent.id,
@@ -7753,6 +15225,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   routeProgressPct: routePct,
                   cargoResourceLabel: ent.currentCargoLabel || ent.label,
                   elementSymbol: ent.lootElement,
+                  noContactsAllowed: ent.noContactsAllowed,
                 };
               } else if (ent.kind === 'SPACE_DEBRIS') {
                 objProfile = {
@@ -7791,7 +15264,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   name: 'станция Кориолис',
                   nickname: `космопорт (${GALAXY_SYSTEMS[currentSystemId]?.name || 'SOL'})`,
                   description:
-                    'Орбитальный торговый и технический узел звёздной системы: товарная биржа, оснащение корабля и терминал миссий GoBell.',
+                    'Орбитальный торговый и технический узел звёздной системы: товарная биржа, оснащение корабля и терминал миссий G. Bell.',
                   groupsTitle: 'диспетчерская служба космопорта (#CORIOLIS-CTRL)',
                   groupsDescription:
                     'Автоматическая стыковка (клавиша T), заправка топливом и регистрация тоннажа опыта пилотов.',
@@ -7815,7 +15288,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   name: 'капсула SOS',
                   nickname: `сигнал бедствия (${fromPlanetCfg.cleanName})`,
                   description:
-                    'Спасательная капсула экипажа на межпланетном маршруте. Захват гравилучом (СКМ) приносит +2 в карму GoBell и +350 CR.',
+                    'Спасательная капсула экипажа на межпланетном маршруте. Захват гравилучом (СКМ) приносит +2 в карму G. Bell и +350 CR.',
                   groupsTitle: 'спасательная служба сектора (#SOS-RESCUE)',
                   groupsDescription: 'Приоритетный протокол помощи терпящим бедствие в космосе.',
                   businessesTitle: 'страховой фонд спасения (+350 CR за эвакуацию)',
@@ -7900,6 +15373,195 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               });
             }
 
+            // =========================================================================
+            // 3B. РОЙ ИЗ 5 КАРАТЕЛЬНЫХ ДРОНОВ ДИКТАТОРА (ЗА АТАКУ ЧЕЛНОКА НА ПОГРУЗКЕ/РАЗГРУЗКЕ У ПЛАНЕТЫ):
+            // • Каждый дрон движется ХАОТИЧЕСКИ и НЕЗАВИСИМО от других со скоростью ВДВОЕ выше скорости корабля нарушителя (2x = 200 ед/с).
+            // • Сила выстрела каждого дрона в 20 раз меньше, чем нужно для разрушения корабля нарушителя (100% / 20 = 5% за выстрел).
+            // =========================================================================
+            if (st.dictatorDrones && st.dictatorDrones.length > 0) {
+              const shipSysU = -(
+                st.starPos.x * st.eclipticU.x +
+                st.starPos.y * st.eclipticU.y +
+                st.starPos.z * st.eclipticU.z
+              );
+              const shipSysV = -(
+                st.starPos.x * st.eclipticV.x +
+                st.starPos.y * st.eclipticV.y +
+                st.starPos.z * st.eclipticV.z
+              );
+              const shipSysN = -(
+                st.starPos.x * st.eclipticN.x +
+                st.starPos.y * st.eclipticN.y +
+                st.starPos.z * st.eclipticN.z
+              );
+              const camForwardU = st.eclipticU.z;
+              const camForwardV = st.eclipticV.z;
+              const camForwardN = st.eclipticN.z;
+              const liveDroneSpeed = Math.round(
+                Math.max(MAX_SYSTEM_SPEED, st.maxSpeed, st.speed) * 2
+              );
+
+              for (const drone of st.dictatorDrones) {
+                drone.speedUnitsPerSec = liveDroneSpeed;
+                drone.chaosPhase += dtSec * 4.2;
+                drone.chaosTimerSec -= dtSec;
+
+                if (drone.chaosTimerSec <= 0) {
+                  drone.chaosTimerSec = 0.24 + Math.random() * 0.48;
+                  const rTheta = Math.random() * Math.PI * 2;
+                  const rPhi = (Math.random() - 0.5) * Math.PI * 0.9;
+                  drone.dirU = Math.cos(rPhi) * Math.cos(rTheta);
+                  drone.dirN = Math.sin(rPhi);
+                  drone.dirV = Math.cos(rPhi) * Math.sin(rTheta);
+                }
+
+                // Независимые хаотические гармоники каждого дрона
+                const waveU =
+                  Math.sin(drone.chaosPhase * drone.chaosFreqX) * 0.65 + drone.dirU * 0.85;
+                const waveN =
+                  Math.cos(drone.chaosPhase * drone.chaosFreqY) * 0.65 + drone.dirN * 0.85;
+                const waveV =
+                  Math.sin(drone.chaosPhase * drone.chaosFreqZ + 1.3) * 0.65 + drone.dirV * 0.85;
+
+                // Целевая точка роения впереди корабля нарушителя (на дистанции ~165 ед. перед носом),
+                // чтобы рой из 5 дронов догонял корабль со скоростью 2x и хаотически метался перед ним!
+                const swarmAnchorU = shipSysU + camForwardU * 165;
+                const swarmAnchorN = shipSysN + camForwardN * 165;
+                const swarmAnchorV = shipSysV + camForwardV * 165;
+
+                const toAnchorU = swarmAnchorU - drone.sysOffsetU;
+                const toAnchorN = swarmAnchorN - drone.sysOffsetN;
+                const toAnchorV = swarmAnchorV - drone.sysOffsetV;
+                const distToAnchor = Math.max(1, Math.hypot(toAnchorU, toAnchorN, toAnchorV));
+
+                const pullWeight = distToAnchor > 220 ? 0.78 : distToAnchor > 95 ? 0.36 : 0.14;
+                const chaosWeight = distToAnchor > 220 ? 0.55 : 0.95;
+
+                let moveU = (toAnchorU / distToAnchor) * pullWeight + waveU * chaosWeight;
+                let moveN = (toAnchorN / distToAnchor) * pullWeight + waveN * chaosWeight;
+                let moveV = (toAnchorV / distToAnchor) * pullWeight + waveV * chaosWeight;
+                const moveLen = Math.max(0.001, Math.hypot(moveU, moveN, moveV));
+                moveU /= moveLen;
+                moveN /= moveLen;
+                moveV /= moveLen;
+
+                const stepDist = drone.speedUnitsPerSec * dtSec;
+                drone.sysOffsetU += moveU * stepDist;
+                drone.sysOffsetN += moveN * stepDist;
+                drone.sysOffsetV += moveV * stepDist;
+
+                // Пересчитываем 3D-координаты дрона относительно камеры корабля
+                const dCamX =
+                  st.starPos.x +
+                  drone.sysOffsetU * st.eclipticU.x +
+                  drone.sysOffsetV * st.eclipticV.x +
+                  drone.sysOffsetN * st.eclipticN.x;
+                const dCamY =
+                  st.starPos.y +
+                  drone.sysOffsetU * st.eclipticU.y +
+                  drone.sysOffsetV * st.eclipticV.y +
+                  drone.sysOffsetN * st.eclipticN.y;
+                const dCamZ =
+                  st.starPos.z +
+                  drone.sysOffsetU * st.eclipticU.z +
+                  drone.sysOffsetV * st.eclipticV.z +
+                  drone.sysOffsetN * st.eclipticN.z;
+                drone.camPos = {x: dCamX, y: dCamY, z: dCamZ};
+
+                const distToPlayer = Math.max(1, Math.hypot(dCamX, dCamY, dCamZ));
+
+                // Огонь карательного дрона: сила выстрела ровно в 20 раз меньше, чем нужно для разрушения корабля (5%)
+                drone.fireCooldownSec -= dtSec;
+                if (drone.fireCooldownSec <= 0 && distToPlayer < 750) {
+                  drone.fireCooldownSec = 2.1 + Math.random() * 1.3;
+                  drone.laserVisualTimer = 9;
+                  applyShieldImpactTons(1.0, `Залп дрона диктатора #${drone.droneNumber}`);
+                }
+
+                // Рендер 3D-силуэта карательного дрона и его лазерного залпа
+                if (dCamZ > 22) {
+                  const dScale = 380 / dCamZ;
+                  const dsx = cx + dCamX * dScale;
+                  const dsy = cy - dCamY * dScale;
+                  const droneRadiusPx = Math.max(5, Math.min(26, (11 * 380) / dCamZ));
+
+                  if (dsx > -120 && dsx < width + 120 && dsy > -120 && dsy < height + 120) {
+                    ctx.save();
+                    ctx.strokeStyle = drone.color;
+                    ctx.lineWidth = 1.6;
+                    // Октаэдрический 3D-каркас боевого дрона с вращающимися лопастями
+                    const spinA = drone.chaosPhase * 1.8;
+                    const wingX = Math.cos(spinA) * droneRadiusPx * 1.15;
+                    const wingY = Math.sin(spinA) * droneRadiusPx * 0.55;
+                    ctx.beginPath();
+                    ctx.moveTo(dsx, dsy - droneRadiusPx);
+                    ctx.lineTo(dsx + droneRadiusPx, dsy);
+                    ctx.lineTo(dsx, dsy + droneRadiusPx);
+                    ctx.lineTo(dsx - droneRadiusPx, dsy);
+                    ctx.closePath();
+                    ctx.moveTo(dsx - wingX, dsy - wingY);
+                    ctx.lineTo(dsx + wingX, dsy + wingY);
+                    ctx.moveTo(dsx - wingY, dsy + wingX * 0.6);
+                    ctx.lineTo(dsx + wingY, dsy - wingX * 0.6);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(dsx, dsy, Math.max(1.8, droneRadiusPx * 0.25), 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Луч выстрела дрона по кораблю нарушителя (1/20 от разрушения корабля)
+                    if (drone.laserVisualTimer > 0) {
+                      drone.laserVisualTimer -= 1;
+                      ctx.strokeStyle = '#ff0055';
+                      ctx.lineWidth = 1.8;
+                      ctx.beginPath();
+                      ctx.moveTo(dsx, dsy);
+                      ctx.lineTo(
+                        cx + ((drone.droneNumber - 3) * 26),
+                        height - 16
+                      );
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    frameScreenTargets.push({
+                      id: drone.id,
+                      canvasX: dsx,
+                      canvasY: dsy,
+                      hitRadius: Math.max(20, droneRadiusPx + 14),
+                      priority: 88,
+                      camPos: {x: dCamX, y: dCamY, z: dCamZ},
+                      standoffDist: 75,
+                      targetMassTons: 2,
+                      targetMassLabel: '2 т (Карательный дрон Диктатора)',
+                      profile: {
+                        id: drone.id,
+                        kind: 'COMBAT_SHIP',
+                        systemTag: `DRONE-#${drone.droneNumber}`,
+                        color: drone.color,
+                        name: `дрон Диктатора #${drone.droneNumber}`,
+                        nickname: `кара планеты ${drone.originPlanetName}`,
+                        description: `Боевой дрон из роя 5 единиц планетарного Диктатора (${drone.originPlanetName}). Движется хаотически и независимо со скоростью ${drone.speedUnitsPerSec} ед/с (вдвое быстрее атаковавшего корабля). Сила выстрела = 5% (в 20 раз меньше, чем нужно для разрушения корабля нарушителя).`,
+                        groupsTitle: `орбитальная гвардия Диктатора (${drone.originPlanetName})`,
+                        groupsDescription:
+                          'Автоматическая защита челноков во время погрузки и разгрузки на орбите планеты.',
+                        businessesTitle: 'протокол неприкосновенности терминалов погрузки',
+                        businessesDescription:
+                          'Челноки на погрузке/разгрузке у планеты неуязвимы, а нарушитель преследуется роем из 5 дронов.',
+                        karmaPlus: 0,
+                        karmaMinus: 25,
+                        distanceUnits: Math.round(distToPlayer),
+                        coordsLabel: `Хаотический рой · V=${drone.speedUnitsPerSec} ед/с (2× корабля)`,
+                        planetOrder: drone.originPlanetIdx + 1,
+                        planetCleanName: drone.originPlanetName,
+                      },
+                    });
+                  }
+                }
+              }
+            }
+
             // Ответный огонь пиратов с проверкой ЗАЩИЩЁННОСТИ (Брони от массы корабля)
             st.enemyFireCooldown -= 1;
             if (st.enemyFireCooldown <= 0) {
@@ -7915,12 +15577,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(ax, ay);
-                ctx.lineTo(cx + (Math.random() - 0.5) * 40, viewH - 18);
+                ctx.lineTo(cx + (Math.random() - 0.5) * 40, height - 18);
                 ctx.stroke();
 
-                const rawDmg = attacker.kind === 'THARGOID' ? 18 : 12;
-                const mitigatedDmg = Math.max(2, Math.round(rawDmg * (1 - st.protectionFactor)));
-                st.frontShield = Math.max(15, st.frontShield - mitigatedDmg);
+                const impactTons = attacker.kind === 'THARGOID' ? 2.0 : 1.0;
+                applyShieldImpactTons(
+                  impactTons,
+                  attacker.kind === 'THARGOID' ? 'Таргоидский залп' : 'Пиратский выстрел'
+                );
               }
             }
 
@@ -7941,30 +15605,227 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             }
             st.debris = st.debris.filter((d) => d.ttl > 0);
 
-            // 5. Курсовой Авиагоризонт корабля в центре экрана
-            ctx.strokeStyle = 'rgba(0, 255, 0, 0.55)';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.arc(cx, cy, 14, 0, Math.PI * 2);
-            ctx.moveTo(cx - 22, cy);
-            ctx.lineTo(cx - 8, cy);
-            ctx.moveTo(cx + 8, cy);
-            ctx.lineTo(cx + 22, cy);
-            ctx.stroke();
+            // 4.1 РАЗЛЁТ КОРАБЛЯ НА БЛОКИ ПРИ ПОТЕРЕ СВЯЗКИ ГРАВИ-КОНВЕРТОРА (0 Т):
+            if (st.shipDisintegrationBlocks && st.shipDisintegrationBlocks.length > 0) {
+              for (const blk of st.shipDisintegrationBlocks) {
+                blk.pos.x += blk.vel.x;
+                blk.pos.y += blk.vel.y;
+                blk.pos.z += blk.vel.z;
+                blk.rot.x += blk.rotSpeed.x;
+                blk.rot.y += blk.rotSpeed.y;
+                blk.rot.z += blk.rotSpeed.z;
 
-            ctx.save();
-            ctx.translate(cx, cy);
-            ctx.rotate(st.bankAngle);
-            const pitchOffsetPx = Math.max(-24, Math.min(24, st.pitchRate * 1400));
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.65)';
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(-44, pitchOffsetPx);
-            ctx.lineTo(-20, pitchOffsetPx);
-            ctx.moveTo(20, pitchOffsetPx);
-            ctx.lineTo(44, pitchOffsetPx);
-            ctx.stroke();
-            ctx.restore();
+                if (blk.pos.z > 15) {
+                  const bScale = 380 / blk.pos.z;
+                  const bx = cx + blk.pos.x * bScale;
+                  const by = cy - blk.pos.y * bScale;
+
+                  if (bx > -120 && bx < width + 120 && by > -120 && by < height + 120) {
+                    ctx.save();
+                    ctx.translate(bx, by);
+
+                    const cosY = Math.cos(blk.rot.y);
+                    const sinY = Math.sin(blk.rot.y);
+                    const hw = (blk.size.w * bScale) / 2;
+                    const hh = (blk.size.h * bScale) / 2;
+                    const hd = (blk.size.d * bScale) / 2;
+
+                    ctx.strokeStyle = blk.color;
+                    ctx.lineWidth = Math.max(1, 1.8 * bScale);
+                    ctx.shadowColor = blk.color;
+                    ctx.shadowBlur = 6;
+
+                    // Передний контур блока
+                    ctx.strokeRect(-hw * Math.abs(cosY), -hh, hw * 2 * Math.abs(cosY), hh * 2);
+
+                    // 3D-рёбра глубины блока
+                    ctx.beginPath();
+                    ctx.moveTo(-hw * Math.abs(cosY), -hh);
+                    ctx.lineTo(-hw * Math.abs(cosY) + hd * sinY, -hh - hd * 0.4);
+                    ctx.lineTo(hw * Math.abs(cosY) + hd * sinY, -hh - hd * 0.4);
+                    ctx.lineTo(hw * Math.abs(cosY), -hh);
+                    ctx.stroke();
+
+                    // Текст названия блока при близком пролёте
+                    if (bScale > 0.85) {
+                      ctx.fillStyle = blk.color;
+                      ctx.font = 'bold 8.5px monospace';
+                      ctx.fillText(blk.name, -hw, hh + 12);
+                    }
+
+                    ctx.restore();
+                  }
+                }
+              }
+
+              if (st.shipDisintegrationTimer > 0) {
+                st.shipDisintegrationTimer -= 1;
+                if (st.shipDisintegrationTimer === 0) {
+                  st.shipDisintegrationBlocks = [];
+                  st.gravConverterTons = totalShipMassTons;
+                  setGravConverterTons(totalShipMassTons);
+                  st.frontShield = 100;
+                  st.aftShield = 100;
+                  st.speed = 0;
+                  st.targetSpeed = 0;
+                  setThrottleUi(0);
+                  setCurrentSystemId(0);
+                  spawnSystemEntities(0);
+                  setFlightMessage(
+                    `🛟 СПАСАТЕЛЬНАЯ КАПСУЛА ДОСТАВИЛА ВАС В LAVE! ТРАКТОРНЫЙ ДОК СОБРАЛ ВСЕ БЛОКИ КОРАБЛЯ (${totalShipMassTons} Т), ГРАВИ-КОНВЕРТОР ПЕРЕЗАПУЩЕН!`
+                  );
+                }
+              }
+            }
+
+            // 5. ПУТЕВОЙ ЦЕНТР КОРАБЛЯ (ЗЕЛЁНЫЙ КРУЖОЧЕК НАПРАВЛЕНИЯ ДВИЖЕНИЯ КОРПУСА st.shipForward)
+            // И ОРИЕНТИР ЦЕНТРА МЕШ-РУБКИ:
+            // • Когда указатель мыши дотрагивается до края экрана, 3-обручевый гироскоп Огневой Рубки поворачивается в эту сторону,
+            //   а зелёный Путевой центр смещается в противоположную сторону, показывая истинный курс полёта корабля!
+            // • Клавиша Ctrl плавно возвращает Огневую Рубку в стандартное положение (Путевой центр посередине экрана).
+            const gyroDeflectionRad = Math.acos(Math.max(-1, Math.min(1, st.shipForward.z)));
+            const gyroDeflectionDeg = Math.round((gyroDeflectionRad * 180) / Math.PI);
+            const isGyroDeflected = gyroDeflectionRad > 0.008;
+
+            // Если гироскоп Меш-Рубки отклонён от курса корабля — отмечаем центр экрана лёгким голубым перекрестием оси рубки
+            if (isGyroDeflected) {
+              ctx.save();
+              ctx.strokeStyle = 'rgba(0, 255, 255, 0.38)';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+              ctx.moveTo(cx - 12, cy);
+              ctx.lineTo(cx - 4, cy);
+              ctx.moveTo(cx + 4, cy);
+              ctx.lineTo(cx + 12, cy);
+              ctx.moveTo(cx, cy - 12);
+              ctx.lineTo(cx, cy - 4);
+              ctx.moveTo(cx, cy + 4);
+              ctx.lineTo(cx, cy + 12);
+              ctx.stroke();
+              ctx.restore();
+            }
+
+            let wayCenterScreenX = cx;
+            let wayCenterScreenY = cy;
+            let isWayCenterVisibleOnScreen = false;
+
+            if (st.shipForward.z > 0.12) {
+              wayCenterScreenX = cx + (st.shipForward.x * 380) / st.shipForward.z;
+              wayCenterScreenY = cy - (st.shipForward.y * 380) / st.shipForward.z;
+              if (
+                wayCenterScreenX >= 18 &&
+                wayCenterScreenX <= width - 18 &&
+                wayCenterScreenY >= 18 &&
+                wayCenterScreenY <= height - 18
+              ) {
+                isWayCenterVisibleOnScreen = true;
+              }
+            }
+
+            if (isWayCenterVisibleOnScreen) {
+              // Эластичная пунктирная линия связи между осью взгляда Меш-Рубки (cx, cy) и зелёным Путевым центром корабля
+              if (Math.hypot(wayCenterScreenX - cx, wayCenterScreenY - cy) > 8) {
+                ctx.save();
+                ctx.setLineDash([3, 5]);
+                ctx.strokeStyle = st.cabinAutoCentering
+                  ? 'rgba(0, 255, 136, 0.65)'
+                  : 'rgba(0, 255, 102, 0.35)';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(wayCenterScreenX, wayCenterScreenY);
+                ctx.stroke();
+                ctx.restore();
+              }
+
+              // ЗЕЛЁНЫЙ ПУТЕВОЙ ЦЕНТР КОРАБЛЯ (кружочек с курсовыми крылышками и центральной точкой вектора тяги)
+              ctx.save();
+              ctx.strokeStyle = '#00ff66';
+              ctx.fillStyle = '#00ff66';
+              ctx.lineWidth = isGyroDeflected ? 1.8 : 1.35;
+              ctx.beginPath();
+              ctx.arc(wayCenterScreenX, wayCenterScreenY, 14, 0, Math.PI * 2);
+              ctx.moveTo(wayCenterScreenX - 24, wayCenterScreenY);
+              ctx.lineTo(wayCenterScreenX - 8, wayCenterScreenY);
+              ctx.moveTo(wayCenterScreenX + 8, wayCenterScreenY);
+              ctx.lineTo(wayCenterScreenX + 24, wayCenterScreenY);
+              ctx.moveTo(wayCenterScreenX, wayCenterScreenY - 20);
+              ctx.lineTo(wayCenterScreenX, wayCenterScreenY - 14);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.arc(wayCenterScreenX, wayCenterScreenY, 2.4, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Планки крена и тангажа авиагоризонта вокруг Путевого центра корабля
+              const cabinRollAngle = Math.atan2(st.shipRight.y, st.shipRight.x);
+              ctx.translate(wayCenterScreenX, wayCenterScreenY);
+              ctx.rotate(st.bankAngle - cabinRollAngle);
+              const pitchOffsetPx = Math.max(-24, Math.min(24, st.pitchRate * 540));
+              ctx.strokeStyle = 'rgba(0, 255, 255, 0.65)';
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.moveTo(-44, pitchOffsetPx);
+              ctx.lineTo(-20, pitchOffsetPx);
+              ctx.moveTo(20, pitchOffsetPx);
+              ctx.lineTo(44, pitchOffsetPx);
+              ctx.stroke();
+              ctx.restore();
+            } else {
+              // Если Меш-Рубка повернулась так далеко (например, 90° вбок или 180° в хвост корабля),
+              // что Путевой центр ушёл за край 3D-экрана — рисуем на кромке зелёный маркер-указатель к Путевому центру!
+              let dirX = st.shipForward.x;
+              let dirY = -st.shipForward.y;
+              const dirLen = Math.hypot(dirX, dirY);
+              if (dirLen < 1e-4) {
+                dirX = 1;
+                dirY = 0;
+              } else {
+                dirX /= dirLen;
+                dirY /= dirLen;
+              }
+              const maxRx = cx - 30;
+              const maxRy = cy - 30;
+              const scaleEdge = Math.min(
+                Math.abs(dirX) > 1e-4 ? maxRx / Math.abs(dirX) : 9999,
+                Math.abs(dirY) > 1e-4 ? maxRy / Math.abs(dirY) : 9999
+              );
+              const edgePtrX = cx + dirX * scaleEdge;
+              const edgePtrY = cy + dirY * scaleEdge;
+              const ptrAngle = Math.atan2(dirY, dirX);
+
+              ctx.save();
+              ctx.setLineDash([4, 6]);
+              ctx.strokeStyle = 'rgba(0, 255, 102, 0.28)';
+              ctx.lineWidth = 1.1;
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              ctx.lineTo(edgePtrX, edgePtrY);
+              ctx.stroke();
+              ctx.setLineDash([]);
+
+              ctx.translate(edgePtrX, edgePtrY);
+              ctx.strokeStyle = '#00ff66';
+              ctx.fillStyle = '#00ff66';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.arc(0, 0, 11, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Стрелка-шеврон в сторону истинного Путевого центра корабля
+              ctx.rotate(ptrAngle);
+              ctx.beginPath();
+              ctx.moveTo(18, 0);
+              ctx.lineTo(11, -6);
+              ctx.moveTo(18, 0);
+              ctx.lineTo(11, 6);
+              ctx.stroke();
+              ctx.restore();
+            }
 
             // =========================================================================
             // 5B. ОГНЕВАЯ РУБКА (ТУРЕЛЬ), ПРИЦЕЛ МЫШИ И ИНСПЕКТОР ПРОФИЛЯ (КУРСОР + КЛАВИША I)
@@ -8097,7 +15958,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               } else {
                 // Если цель была уничтожена (например, астероид или корабль/груз сбит) — снимаем захват автопилота
                 const asteroidGone =
-                  curAp.asteroidId && !st.asteroids.some((a) => a.id === curAp.asteroidId);
+                  curAp.asteroidId &&
+                  !st.asteroids.some(
+                    (a) =>
+                      a.id === curAp.asteroidId &&
+                      !(a.respawnAtMs !== undefined && Date.now() < a.respawnAtMs)
+                  );
                 const entityGone =
                   curAp.entityId && !st.entities.some((e) => e.id === curAp.entityId);
                 if (asteroidGone || entityGone) {
@@ -8110,7 +15976,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             // 1) Если объект находится в зоне действия курсора мыши И нажата клавиша I — открываем/обновляем карточку этого объекта в углу экрана
             if (isKeyIDownRef.current && bestHoveredTarget) {
               const currentOpenId = activeObjectProfileRef.current?.id;
-              if (currentOpenId !== bestHoveredTarget.id || st.frameCounter % 3 === 0) {
+              if (currentOpenId !== bestHoveredTarget.profile.id || st.frameCounter % 3 === 0) {
                 const anchor = computeCardAnchorFromHit(bestHoveredTarget);
                 const nextProfile: SpaceObjectProfileData = {
                   ...bestHoveredTarget.profile,
@@ -8125,12 +15991,17 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               // 2) Если карточка уже открыта в углу экрана: обновляем дистанцию и координаты объекта в реальном времени,
               //    чтобы пилот мог свободно увести курсор в угол к карточке и нажимать в ней кнопки
               const liveTarget = frameScreenTargets.find(
-                (t) => t.id === activeObjectProfileRef.current?.id
+                (t) =>
+                  t.id === activeObjectProfileRef.current?.id ||
+                  t.profile.id === activeObjectProfileRef.current?.id
               );
               if (liveTarget && st.frameCounter % 4 === 0) {
                 const anchor = computeCardAnchorFromHit(liveTarget);
                 const nextProfile: SpaceObjectProfileData = {
                   ...liveTarget.profile,
+                  constellationStars:
+                    activeObjectProfileRef.current.constellationStars ||
+                    liveTarget.profile.constellationStars,
                   canvasX: liveTarget.canvasX,
                   canvasY: liveTarget.canvasY,
                   ...anchor,
@@ -8159,43 +16030,153 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               }
             }
 
-            // Векторная Огневая Башня (Turret Mount) внизу кокпита, поворачивающая стволы за мышью
+            // =========================================================================
+            // ВЕКТОРНЫЙ 3-ОБРУЧЕВЫЙ ГИРОСКОП КРЕСЛА ОГНЕВОЙ РУБКИ И МЕШ-СИСТЕМА КАМЕР/ОРУДИЙ:
+            // • Внизу по центру 3D-окна отображается 3-обручевый гироскоп кресла пилота (Курс / Тангаж / Крен),
+            //   кольца которого реально вращаются в 3D при повороте рубки на все 360°!
+            // • По периметру 3D-окна расположены распределённые узлы Меш-системы камер и орудий корабля:
+            //   при касании края экрана мышью соответствующая грань Меш-системы подсвечивается,
+            //   поворачивая синтезированную модель космоса в эту сторону.
+            // =========================================================================
             const turretBaseX = cx;
             const turretBaseY = viewH - 2;
-            const turretAngle = Math.atan2(aimY - turretBaseY, aimX - turretBaseX);
-            const barrelLen = 34;
-            const bTipLeftX = turretBaseX - 14 + Math.cos(turretAngle) * barrelLen;
-            const bTipLeftY = turretBaseY - 6 + Math.sin(turretAngle) * barrelLen;
-            const bTipRightX = turretBaseX + 14 + Math.cos(turretAngle) * barrelLen;
-            const bTipRightY = turretBaseY - 6 + Math.sin(turretAngle) * barrelLen;
+            const gyroCenterX = cx;
+            const gyroCenterY = viewH - 24;
+            const turretAngle = Math.atan2(aimY - gyroCenterY, aimX - gyroCenterX);
 
-            // Купол огневой рубки
-            ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 1.6;
+            // Точки схождения огня распределённой Меш-системы орудий (боковые излучатели в разных частях корпуса + гироскоп рубки)
+            const barrelLen = 28;
+            const bTipLeftX = gyroCenterX - 24 + Math.cos(turretAngle) * barrelLen;
+            const bTipLeftY = gyroCenterY + 4 + Math.sin(turretAngle) * barrelLen;
+            const bTipRightX = gyroCenterX + 24 + Math.cos(turretAngle) * barrelLen;
+            const bTipRightY = gyroCenterY + 4 + Math.sin(turretAngle) * barrelLen;
+
+            // 1) Индикация активных граней Меш-системы при касании указателем мыши краёв 3D-экрана
+            if (Math.abs(st.cabinYawRate) > 1e-5 || Math.abs(st.cabinPitchRate) > 1e-5) {
+              ctx.save();
+              ctx.strokeStyle = 'rgba(0, 255, 255, 0.55)';
+              ctx.lineWidth = 2;
+              if (st.cabinYawRate < -1e-5) {
+                // Поворот Меш-рубки ВЛЕВО
+                ctx.beginPath();
+                ctx.moveTo(8, 28);
+                ctx.lineTo(8, viewH - 28);
+                ctx.moveTo(16, cy - 18);
+                ctx.lineTo(6, cy);
+                ctx.lineTo(16, cy + 18);
+                ctx.stroke();
+              } else if (st.cabinYawRate > 1e-5) {
+                // Поворот Меш-рубки ВПРАВО
+                ctx.beginPath();
+                ctx.moveTo(width - 8, 28);
+                ctx.lineTo(width - 8, viewH - 28);
+                ctx.moveTo(width - 16, cy - 18);
+                ctx.lineTo(width - 6, cy);
+                ctx.lineTo(width - 16, cy + 18);
+                ctx.stroke();
+              }
+              if (st.cabinPitchRate > 1e-5) {
+                // Поворот Меш-рубки ВВЕРХ
+                ctx.beginPath();
+                ctx.moveTo(80, 8);
+                ctx.lineTo(width - 80, 8);
+                ctx.moveTo(cx - 18, 16);
+                ctx.lineTo(cx, 6);
+                ctx.lineTo(cx + 18, 16);
+                ctx.stroke();
+              } else if (st.cabinPitchRate < -1e-5) {
+                // Поворот Меш-рубки ВНИЗ
+                ctx.beginPath();
+                ctx.moveTo(80, viewH - 6);
+                ctx.lineTo(width - 80, viewH - 6);
+                ctx.moveTo(cx - 18, viewH - 14);
+                ctx.lineTo(cx, viewH - 4);
+                ctx.lineTo(cx + 18, viewH - 14);
+                ctx.stroke();
+              }
+              ctx.restore();
+            }
+
+            // 2) Отрисовка 3D Трёхобручевого Гироскопа кресла управления Огневой Рубки внизу по центру (gyroCenterX, gyroCenterY)
+            const gyroYawAng = Math.atan2(-st.shipForward.x, st.shipForward.z);
+            const gyroPitchAng = Math.asin(Math.max(-1, Math.min(1, -st.shipForward.y)));
+            const gyroRollAng = Math.atan2(st.shipRight.y, st.shipRight.x);
+
+            ctx.save();
+            // Опорные стойки подвеса 3-обручевого гироскопа внутри корабля
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(turretBaseX - 36, turretBaseY);
-            ctx.lineTo(turretBaseX - 22, turretBaseY - 14);
-            ctx.lineTo(turretBaseX + 22, turretBaseY - 14);
-            ctx.lineTo(turretBaseX + 36, turretBaseY);
+            ctx.moveTo(gyroCenterX - 38, turretBaseY);
+            ctx.lineTo(gyroCenterX - 24, gyroCenterY);
+            ctx.moveTo(gyroCenterX + 38, turretBaseY);
+            ctx.lineTo(gyroCenterX + 24, gyroCenterY);
             ctx.stroke();
 
-            // Поворотные спаренные стволы огневой башни
-            ctx.strokeStyle = lockedTarget ? '#ff0055' : '#ffff00';
-            ctx.lineWidth = 2.5;
+            // Обруч №1 (Внешний — Курсовой обруч Yaw, вращается в 3D)
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 1.4;
             ctx.beginPath();
-            ctx.moveTo(turretBaseX - 14, turretBaseY - 6);
+            ctx.ellipse(
+              gyroCenterX,
+              gyroCenterY,
+              22,
+              Math.max(4, Math.abs(Math.sin(gyroYawAng + 0.45)) * 22),
+              0,
+              0,
+              Math.PI * 2
+            );
+            ctx.stroke();
+
+            // Обруч №2 (Средний — Тангажный обруч Pitch, вращается перпендикулярно)
+            ctx.strokeStyle = '#fde047';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.ellipse(
+              gyroCenterX,
+              gyroCenterY,
+              Math.max(4, Math.abs(Math.cos(gyroPitchAng + 0.35)) * 17),
+              17,
+              gyroRollAng * 0.5,
+              0,
+              Math.PI * 2
+            );
+            ctx.stroke();
+
+            // Обруч №3 (Внутренний — Креновой обруч Roll + ложемент кресла пилота)
+            ctx.strokeStyle = st.cabinAutoCentering
+              ? '#00ff88'
+              : lockedTarget
+              ? '#ff0055'
+              : '#10b981';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.ellipse(
+              gyroCenterX,
+              gyroCenterY,
+              12,
+              Math.max(3.5, Math.abs(Math.cos(gyroPitchAng)) * 12),
+              gyroRollAng,
+              0,
+              Math.PI * 2
+            );
+            ctx.stroke();
+
+            // Излучатели Меш-сети орудий и вектор наведения от гироскопа к прицелу мыши
+            ctx.strokeStyle = lockedTarget ? '#ff0055' : '#ffff00';
+            ctx.lineWidth = 2.0;
+            ctx.beginPath();
+            ctx.moveTo(gyroCenterX - 24, gyroCenterY + 4);
             ctx.lineTo(bTipLeftX, bTipLeftY);
-            ctx.moveTo(turretBaseX + 14, turretBaseY - 6);
+            ctx.moveTo(gyroCenterX + 24, gyroCenterY + 4);
             ctx.lineTo(bTipRightX, bTipRightY);
             ctx.stroke();
 
-            // Пунктирная линия наведения от огневой рубки к прицелу мыши
-            ctx.save();
             ctx.setLineDash([4, 6]);
-            ctx.strokeStyle = lockedTarget ? 'rgba(255, 0, 85, 0.45)' : 'rgba(255, 255, 0, 0.28)';
+            ctx.strokeStyle = lockedTarget ? 'rgba(255, 0, 85, 0.45)' : 'rgba(255, 255, 0, 0.25)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(turretBaseX, turretBaseY - 10);
+            ctx.moveTo(gyroCenterX, gyroCenterY);
             ctx.lineTo(aimX, aimY);
             ctx.stroke();
             ctx.restore();
@@ -8338,256 +16319,448 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           }
 
           // =========================================================================
-          // НИЖНЯЯ ПАНЕЛЬ КОКПИТА ELITE (ZX SPECTRUM 3D RADAR SCANNER + ПРИБОРЫ)
+          // NEON SPACE NAVIGATION COCKPIT HUD (MATCHING UPLOADED NEON DESIGN)
+          // 80% TRANSPARENT BACKDROP + 100% OPAQUE RADAR + CIRCULAR DIALS + ENGLISH
           // =========================================================================
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, viewH, width, height - viewH);
-          ctx.strokeStyle = '#ffff00';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(2, viewH + 2, width - 4, height - viewH - 4);
-          ctx.strokeRect(2, 2, width - 4, viewH - 2);
+          {
+            const panelTopY = viewH;
+            const panelH = height - viewH;
+            const dialCy = viewH + Math.floor(panelH * 0.44);
 
-          // Центральный 3D-Эллиптический Радар-Сканер (Elite 3D Scanner)
-          const radarCx = width / 2;
-          const radarCy = viewH + (height - viewH) * 0.56;
-          const radarRx = Math.min(155, width * 0.24);
-          const radarRy = Math.min(54, (height - viewH) * 0.34);
-
-          ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.ellipse(radarCx, radarCy, radarRx, radarRy, 0, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Сектор обзора на радаре
-          ctx.strokeStyle = 'rgba(0, 255, 255, 0.45)';
-          ctx.beginPath();
-          ctx.moveTo(radarCx, radarCy);
-          ctx.lineTo(radarCx - radarRx * 0.65, radarCy - radarRy * 0.75);
-          ctx.moveTo(radarCx, radarCy);
-          ctx.lineTo(radarCx + radarRx * 0.65, radarCy - radarRy * 0.75);
-          ctx.stroke();
-
-          // Отображение Центральной Звезды и 4 Планет эклиптики на 3D-радаре (центр радара = позиция корабля)
-          const starRadarNx = Math.max(-1, Math.min(1, st.starPos.x / SYSTEM_SPHERE_RADIUS));
-          const starRadarNz = Math.max(-1, Math.min(1, st.starPos.z / SYSTEM_SPHERE_RADIUS));
-          const starRadarNy = Math.max(-1, Math.min(1, st.starPos.y / 6000));
-          const sBx = radarCx + starRadarNx * radarRx * 0.85;
-          const sBy = radarCy - starRadarNz * radarRy * 0.8;
-          const sStickY = sBy - starRadarNy * 20;
-          ctx.strokeStyle = '#fde047';
-          ctx.fillStyle = '#fde047';
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(sBx, sBy);
-          ctx.lineTo(sBx, sStickY);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(sBx, sStickY, 4, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Отображение 4 Планет на 3D-радаре точками их цветов
-          for (const p of st.planets) {
-            const cA = Math.cos(p.orbitAngle);
-            const sA = Math.sin(p.orbitAngle);
-            const px = st.starPos.x + p.orbitRadius * (cA * st.eclipticU.x + sA * st.eclipticV.x);
-            const py = st.starPos.y + p.orbitRadius * (cA * st.eclipticU.y + sA * st.eclipticV.y);
-            const pz = st.starPos.z + p.orbitRadius * (cA * st.eclipticU.z + sA * st.eclipticV.z);
-            const pNx = Math.max(-1, Math.min(1, px / SYSTEM_SPHERE_RADIUS));
-            const pNz = Math.max(-1, Math.min(1, pz / SYSTEM_SPHERE_RADIUS));
-            const pNy = Math.max(-1, Math.min(1, py / 6000));
-            const pBx = radarCx + pNx * radarRx * 0.85;
-            const pBy = radarCy - pNz * radarRy * 0.8;
-            const pStickY = pBy - pNy * 18;
-            ctx.strokeStyle = p.color;
-            ctx.fillStyle = p.color;
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(pBx, pBy);
-            ctx.lineTo(pBx, pStickY);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.arc(pBx, pStickY, 2.8, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          // Отображение 3D-целей (модулей и грузов на межпланетных траекториях) на радаре в едином масштабе системы с планетами
-          for (const ent of st.entities) {
-            const nx = Math.max(-1, Math.min(1, ent.pos.x / SYSTEM_SPHERE_RADIUS));
-            const nz = Math.max(-1, Math.min(1, ent.pos.z / SYSTEM_SPHERE_RADIUS));
-            const ny = Math.max(-1, Math.min(1, ent.pos.y / 6000));
-
-            const bx = radarCx + nx * radarRx * 0.85;
-            const by = radarCy - nz * radarRy * 0.8;
-            const stickTopY = by - ny * 18;
-
-            ctx.strokeStyle = ent.color;
-            ctx.fillStyle = ent.color;
-            ctx.lineWidth = 1.2;
-            ctx.beginPath();
-            ctx.moveTo(bx, by);
-            ctx.lineTo(bx, stickTopY);
-            ctx.stroke();
-            ctx.fillRect(bx - 2, stickTopY - 2, 4, 4);
-          }
-
-          // Маркер самого корабля в центре 3D-радара (radarCx, radarCy)
-          ctx.fillStyle = '#00ffff';
-          ctx.beginPath();
-          ctx.arc(radarCx, radarCy, 2.8, 0, Math.PI * 2);
-          ctx.fill();
-
-          // ПУНКТИР НА РАДАРЕ МЕЖДУ КОРАБЛЁМ И ОБЪЕКТОМ, ПОПАВШИМ В ЗАХВАТ АВТОПИЛОТА (КЛАВИША Q):
-          const apRadarLock = autopilotTargetRef.current;
-          if (apRadarLock) {
-            const rawNx = Math.max(-1, Math.min(1, apRadarLock.camPos.x / SYSTEM_SPHERE_RADIUS));
-            const rawNz = Math.max(-1, Math.min(1, apRadarLock.camPos.z / SYSTEM_SPHERE_RADIUS));
-            const rawNy = Math.max(-1, Math.min(1, apRadarLock.camPos.y / 6000));
-
-            let apBx = radarCx + rawNx * radarRx * 0.85;
-            let apBy = radarCy - rawNz * radarRy * 0.8;
-            let apStickY = apBy - rawNy * 18;
-
-            // Если захваченный объект находится на малой/средней дистанции (астероид, груз, группа/бизнес на планете и т.д.),
-            // гарантируем минимальную видимую длину вектора на радаре в направлении цели, чтобы пунктир между кораблём и объектом всегда чётко читался
-            const dRadar = Math.hypot(apBx - radarCx, apStickY - radarCy);
-            if (dRadar < 26 && apRadarLock.distanceUnits > 5) {
-              const dirX = apRadarLock.camPos.x;
-              const dirZ = -apRadarLock.camPos.z;
-              const dirLen = Math.hypot(dirX, dirZ) || 1;
-              const minRadarDist = Math.min(
-                radarRy * 0.78,
-                Math.max(26, (apRadarLock.distanceUnits / 3500) * radarRy * 0.78)
-              );
-              apBx = radarCx + (dirX / dirLen) * minRadarDist * (radarRx / radarRy) * 0.55;
-              apBy = radarCy + (dirZ / dirLen) * minRadarDist;
-              apStickY = apBy - rawNy * 12;
-            }
-
+            // 1. ПОДЛОЖКА ПРИБОРНОЙ ПАНЕЛИ (80% ПРОЗРАЧНОСТЬ / ALPHA 0.20):
+            //    Космос, звёзды и орбиты полностью видны сквозь приборную консоль!
             ctx.save();
-            // Пунктир в плоскости радара (проекция курса)
-            if (Math.abs(apStickY - apBy) > 2) {
-              ctx.setLineDash([2, 3]);
-              ctx.strokeStyle = 'rgba(16, 185, 129, 0.75)';
-              ctx.lineWidth = 1.3;
-              ctx.beginPath();
-              ctx.moveTo(radarCx, radarCy);
-              ctx.lineTo(apBx, apBy);
-              ctx.lineTo(apBx, apStickY);
-              ctx.stroke();
-            }
+            ctx.fillStyle = 'rgba(2, 6, 18, 0.20)';
+            ctx.fillRect(0, panelTopY, width, panelH);
 
-            // Главный яркий пунктир между кораблём (radarCx, radarCy) и захваченным объектом (apBx, apStickY)
-            ctx.setLineDash([4, 4]);
-            ctx.lineDashOffset = -((st.frameCounter * 0.5) % 8);
-            ctx.strokeStyle = '#fbbf24';
-            ctx.lineWidth = 2.2;
+            // Скошенные футуристические грани верхней консоли (Chamfered Sci-Fi Cockpit Frame)
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.75)';
+            ctx.lineWidth = 1.6;
+            ctx.shadowColor = 'rgba(0, 240, 255, 0.6)';
+            ctx.shadowBlur = 6;
+            ctx.beginPath();
+            ctx.moveTo(0, panelTopY);
+            ctx.lineTo(260, panelTopY);
+            ctx.lineTo(285, panelTopY + 14);
+            ctx.lineTo(width - 285, panelTopY + 14);
+            ctx.lineTo(width - 260, panelTopY);
+            ctx.lineTo(width, panelTopY);
+            ctx.stroke();
+
+            // Тонкая нижняя рамка панели
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.35)';
+            ctx.strokeRect(2, panelTopY + 2, width - 4, panelH - 4);
+
+            // Угловые акцентные неоновые насечки
+            ctx.fillStyle = '#00f0ff';
+            ctx.fillRect(14, panelTopY - 2, 42, 3);
+            ctx.fillRect(width - 56, panelTopY - 2, 42, 3);
+            ctx.fillRect(width / 2 - 25, panelTopY + 12, 50, 3);
+            ctx.restore();
+
+            // =========================================================================
+            // 2. ЦЕНТРАЛЬНЫЙ 3D-РАДАР (ПОЛНОСТЬЮ НЕПРОЗРАЧНЫЙ / 100% OPAQUE):
+            // Поднят вверх (radarCy = 452), чтобы не налезать на нижнюю информационную строку
+            // =========================================================================
+            // =========================================================================
+            // 2. ЦЕНТРАЛЬНЫЙ 3D-РАДАР (ПОЛНОСТЬЮ НЕПРОЗРАЧНЫЙ / 100% OPAQUE & RAZOR-SHARP):
+            // Пропорции: radarCx = 430, radarCy = 436, radarRx = 142, radarRy = 56
+            // Низ радара вплотную к информационной строке (y=492 при начале строки на y=496)
+            // =========================================================================
+            const radarCx = width / 2;
+            const radarCy = 436;
+            const radarRx = 142;
+            const radarRy = 56;
+
+            const radarScale = st.radarScaleUnits || 10000;
+            const shipsOnly = st.radarShipsOnlyFilter;
+            const engineFilter = st.radarEngineFilter || 'ALL';
+            const stepTagEn = radarScale <= 10000 ? ' (STEP 2,000)' : '';
+
+            // Сброс размытия перед отрисовкой радара для максимальной четкости объектов
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+
+            // Шапка статуса 3D-радара на английском языке (размещена СВЕРХУ над чашей радара)
+            ctx.save();
+            ctx.font = 'bold 9px monospace';
+            ctx.textAlign = 'center';
+            if (shipsOnly) {
+              const activeEngMeta =
+                RADAR_ENGINE_FILTERS.find((f) => f.id === engineFilter) || RADAR_ENGINE_FILTERS[0];
+              ctx.fillStyle = '#f59e0b';
+              ctx.fillText(
+                `3D RADAR: SHIPS ONLY [Num *] · ${activeEngMeta.badgeEn} [Num /] · RANGE: ${radarScale.toLocaleString()} KM${stepTagEn} [+/-]`,
+                radarCx,
+                radarCy - radarRy - 8
+              );
+            } else {
+              ctx.fillStyle = '#00f0ff';
+              ctx.fillText(
+                `3D RADAR: ALL OBJECTS [Num *] · RANGE: ${radarScale.toLocaleString()} KM${stepTagEn} [+/-]`,
+                radarCx,
+                radarCy - radarRy - 8
+              );
+            }
+            ctx.restore();
+
+            // ПОЛНОСТЬЮ НЕПРОЗРАЧНАЯ ЧАША РАДАРА (100% OPAQUE SOLID DISH):
+            ctx.save();
+            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.ellipse(radarCx, radarCy, radarRx, radarRy, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#010511'; // 100% непрозрачный глубокий космический фон
+            ctx.fill();
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+
+            // ВРАЩАЮЩИЙСЯ НЕОНОВЫЙ ЛУЧ СКАНИРОВАНИЯ (ANIMATED RADAR SWEEP BEAM):
+            // Математически масштабирован строго в координатах эллипса и обрезан клиппингом,
+            // что на 100% исключает выход луча за пределы чаши радара!
+            ctx.save();
+            ctx.translate(radarCx, radarCy);
+            ctx.scale(1, radarRy / radarRx);
+            ctx.beginPath();
+            ctx.arc(0, 0, radarRx - 1.5, 0, Math.PI * 2);
+            ctx.clip();
+
+            const sweepAngle = (st.frameCounter * 0.035) % (Math.PI * 2);
+            const sweepGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radarRx - 1.5);
+            sweepGrad.addColorStop(0, 'rgba(0, 255, 180, 0.40)');
+            sweepGrad.addColorStop(0.75, 'rgba(0, 229, 255, 0.16)');
+            sweepGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.arc(0, 0, radarRx - 1.5, sweepAngle - 0.45, sweepAngle, false);
+            ctx.closePath();
+            ctx.fillStyle = sweepGrad;
+            ctx.fill();
+
+            // Яркая лидирующая кромка луча сканирования
+            ctx.strokeStyle = 'rgba(0, 255, 200, 0.9)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(sweepAngle) * (radarRx - 1.5), Math.sin(sweepAngle) * (radarRx - 1.5));
+            ctx.stroke();
+            ctx.restore();
+
+            // Внутренние концентрические кольца дальности радара
+            ctx.strokeStyle = 'rgba(0, 255, 128, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.ellipse(radarCx, radarCy, radarRx * 0.35, radarRy * 0.35, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(radarCx, radarCy, radarRx * 0.70, radarRy * 0.70, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Оси координат радара (Crosshair Axes)
+            ctx.strokeStyle = 'rgba(0, 255, 128, 0.25)';
+            ctx.beginPath();
+            ctx.moveTo(radarCx - radarRx, radarCy);
+            ctx.lineTo(radarCx + radarRx, radarCy);
+            ctx.moveTo(radarCx, radarCy - radarRy);
+            ctx.lineTo(radarCx, radarCy + radarRy);
+            ctx.stroke();
+
+            // Зелёный эллипс горизонта радара
+            ctx.strokeStyle = '#00ff66';
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.ellipse(radarCx, radarCy, radarRx, radarRy, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Сектор обзора Меш-Рубки на радаре (голубой конус)
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.45)';
             ctx.beginPath();
             ctx.moveTo(radarCx, radarCy);
-            ctx.lineTo(apBx, apStickY);
+            ctx.lineTo(radarCx - radarRx * 0.62, radarCy - radarRy * 0.75);
+            ctx.moveTo(radarCx, radarCy);
+            ctx.lineTo(radarCx + radarRx * 0.62, radarCy - radarRy * 0.75);
             ctx.stroke();
-            ctx.setLineDash([]);
 
-            // Подсветка точки корабля и захваченного объекта на концах пунктира
-            ctx.fillStyle = '#00ffff';
+            // Вектор истинного движения корабля (Путевой центр st.shipForward)
+            const shipRadarX = radarCx + st.shipForward.x * radarRx * 0.80;
+            const shipRadarY = radarCy - st.shipForward.z * radarRy * 0.80;
+            ctx.save();
+            ctx.strokeStyle = '#00ff66';
+            ctx.fillStyle = '#00ff66';
+            ctx.lineWidth = 1.6;
             ctx.beginPath();
-            ctx.arc(radarCx, radarCy, 3.5, 0, Math.PI * 2);
-            ctx.fill();
-
-            ctx.strokeStyle = '#fbbf24';
-            ctx.fillStyle = apRadarLock.color || '#10b981';
-            ctx.lineWidth = 1.8;
-            ctx.beginPath();
-            ctx.arc(apBx, apStickY, 5.5, 0, Math.PI * 2);
+            ctx.moveTo(radarCx, radarCy);
+            ctx.lineTo(shipRadarX, shipRadarY);
             ctx.stroke();
             ctx.beginPath();
-            ctx.arc(apBx, apStickY, 3, 0, Math.PI * 2);
+            ctx.arc(shipRadarX, shipRadarY, 2.8, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
-          }
 
-          // Компас наведения на станцию Coriolis и индикатор Солнечной Зарядки (справа от радара)
-          const compX = radarCx + radarRx + 36;
-          const compY = viewH + 28;
-          ctx.strokeStyle = '#00ffff';
-          ctx.beginPath();
-          ctx.arc(compX, compY, 14, 0, Math.PI * 2);
-          ctx.stroke();
-          const stationEnt = st.entities.find((e) => e.kind === 'STATION');
-          if (stationEnt) {
-            const dx = Math.max(-9, Math.min(9, stationEnt.pos.x / 55));
-            const dy = Math.max(-9, Math.min(9, -stationEnt.pos.y / 55));
-            ctx.fillStyle = '#00ff00';
-            ctx.fillRect(compX + dx - 2.5, compY + dy - 2.5, 5, 5);
-          }
+            // =========================================================================
+            // ЯРКИЕ ЧЁТКИЕ ОБЪЕКТЫ НА 3D-РАДАРЕ (ЗВЕЗДА, ПЛАНЕТЫ, СТАНЦИИ, КОРАБЛИ, ГРУЗ)
+            // =========================================================================
 
-          // Индикатор направления на Звезду и % солнечной зарядки под компасом
-          const sunCompY = viewH + 66;
-          ctx.strokeStyle = '#fde047';
-          ctx.beginPath();
-          ctx.arc(compX, sunCompY, 12, 0, Math.PI * 2);
-          ctx.stroke();
-          const sunDx = Math.max(-7, Math.min(7, st.starPos.x / 180));
-          const sunDy = Math.max(-7, Math.min(7, -st.starPos.y / 180));
-          ctx.fillStyle = '#fde047';
-          ctx.beginPath();
-          ctx.arc(compX + sunDx, sunCompY + sunDy, 3.2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.font = 'bold 9px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`☀${st.solarFluxPct}%`, compX, sunCompY + 23);
+            // 1. Центральная Звезда
+            if (!shipsOnly) {
+              const starRadarNx = Math.max(-0.95, Math.min(0.95, st.starPos.x / radarScale));
+              const starRadarNz = Math.max(-0.95, Math.min(0.95, st.starPos.z / radarScale));
+              const starRadarNy = Math.max(-0.85, Math.min(0.85, st.starPos.y / 6000));
+              const sBx = radarCx + starRadarNx * radarRx * 0.88;
+              const sBy = radarCy - starRadarNz * radarRy * 0.85;
+              const sStickY = sBy - starRadarNy * 16;
 
-          // Левая колонка приборов (FS, AS, FUEL, LASER TEMP)
-          const drawBar = (
-            x: number,
-            y: number,
-            label: string,
-            val: number,
-            maxVal: number,
-            barColor: string
-          ) => {
-            ctx.fillStyle = '#ffff00';
-            ctx.font = 'bold 11px monospace';
-            ctx.textAlign = 'left';
-            ctx.fillText(label, x, y + 9);
-            const barX = x + 38;
-            const barW = Math.max(55, radarCx - radarRx - 68);
-            ctx.strokeStyle = '#555555';
-            ctx.strokeRect(barX, y, barW, 10);
-            ctx.fillStyle = barColor;
-            ctx.fillRect(barX + 1, y + 1, Math.max(0, ((barW - 2) * val) / maxVal), 8);
-          };
+              // След на плоскости
+              ctx.fillStyle = 'rgba(253, 224, 71, 0.4)';
+              ctx.beginPath();
+              ctx.arc(sBx, sBy, 2.5, 0, Math.PI * 2);
+              ctx.fill();
 
-          drawBar(14, viewH + 16, 'FS', st.frontShield, 100, '#00ff00');
-          drawBar(14, viewH + 34, 'AS', st.aftShield, 100, '#00ff00');
-          drawBar(14, viewH + 52, 'FL', fuel, 7.0, '#00ffff');
-          drawBar(14, viewH + 70, 'LT', st.laserHeat, 100, st.laserHeat > 75 ? '#ff0055' : '#ffff00');
+              // Вертикальный шест высоты
+              ctx.strokeStyle = '#fde047';
+              ctx.lineWidth = 1.4;
+              ctx.beginPath();
+              ctx.moveTo(sBx, sBy);
+              ctx.lineTo(sBx, sStickY);
+              ctx.stroke();
 
-          // Правая колонка приборов (SPD, MANEUVER с учётом скорости/инерции, ARMOR DEF, ENERGY)
-          const rightX = radarCx + radarRx + 68;
-          if (rightX + 95 < width) {
-            const liveSpdRatioForHud = Math.max(0, Math.min(1, st.speed / Math.max(1, st.maxSpeed)));
-            const liveEffectiveMnvPct = Math.round(
-              Math.max(14, st.maneuverFactor * (1 - liveSpdRatioForHud * 0.62) * 100)
+              // Яркая точка Звезды
+              ctx.fillStyle = '#fde047';
+              ctx.beginPath();
+              ctx.arc(sBx, sStickY, 4.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.arc(sBx, sStickY, 2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            // 2. Планеты и Мегаструктуры системы
+            if (!shipsOnly) {
+              for (const p of st.planets) {
+                const cA = Math.cos(p.orbitAngle);
+                const sA = Math.sin(p.orbitAngle);
+                const px = st.starPos.x + p.orbitRadius * (cA * st.eclipticU.x + sA * st.eclipticV.x);
+                const py = st.starPos.y + p.orbitRadius * (cA * st.eclipticU.y + sA * st.eclipticV.y);
+                const pz = st.starPos.z + p.orbitRadius * (cA * st.eclipticU.z + sA * st.eclipticV.z);
+                const pNx = Math.max(-0.95, Math.min(0.95, px / radarScale));
+                const pNz = Math.max(-0.95, Math.min(0.95, pz / radarScale));
+                const pNy = Math.max(-0.85, Math.min(0.85, py / 6000));
+                const pBx = radarCx + pNx * radarRx * 0.88;
+                const pBy = radarCy - pNz * radarRy * 0.85;
+                const pStickY = pBy - pNy * 14;
+
+                // Базовая проекция на плоскость радара
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.beginPath();
+                ctx.arc(pBx, pBy, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Шест
+                ctx.strokeStyle = p.color;
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(pBx, pBy);
+                ctx.lineTo(pBx, pStickY);
+                ctx.stroke();
+
+                // Яркий маяк планеты / станции
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(pBx, pStickY, 3.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(pBx, pStickY, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Компактный маркер номера планеты
+                if (p.orbitOrder <= 4) {
+                  ctx.fillStyle = '#ffffff';
+                  ctx.font = 'bold 7px monospace';
+                  ctx.fillText(`${p.orbitOrder}`, pBx + 5, pStickY + 2.5);
+                }
+              }
+            }
+
+            // 3. Сеть Часовых
+            if (!shipsOnly) {
+              for (const s of sentinelNetworkRef.current) {
+                if (!s.deployed) continue;
+                const sx = st.starPos.x + s.worldPos.x;
+                const sy = st.starPos.y + s.worldPos.y;
+                const sz = st.starPos.z + s.worldPos.z;
+                const sNx = Math.max(-0.95, Math.min(0.95, sx / radarScale));
+                const sNz = Math.max(-0.95, Math.min(0.95, sz / radarScale));
+                const sNy = Math.max(-0.85, Math.min(0.85, sy / 6000));
+                const sBx = radarCx + sNx * radarRx * 0.88;
+                const sBy = radarCy - sNz * radarRy * 0.85;
+                const sStickY = sBy - sNy * 14;
+                ctx.strokeStyle = '#22d3ee';
+                ctx.fillStyle = '#22d3ee';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(sBx, sBy);
+                ctx.lineTo(sBx, sStickY);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(sBx, sStickY, 3.0, 0, Math.PI * 2);
+                ctx.fill();
+              }
+            }
+
+            // 4. Корабли, логистические модули, груз и станции
+            for (const ent of st.entities) {
+              const hasEngine = ent.kind !== 'CARGO' && ent.kind !== 'SPACE_DEBRIS' && ent.kind !== 'STATION';
+              if (shipsOnly && !hasEngine) continue;
+              if (shipsOnly && engineFilter !== 'ALL' && ent.engineType !== engineFilter) continue;
+
+              const nx = Math.max(-0.95, Math.min(0.95, ent.pos.x / radarScale));
+              const nz = Math.max(-0.95, Math.min(0.95, ent.pos.z / radarScale));
+              const ny = Math.max(-0.85, Math.min(0.85, ent.pos.y / (radarScale * 0.5 + 1000)));
+              const bx = radarCx + nx * radarRx * 0.88;
+              const by = radarCy - nz * radarRy * 0.85;
+              const stickTopY = by - ny * 15;
+
+              // Базовая отметка на плоскости диска
+              ctx.fillStyle = 'rgba(0, 229, 255, 0.4)';
+              ctx.beginPath();
+              ctx.arc(bx, by, 1.8, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Вертикальный шест высоты
+              ctx.strokeStyle = ent.color;
+              ctx.lineWidth = 1.4;
+              ctx.beginPath();
+              ctx.moveTo(bx, by);
+              ctx.lineTo(bx, stickTopY);
+              ctx.stroke();
+
+              // Яркая фигура объекта на радаре
+              ctx.fillStyle = ent.color;
+              if (ent.kind === 'CARGO' || ent.kind === 'SPACE_DEBRIS') {
+                // Груз / обломки — ромбовидная метка
+                ctx.fillRect(bx - 2.5, stickTopY - 2.5, 5, 5);
+              } else if (ent.isBuranMiner) {
+                // Шахтёрский челнок «Буран» в поясе — треугольник
+                ctx.beginPath();
+                ctx.moveTo(bx, stickTopY - 4);
+                ctx.lineTo(bx + 3.5, stickTopY + 3);
+                ctx.lineTo(bx - 3.5, stickTopY + 3);
+                ctx.closePath();
+                ctx.fill();
+              } else {
+                // Корабли и автоматические модули — яркий ромб с белым ядром
+                ctx.beginPath();
+                ctx.moveTo(bx, stickTopY - 4);
+                ctx.lineTo(bx + 3.5, stickTopY);
+                ctx.lineTo(bx, stickTopY + 4);
+                ctx.lineTo(bx - 3.5, stickTopY);
+                ctx.closePath();
+                ctx.fill();
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(bx, stickTopY, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+              }
+
+              if (shipsOnly && ent.engineType) {
+                const engMeta = RADAR_ENGINE_FILTERS.find((f) => f.id === ent.engineType);
+                if (engMeta) {
+                  ctx.strokeStyle = engMeta.color;
+                  ctx.lineWidth = 1;
+                  ctx.strokeRect(bx - 4.5, stickTopY - 4.5, 9, 9);
+                }
+              }
+            }
+
+            // 5. Дроны Диктатора
+            for (const dr of st.dictatorDrones) {
+              if (shipsOnly && engineFilter !== 'ALL' && dr.engineType !== engineFilter) continue;
+              const nx = Math.max(-0.95, Math.min(0.95, dr.camPos.x / (radarScale * 0.4 + 500)));
+              const nz = Math.max(-0.95, Math.min(0.95, dr.camPos.z / (radarScale * 0.4 + 500)));
+              const ny = Math.max(-0.85, Math.min(0.85, dr.camPos.y / 800));
+              const bx = radarCx + nx * radarRx * 0.85;
+              const by = radarCy - nz * radarRy * 0.85;
+              const stickTopY = by - ny * 14;
+              ctx.strokeStyle = '#ff0055';
+              ctx.fillStyle = '#ff0055';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(bx, by);
+              ctx.lineTo(bx, stickTopY);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(bx, stickTopY, 3.0, 0, Math.PI * 2);
+              ctx.fill();
+            }
+
+            // 6. Корабль игрока в центре (яркий ориентир со стрелкой курса)
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(radarCx, radarCy, 3.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // 7. Линия захвата цели автопилотом (Клавиша Q)
+            const apRadarLock = autopilotTargetRef.current;
+            const isApShip = apRadarLock && (
+              apRadarLock.kind === 'COMBAT_SHIP' ||
+              apRadarLock.kind === 'LOGISTICS_MODULE' ||
+              (apRadarLock.entityId && !apRadarLock.name.includes('ГРУЗ') && !apRadarLock.name.includes('ОБЛОМКИ'))
             );
-            drawBar(rightX, viewH + 16, 'SPD', st.speed, st.maxSpeed, '#00ffff');
-            drawBar(
-              rightX,
-              viewH + 34,
-              'MNV',
-              liveEffectiveMnvPct,
-              100,
-              '#ff00ff'
-            );
-            drawBar(
-              rightX,
-              viewH + 52,
-              'DEF',
-              Math.round(st.protectionFactor * 100),
-              100,
-              '#ffff00'
-            );
-            drawBar(rightX, viewH + 70, 'NRG', st.energy, 100, '#00ff00');
+            if (apRadarLock && (!shipsOnly || isApShip)) {
+              const rawNx = Math.max(-0.95, Math.min(0.95, apRadarLock.camPos.x / radarScale));
+              const rawNz = Math.max(-0.95, Math.min(0.95, apRadarLock.camPos.z / radarScale));
+              const rawNy = Math.max(-0.85, Math.min(0.85, apRadarLock.camPos.y / 6000));
+              let apBx = radarCx + rawNx * radarRx * 0.88;
+              let apBy = radarCy - rawNz * radarRy * 0.85;
+              let apStickY = apBy - rawNy * 16;
+
+              const dRadar = Math.hypot(apBx - radarCx, apStickY - radarCy);
+              if (dRadar < 26 && apRadarLock.distanceUnits > 5) {
+                const dirX = apRadarLock.camPos.x;
+                const dirZ = -apRadarLock.camPos.z;
+                const dirLen = Math.hypot(dirX, dirZ) || 1;
+                const minRadarDist = Math.min(
+                  radarRy * 0.78,
+                  Math.max(26, (apRadarLock.distanceUnits / 3500) * radarRy * 0.78)
+                );
+                apBx = radarCx + (dirX / dirLen) * minRadarDist * (radarRx / radarRy) * 0.55;
+                apBy = radarCy + (dirZ / dirLen) * minRadarDist;
+                apStickY = apBy - rawNy * 12;
+              }
+
+              ctx.save();
+              ctx.setLineDash([4, 4]);
+              ctx.lineDashOffset = -((st.frameCounter * 0.5) % 8);
+              ctx.strokeStyle = '#fbbf24';
+              ctx.lineWidth = 2.2;
+              ctx.beginPath();
+              ctx.moveTo(radarCx, radarCy);
+              ctx.lineTo(apBx, apStickY);
+              ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.fillStyle = '#00ffff';
+              ctx.beginPath();
+              ctx.arc(radarCx, radarCy, 3.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.strokeStyle = '#fbbf24';
+              ctx.fillStyle = apRadarLock.color || '#10b981';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.arc(apBx, apStickY, 5.5, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(apBx, apStickY, 3, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
+
+            ctx.restore(); // dish
           }
         }
       }
@@ -8615,8 +16788,9 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const targetSystem = GALAXY_SYSTEMS[targetSystemId] || GALAXY_SYSTEMS[1];
   const usedCargoTons = usedCargoTonsForPhysics;
 
-  // Точное преобразование координат указателя мыши в координаты 3D-прицела Огневой Башни
-  const updateTurretReticleFromMouse = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Точное преобразование координат указателя мыши в координаты 3D-прицела Меш-Рубки
+  // и отслеживание касания края экрана для неограниченного 360° вращения 3-обручевого гироскопа
+  const updateTurretReticleFromMouse = (e: React.MouseEvent<HTMLElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -8636,9 +16810,23 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     const rawX = ((e.clientX - rect.left - offsetX) / renderW) * canvas.width;
     const rawY = ((e.clientY - rect.top - offsetY) / renderH) * canvas.height;
     const viewH = Math.floor(canvas.height * 0.72);
-    flightStateRef.current.turretX = Math.max(18, Math.min(canvas.width - 18, rawX));
-    flightStateRef.current.turretY = Math.max(18, Math.min(viewH - 14, rawY));
-    flightStateRef.current.turretActive = true;
+    const st = flightStateRef.current;
+    st.cabinRawMouseX = rawX;
+    st.cabinRawMouseY = rawY;
+    // Если открыта табличка объекта или курсор на табличке — отключаем датчик края гироскопа Огневой Рубки,
+    // чтобы при попытке навести курсор на табличку огневая рубка не двигалась!
+    const isPlacardLockingCabin =
+      activeObjectProfileRef.current !== null ||
+      isHoveringObjectCardRef.current ||
+      isHoveringAutopilotCardRef.current;
+    st.cabinMouseIn3DWindow = !isPlacardLockingCabin && rawY <= canvas.height + 6;
+    if (isPlacardLockingCabin) {
+      st.cabinYawRate = 0;
+      st.cabinPitchRate = 0;
+    }
+    st.turretX = Math.max(18, Math.min(canvas.width - 18, rawX));
+    st.turretY = Math.max(18, Math.min(canvas.height - 14, rawY));
+    st.turretActive = true;
   };
 
   const xpRankMeta = getPilotExperienceRankByTons(destroyedEnemyTonsXp);
@@ -8691,172 +16879,247 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     );
     setTargetSystemId(destSysId);
     setFlightMessage(
-      `МИССИЯ GOBELL ПРИНЯТА! КУРС НА ${GALAXY_SYSTEMS[destSysId]?.name} ЗАДАН (НАЖМИТЕ H ДЛЯ ПРЫЖКА)`
+      `МИССИЯ G. BELL ПРИНЯТА! КУРС НА ${GALAXY_SYSTEMS[destSysId]?.name} ЗАДАН (НАЖМИТЕ H ДЛЯ ПРЫЖКА)`
     );
   };
 
   return (
     <div className="fixed inset-0 z-[120] bg-black text-emerald-400 font-mono flex flex-col select-none overflow-hidden">
-      {/* Верхняя строка статуса ZX Spectrum / GoBell Space Command */}
-      <div className="px-3 py-2 border-b-2 border-cyan-400 bg-black flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 border border-yellow-400 text-yellow-300 font-extrabold text-xs tracking-wider">
-            <Rocket className="w-4 h-4 text-cyan-400" />
-            <span>GOBELL : ELITE 1984 (ZX SPECTRUM 3D)</span>
+      {/* Верхняя строка статуса ZX Spectrum / G. Bell Space Command (отображается только в полном режиме с блоками и панелью) */}
+      {cockpitDisplayMode === 'FULL' && (
+        <div className="px-3 py-2 border-b-2 border-cyan-400 bg-black flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 border border-yellow-400 text-yellow-300 font-extrabold text-xs tracking-wider">
+              <Rocket className="w-4 h-4 text-cyan-400" />
+              <span>G. BELL : ELITE 1984 (ZX SPECTRUM 3D)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setCockpitDisplayMode('CLEAN_COCKPIT');
+              }}
+              className="px-3 py-1 border-2 border-cyan-300 bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-[0_0_14px_rgba(34,211,238,0.75)] transition-all"
+              title="Переключить в режим «Чистый кокпит» — убрать боковую панель и все загромождающие блоки с экрана (клавиша Tab)"
+            >
+              <span>🕹️ ЧИСТЫЙ КОКПИТ [TAB]</span>
+            </button>
+            <span className="text-xs text-cyan-300 font-bold">
+              CMDR {pilotName.toUpperCase()} · RANK: <span className="text-yellow-300">{eliteRank}</span> ·{' '}
+              <span className="text-emerald-300">ОПЫТ: {destroyedEnemyTonsXp.toFixed(2)} Т</span>
+            </span>
           </div>
-          <span className="text-xs text-cyan-300 font-bold">
-            CMDR {pilotName.toUpperCase()} · RANK: <span className="text-yellow-300">{eliteRank}</span> ·{' '}
-            <span className="text-emerald-300">ОПЫТ: {destroyedEnemyTonsXp.toFixed(2)} Т</span>
-          </span>
+
+          <div className="flex items-center gap-2 text-xs font-extrabold flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setObjectsGalleryTargetId(undefined);
+                setIsObjectsGalleryOpen(true);
+              }}
+              className="px-3 py-1 border-2 border-cyan-400 bg-cyan-400 hover:bg-cyan-300 text-black font-black text-[11px] flex items-center gap-1.5 shadow-[0_0_16px_rgba(6,182,212,0.8)] transition-all"
+              title="Открыть раздел «ОБЪЕКТЫ»: каталог космических тел (начиная с планет) с интерактивным 3D-вращением мышью со всех сторон и полным описанием физических свойств"
+            >
+              <span>🔭 РАЗДЕЛ «ОБЪЕКТЫ» (3D)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setIsShipyardBuilderOpen(true);
+              }}
+              className="px-3 py-1 border-2 border-sky-400 bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-slate-950 font-black text-[11px] flex items-center gap-1.5 shadow-[0_0_16px_rgba(56,189,248,0.85)] transition-all"
+              title="Орбитальная Верфь: модульная система кораблестроения на базе 6-лучевого каркаса XYZ. Сферические двигатели с дюзами, солнечные крылья, радары, трюмы 40т, оружие и рубка пилота!"
+            >
+              <span>🏗️ ВЕРФЬ (КОНСТРУКТОР XYZ)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setObjectsGalleryTargetId('megastructure-shipyard-triacontahedron');
+                setIsObjectsGalleryOpen(true);
+              }}
+              className="px-2.5 py-1 border-2 border-purple-400 bg-purple-950/90 hover:bg-purple-900 text-purple-200 font-black text-[11px] flex items-center gap-1.5 shadow-[0_0_14px_rgba(168,85,247,0.7)] transition-all"
+              title="Космический объект: Орбитальная Мегаверфь «Талион» размером в половину планеты (D = 6 371 км, форма: Средний ромботриаконтаэдр)"
+            >
+              <span>🪐 МЕГАВЕРФЬ 0.5R ПЛАНЕТЫ (РОМБОТРИАКОНТАЭДР)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsStandardWorldsModalOpen(true)}
+              className="px-2.5 py-1 border-2 border-amber-300 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_14px_rgba(251,191,36,0.75)]"
+              title="Открыть полный Каталог Всех Планет в Созвездиях (200 канонических + все 65 звёзд 10 созвездий = 284 мира), всех Звёзд Смерти и всех Космических Станций с системой фракционных префиксов/суффиксов и Двойных Имён (Официально + в народе)"
+            >
+              <span>🪐 ПЛАНЕТЫ СОЗВЕЗДИЙ ({ALL_STANDARD_CONSTELLATION_PLANETS.length}), ЗВЁЗДЫ СМЕРТИ И СТАНЦИИ (ДВОЙНЫЕ ИМЕНА)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOpenPlanetCardByOrbit(1)}
+              className="px-2.5 py-1 border-2 border-pink-300 bg-pink-500 hover:bg-pink-400 text-slate-950 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_14px_rgba(244,114,182,0.8)]"
+              title="Открыть карточку планеты: при захвате планеты игрок получает доступ к карточке и может переименовать и присоединить планету или систему к союзу или клану (например: Метадонг - бывший Шлак-9 · клан Розовой бабочки) и получать с неё доход или продать на аукционе!"
+            >
+              <span>🦋 КАРТОЧКА ПЛАНЕТЫ: КЛАН · ДОХОД · АУКЦИОН</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsFullConfigDocOpen(true)}
+              className="px-2.5 py-1 border-2 border-yellow-300 bg-yellow-400 hover:bg-yellow-300 text-black font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_14px_rgba(250,204,21,0.65)]"
+              title="Открыть документ «Полное описание финальной конфигурации игры»: визуальный ряд, звёздная система и траектории, группы/бизнесы/объявления и карма (×10), масса/щит/схема урона и подсчёт очков (Дебет/Кредит)"
+            >
+              <span>📄 ПОЛНОЕ ОПИСАНИЕ ИГРЫ (КОНФИГУРАЦИЯ)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsTonnageXpModalOpen(true)}
+              className="px-2.5 py-1 border-2 border-amber-400 bg-amber-500/20 hover:bg-amber-400 hover:text-black text-amber-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(251,191,36,0.45)]"
+              title="Простой Дебет / Кредит игровых очков: потратил 51 т залпа и уничтожил противника (50 т) -> засчиталось 50 т XP (если не уничтожил — не засчитываются). Если работает команда — считаются конкретно твои попадания и после уничтожения врага тебе засчитываются уничтоженные тобой тонны!"
+            >
+              <Award className="w-3.5 h-3.5 text-yellow-300" />
+              <span>
+                🏆 КРЕДИТ (XP): {destroyedEnemyTonsXp.toFixed(2)} Т · ДЕБЕТ ЗАЛПА: {(spentSalvoDebitKg / 1000).toFixed(1)} Т ·{' '}
+                {isTeamCombatMode ? '🤝 КОМАНДА' : '👤 СОЛО'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsLabHangarModalOpen(true)}
+              className="px-2.5 py-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.45)]"
+              title="Два способа получить что-либо: 1) Купить за 100% цены; 2) Разработать в Лаборатории за 10% цены + Построить в Ангаре за 10% цены. Продать: Правительству планеты за 50% цены или Частному бизнесу за 80% цены. Лаборатория (+5т) и Ангар (+5т) присоединяются к общей массе корабля!"
+            >
+              <span>
+                🔬🏗️ ЛАБОРАТОРИЯ ({hasLaboratory ? '+5Т' : 'КУПИТЬ'}) И АНГАР ({hasHangar ? '+5Т' : 'КУПИТЬ'}) · РАЗРАБОТКА 10% + ПОСТРОЙКА 10% · ПРОДАЖА 50%/80%
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsLogisticsModalOpen(true)}
+              className="px-2.5 py-1 border-2 border-cyan-400 bg-cyan-500/20 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(34,211,238,0.45)]"
+              title="Строгие траектории без хаотических движений: у каждой планеты свой автоматический логистический стандартный модуль (цикл: своя планета -> другая планета 1 -> орбита 1 мин -> возврат -> орбита 1 мин -> другая планета 2...). При гибели груз движется по траектории убитого корабля и исчезает в планете назначения. Уничтожение мусора/груза = уничтожение астероида!"
+            >
+              <span>
+                🛰️ ТРАЕКТОРИИ ПЛАНЕТ (4 МОДУЛЯ · ИСЧЕЗЛО В ПЛАНЕТАХ: {absorbedInPlanetCount} · УБИТО КАК АСТЕРОИД: {destroyedCargoDebrisAsAsteroidCount})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsGeoBeaconModalOpen(true)}
+              className="px-2.5 py-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+              title="Пока вы играете в космосе, геолокация смартфона активна и ваш профиль светится на реальной карте G. Bell!"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>
+                📡 GPS ВКЛ ({smartphoneGeoCoords.lat.toFixed(4)}, {smartphoneGeoCoords.lng.toFixed(4)}) · ВЫ СВЕТИТЕСЬ НА КАРТЕ G. BELL
+              </span>
+            </button>
+            <span className="text-yellow-300">CREDITS: {credits} CR</span>
+            <span className="text-cyan-300">FUEL: {fuel.toFixed(1)} LY</span>
+            <span className="text-emerald-400">
+              CARGO: {usedCargoTons}/{maxCargoCapacity}t
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsOntologyModalOpen(true)}
+              className={`px-2 py-1 border-2 font-extrabold text-[11px] flex items-center gap-1 ${
+                reactorSuperEnergySec > 0
+                  ? 'border-fuchsia-300 bg-fuchsia-400 text-black shadow-[0_0_12px_rgba(232,121,249,0.8)]'
+                  : 'border-fuchsia-400 bg-fuchsia-950/50 hover:bg-fuchsia-400 hover:text-black text-fuchsia-200'
+              }`}
+              title="Онтологическая модель диссипации вещества: Критическое вещество (Ω-γ), контролируемое размыкание локальных узлов (супер-энергия для тяжёлых кораблей и тяжёлого гамма-оружия), старые галактики без планет и контрабанда"
+            >
+              <span>
+                ☢️ КРИТ. ВЕЩЕСТВО Ω-γ: {minedElementsHold.Omega || 0}т
+                {reactorSuperEnergySec > 0 ? ` · СУПЕР-ЭНЕРГИЯ ${reactorSuperEnergySec}с` : ''}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBusinessModalOpen(true)}
+              className="px-2 py-1 border border-fuchsia-400 bg-fuchsia-500/20 hover:bg-fuchsia-400 hover:text-black text-fuchsia-300 font-extrabold text-[11px]"
+              title="Бизнес-аккаунт пилота: создать бизнес с меньшей маржой (закупать по завышенной цене >50%, продавать по заниженной <100% по сравнению с правительствами планет)"
+            >
+              🏢 БИЗНЕС ({gobellTariff === 'BUSINESS' && pilotBusiness.isCreated ? `${pilotBusiness.buyRatePct}%/${pilotBusiness.sellRatePct}%` : 'ПРАВ-ВА 50%/100%'})
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSubspaceChannelModalOpen(true)}
+              className="px-2 py-1 border border-yellow-400 bg-yellow-400/20 hover:bg-yellow-400 hover:text-black text-yellow-300 font-extrabold text-[11px]"
+              title="Подпространственный канал фиксации (аукцион слота объявления): зафиксировать объявление прямо возле себя или в любой точке · Доля в пуле аукциона"
+            >
+              📡 КАНАЛ ФИКСАЦИИ (ПУЛ {myAuctionPoolSharePct}%)
+            </button>
+            <button
+              type="button"
+              onClick={handleTogglePirateStatus}
+              className={`px-2.5 py-1 border-2 font-extrabold text-[11px] flex items-center gap-1 transition-all ${
+                isPirateStatus
+                  ? 'border-rose-400 bg-rose-600 text-white shadow-[0_0_14px_rgba(244,63,94,0.85)]'
+                  : isMarauderStatus
+                  ? 'border-amber-400 bg-amber-500/25 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                  : 'border-emerald-400 bg-emerald-950/40 hover:bg-amber-500/30 text-emerald-300'
+              }`}
+              title="Статус ПИРАТ: если разбил чужой корабль и забрал с него хоть 1 предмет (карма в минусе + наценка на всё ×10: покупка ×10+, продажа ÷10-). Статус МАРОДЁР: если просто подобрал предмет после драки (просто портится карма, без наценки ×10)."
+            >
+              <span>
+                {isPirateStatus
+                  ? `🏴‍☠️ СТАТУС: ПИРАТ (КАРМА ${earnedGoBellKarma} · КУП ×10+ / ПРОД ÷10-)`
+                  : isMarauderStatus
+                  ? `🦅 СТАТУС: МАРОДЁР (ПОДОБРАЛ ПОСЛЕ ДРАКИ · КАРМА ${
+                      earnedGoBellKarma > 0 ? `+${earnedGoBellKarma}` : earnedGoBellKarma
+                    } · ЦЕНЫ 1×)`
+                  : `🛡️ ЗАКОННЫЙ (КАРМА ${
+                      earnedGoBellKarma >= 0 ? `+${earnedGoBellKarma}` : earnedGoBellKarma
+                    })`}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSoundEnabled((s) => !s)}
+              className="p-1.5 border border-cyan-500 text-cyan-300 hover:bg-cyan-500/20"
+              title="Звук ZX Spectrum Beeper"
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2.5 py-1 border-2 border-rose-500 text-rose-400 hover:bg-rose-500 hover:text-black font-extrabold flex items-center gap-1"
+            >
+              <X className="w-4 h-4" />
+              <span>НА КАРТУ G. BELL</span>
+            </button>
+          </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2 text-xs font-extrabold flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsFullConfigDocOpen(true)}
-            className="px-2.5 py-1 border-2 border-yellow-300 bg-yellow-400 hover:bg-yellow-300 text-black font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_14px_rgba(250,204,21,0.65)]"
-            title="Открыть документ «Полное описание финальной конфигурации игры»: визуальный ряд, звёздная система и траектории, группы/бизнесы/объявления и карма (×10), масса/щит/схема урона и подсчёт очков (Дебет/Кредит)"
-          >
-            <span>📄 ПОЛНОЕ ОПИСАНИЕ ИГРЫ (КОНФИГУРАЦИЯ)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsTonnageXpModalOpen(true)}
-            className="px-2.5 py-1 border-2 border-amber-400 bg-amber-500/20 hover:bg-amber-400 hover:text-black text-amber-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(251,191,36,0.45)]"
-            title="Простой Дебет / Кредит игровых очков: потратил 51 т залпа и уничтожил противника (50 т) -> засчиталось 50 т XP (если не уничтожил — не засчитываются). Если работает команда — считаются конкретно твои попадания и после уничтожения врага тебе засчитываются уничтоженные тобой тонны!"
-          >
-            <Award className="w-3.5 h-3.5 text-yellow-300" />
-            <span>
-              🏆 КРЕДИТ (XP): {destroyedEnemyTonsXp.toFixed(2)} Т · ДЕБЕТ ЗАЛПА: {(spentSalvoDebitKg / 1000).toFixed(1)} Т ·{' '}
-              {isTeamCombatMode ? '🤝 КОМАНДА' : '👤 СОЛО'}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsLabHangarModalOpen(true)}
-            className="px-2.5 py-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(16,185,129,0.45)]"
-            title="Два способа получить что-либо: 1) Купить за 100% цены; 2) Разработать в Лаборатории за 10% цены + Построить в Ангаре за 10% цены. Продать: Правительству планеты за 50% цены или Частному бизнесу за 80% цены. Лаборатория (+5т) и Ангар (+5т) присоединяются к общей массе корабля!"
-          >
-            <span>
-              🔬🏗️ ЛАБОРАТОРИЯ ({hasLaboratory ? '+5Т' : 'КУПИТЬ'}) И АНГАР ({hasHangar ? '+5Т' : 'КУПИТЬ'}) · РАЗРАБОТКА 10% + ПОСТРОЙКА 10% · ПРОДАЖА 50%/80%
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsLogisticsModalOpen(true)}
-            className="px-2.5 py-1 border-2 border-cyan-400 bg-cyan-500/20 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(34,211,238,0.45)]"
-            title="Строгие траектории без хаотических движений: у каждой планеты свой автоматический логистический стандартный модуль (цикл: своя планета -> другая планета 1 -> орбита 1 мин -> возврат -> орбита 1 мин -> другая планета 2...). При гибели груз движется по траектории убитого корабля и исчезает в планете назначения. Уничтожение мусора/груза = уничтожение астероида!"
-          >
-            <span>
-              🛰️ ТРАЕКТОРИИ ПЛАНЕТ (4 МОДУЛЯ · ИСЧЕЗЛО В ПЛАНЕТАХ: {absorbedInPlanetCount} · УБИТО КАК АСТЕРОИД: {destroyedCargoDebrisAsAsteroidCount})
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsGeoBeaconModalOpen(true)}
-            className="px-2.5 py-1 border-2 border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300 font-extrabold text-[11px] flex items-center gap-1.5 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-            title="Пока вы играете в космосе, геолокация смартфона активна и ваш профиль светится на реальной карте GoBell!"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>
-              📡 GPS ВКЛ ({smartphoneGeoCoords.lat.toFixed(4)}, {smartphoneGeoCoords.lng.toFixed(4)}) · ВЫ СВЕТИТЕСЬ НА КАРТЕ GOBELL
-            </span>
-          </button>
-          <span className="text-yellow-300">CREDITS: {credits} CR</span>
-          <span className="text-cyan-300">FUEL: {fuel.toFixed(1)} LY</span>
-          <span className="text-emerald-400">
-            CARGO: {usedCargoTons}/{maxCargoCapacity}t
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsOntologyModalOpen(true)}
-            className={`px-2 py-1 border-2 font-extrabold text-[11px] flex items-center gap-1 ${
-              reactorSuperEnergySec > 0
-                ? 'border-fuchsia-300 bg-fuchsia-400 text-black shadow-[0_0_12px_rgba(232,121,249,0.8)]'
-                : 'border-fuchsia-400 bg-fuchsia-950/50 hover:bg-fuchsia-400 hover:text-black text-fuchsia-200'
-            }`}
-            title="Онтологическая модель диссипации вещества: Критическое вещество (Ω-γ), контролируемое размыкание локальных узлов (супер-энергия для тяжёлых кораблей и тяжёлого гамма-оружия), старые галактики без планет и контрабанда"
-          >
-            <span>
-              ☢️ КРИТ. ВЕЩЕСТВО Ω-γ: {minedElementsHold.Omega || 0}т
-              {reactorSuperEnergySec > 0 ? ` · СУПЕР-ЭНЕРГИЯ ${reactorSuperEnergySec}с` : ''}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsBusinessModalOpen(true)}
-            className="px-2 py-1 border border-fuchsia-400 bg-fuchsia-500/20 hover:bg-fuchsia-400 hover:text-black text-fuchsia-300 font-extrabold text-[11px]"
-            title="Бизнес-аккаунт пилота: создать бизнес с меньшей маржой (закупать по завышенной цене >50%, продавать по заниженной <100% по сравнению с правительствами планет)"
-          >
-            🏢 БИЗНЕС ({gobellTariff === 'BUSINESS' && pilotBusiness.isCreated ? `${pilotBusiness.buyRatePct}%/${pilotBusiness.sellRatePct}%` : 'ПРАВ-ВА 50%/100%'})
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsSubspaceChannelModalOpen(true)}
-            className="px-2 py-1 border border-yellow-400 bg-yellow-400/20 hover:bg-yellow-400 hover:text-black text-yellow-300 font-extrabold text-[11px]"
-            title="Подпространственный канал фиксации (аукцион слота объявления): зафиксировать объявление прямо возле себя или в любой точке · Доля в пуле аукциона"
-          >
-            📡 КАНАЛ ФИКСАЦИИ (ПУЛ {myAuctionPoolSharePct}%)
-          </button>
-          <button
-            type="button"
-            onClick={handleTogglePirateStatus}
-            className={`px-2.5 py-1 border-2 font-extrabold text-[11px] flex items-center gap-1 transition-all ${
-              isPirateStatus
-                ? 'border-rose-400 bg-rose-600 text-white shadow-[0_0_14px_rgba(244,63,94,0.85)]'
-                : isMarauderStatus
-                ? 'border-amber-400 bg-amber-500/25 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-                : 'border-emerald-400 bg-emerald-950/40 hover:bg-amber-500/30 text-emerald-300'
-            }`}
-            title="Статус ПИРАТ: если разбил чужой корабль и забрал с него хоть 1 предмет (карма в минусе + наценка на всё ×10: покупка ×10+, продажа ÷10-). Статус МАРОДЁР: если просто подобрал предмет после драки (просто портится карма, без наценки ×10)."
-          >
-            <span>
-              {isPirateStatus
-                ? `🏴‍☠️ СТАТУС: ПИРАТ (КАРМА ${earnedGoBellKarma} · КУП ×10+ / ПРОД ÷10-)`
-                : isMarauderStatus
-                ? `🦅 СТАТУС: МАРОДЁР (ПОДОБРАЛ ПОСЛЕ ДРАКИ · КАРМА ${
-                    earnedGoBellKarma > 0 ? `+${earnedGoBellKarma}` : earnedGoBellKarma
-                  } · ЦЕНЫ 1×)`
-                : `🛡️ ЗАКОННЫЙ (КАРМА ${
-                    earnedGoBellKarma >= 0 ? `+${earnedGoBellKarma}` : earnedGoBellKarma
-                  })`}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setSoundEnabled((s) => !s)}
-            className="p-1.5 border border-cyan-500 text-cyan-300 hover:bg-cyan-500/20"
-            title="Звук ZX Spectrum Beeper"
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-2.5 py-1 border-2 border-rose-500 text-rose-400 hover:bg-rose-500 hover:text-black font-extrabold flex items-center gap-1"
-          >
-            <X className="w-4 h-4" />
-            <span>НА КАРТУ GOBELL</span>
-          </button>
+      {/* Информационная строка бортового компьютера (отображается только в полном режиме с блоками и панелью) */}
+      {cockpitDisplayMode === 'FULL' && (
+        <div className="px-3 py-1 bg-slate-950 border-b border-emerald-500/40 flex items-center justify-between text-[11px] text-yellow-300">
+          <div className="truncate font-bold">{flightMessage}</div>
+          <div className="flex items-center gap-3 shrink-0 text-cyan-300">
+            <span>СИСТЕМА: {currentSystem.name}</span>
+            <span>→ ЦЕЛЬ ПРЫЖКА: {targetSystem.name}</span>
+          </div>
         </div>
-      </div>
-
-      {/* Информационная строка бортового компьютера */}
-      <div className="px-3 py-1 bg-slate-950 border-b border-emerald-500/40 flex items-center justify-between text-[11px] text-yellow-300">
-        <div className="truncate font-bold">{flightMessage}</div>
-        <div className="flex items-center gap-3 shrink-0 text-cyan-300">
-          <span>СИСТЕМА: {currentSystem.name}</span>
-          <span>→ ЦЕЛЬ ПРЫЖКА: {targetSystem.name}</span>
-        </div>
-      </div>
+      )}
 
       {/* Основная область: 3D-Космос + Терминал Миссий GoBell / Торговли / Галактической Карты */}
       <div className="relative flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Левый / главный экран 3D Wireframe */}
         <div
           ref={viewportContainerRef}
+          onMouseMove={(e) => {
+            if (screenMode !== 'FLIGHT') return;
+            updateTurretReticleFromMouse(e);
+          }}
+          onMouseLeave={() => {
+            flightStateRef.current.cabinMouseIn3DWindow = false;
+            flightStateRef.current.cabinYawRate = 0;
+            flightStateRef.current.cabinPitchRate = 0;
+          }}
           className="relative flex-1 bg-black flex flex-col items-center justify-center overflow-hidden"
         >
           <canvas
@@ -8889,7 +17152,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               }
               if (e.button === 0) {
                 e.preventDefault();
-                handleFireLaser();
+                const activeSlot = flightStateRef.current.activeWeaponSlot;
+                if (activeSlot === 2) {
+                  handleFireSecondaryWeapon();
+                } else if (activeSlot === 3) {
+                  handleFireHeavyGammaWeapon();
+                } else {
+                  handleFireLaser();
+                }
               } else if (e.button === 1) {
                 e.preventDefault();
                 handleTractorCapture();
@@ -8901,35 +17171,196 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             onWheel={(e) => {
               if (screenMode !== 'FLIGHT') return;
               e.preventDefault();
-              const deltaPct = e.deltaY < 0 ? 8 : -8;
-              setThrottleUi((prev) => {
-                const next = Math.max(0, Math.min(100, prev + deltaPct));
-                flightStateRef.current.targetSpeed =
-                  (next / 100) * flightStateRef.current.maxSpeed;
-                return next;
-              });
+              const deltaStep = e.deltaY < 0 ? 10 : -10;
+              handleStepSpeedOrConverter(deltaStep);
             }}
             className="w-full h-full object-contain bg-black cursor-crosshair"
           />
 
-          {/* БЫСТРЫЕ КНОПКИ СТАЦИОНАРНОЙ ОРБИТЫ (X) И АВТОПИЛОТА (Q) НА 3D-ЭКРАНЕ */}
-          {screenMode === 'FLIGHT' && !sentContactBanner && (
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap pointer-events-auto">
+          {/* НЕОНОВАЯ HUD-МАСКА КОКПИТА (ТОЧНО ПО ЗАГРУЖЕННОМУ ДИЗАЙНУ) */}
+          {screenMode === 'FLIGHT' && (
+            <CockpitHudMask
+              speed={throttleUi}
+              maxSpeed={flightStateRef.current.maxSpeed || 200}
+              frontShield={flightStateRef.current.frontShield}
+              aftShield={flightStateRef.current.aftShield}
+              converterActive={isShieldConverterActive}
+              solarFluxPct={flightStateRef.current.solarFluxPct || 4}
+              fuel={fuel}
+              radarScale={radarScaleUnits}
+              radarShipsOnly={radarShipsOnlyFilter}
+              radarEngineFilter={radarEngineFilter}
+              autopilotTargetName={autopilotTargetUi?.name}
+              flightMessage={flightMessage}
+              systemName={GALAXY_SYSTEMS[currentSystemId]?.name}
+              isUnderAttack={flightStateRef.current.enemyFireCooldown > 80}
+              gravConverterTons={gravConverterTons}
+              maxShipMassTons={totalShipMassTons}
+              onSimulateShieldHitTons={(tons) => applyShieldImpactTons(tons ?? 1.0, 'Тестовый удар в щит')}
+              onToggleConverter={handleToggleShieldSpeedConverter}
+              onToggleShipsOnly={handleToggleRadarShipsOnlyFilter}
+            />
+          )}
+
+          {/* ПОСТОЯННАЯ КНОПКА ПЕРЕКЛЮЧЕНИЯ РЕЖИМОВ ПОКАЗА («ЧИСТЫЙ КОКПИТ» ↔ «БЛОКИ И БОКОВАЯ ПАНЕЛЬ») И ЦЕНТРОВКИ ГИРОСКОПА МЕШ-РУБКИ [CTRL] В ПРАВОМ ВЕРХНЕМ УГЛУ 3D-ЭКРАНА */}
+          <div
+            onMouseEnter={() => {
+              flightStateRef.current.cabinMouseIn3DWindow = false;
+              flightStateRef.current.cabinYawRate = 0;
+              flightStateRef.current.cabinPitchRate = 0;
+            }}
+            className="absolute top-2.5 right-3 z-30 flex items-center gap-1.5 pointer-events-auto"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                applyShieldImpactTons(1.0, 'Тестовый удар в щит');
+              }}
+              className="px-2.5 py-1.5 border-2 border-rose-500/90 bg-slate-950/85 hover:bg-rose-500 hover:text-white text-rose-300 font-extrabold text-xs transition-all flex items-center gap-1 shadow-lg"
+              title="Тест удара по щиту (1.0 т): при щите 200% обратный урон конвертору 0.1 т, при 100% — 0.5 т, при 1% — 1.0 т!"
+            >
+              <span>💥 УДАР В ЩИТ (1 Т)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setObjectsGalleryTargetId(undefined);
+                setIsObjectsGalleryOpen(true);
+              }}
+              className="px-2.5 py-1.5 border-2 border-cyan-400 bg-slate-950/85 hover:bg-cyan-400 hover:text-black text-cyan-300 font-extrabold text-xs transition-all flex items-center gap-1 shadow-lg"
+              title="Открыть раздел «ОБЪЕКТЫ»: список космических тел (начиная с планет) с интерактивным 3D-вращением мышью со всех сторон и описанием свойств"
+            >
+              <span>🔭 ОБЪЕКТЫ (3D)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setIsStandardWorldsModalOpen(true);
+              }}
+              className="px-2.5 py-1.5 border-2 border-amber-400/90 bg-slate-950/85 hover:bg-amber-400 hover:text-black text-amber-300 font-extrabold text-xs transition-all flex items-center gap-1 shadow-lg"
+              title="Открыть Каталог Планет Созвездий, Звёзд Смерти и Космических Станций (Префиксы Фракций + Двойные Имена: Официально и В народе)"
+            >
+              <span>🪐 МИРЫ И СТАНЦИИ СОЗВЕЗДИЙ</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                flightStateRef.current.cabinAutoCentering = true;
+                flightStateRef.current.cabinYawRate = 0;
+                flightStateRef.current.cabinPitchRate = 0;
+              }}
+              className="px-2.5 py-1.5 border-2 border-emerald-400/90 bg-slate-950/85 hover:bg-emerald-400 hover:text-black text-emerald-300 font-extrabold text-xs transition-all flex items-center gap-1 shadow-lg"
+              title="Плавно вернуть 3-обручевый гироскоп Огневой Рубки (Меш-систему камер и орудий) в стандартное положение по Путевому центру корабля (клавиша Ctrl)"
+            >
+              <span>🎯 ЦЕНТР РУБКИ [CTRL]</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playZxBeep('DOCK');
+                setCockpitDisplayMode((prev) =>
+                  prev === 'CLEAN_COCKPIT' ? 'FULL' : 'CLEAN_COCKPIT'
+                );
+              }}
+              className={`px-3 py-1.5 border-2 font-extrabold text-xs transition-all flex items-center gap-1.5 shadow-lg ${
+                cockpitDisplayMode === 'CLEAN_COCKPIT'
+                  ? 'bg-slate-950/85 hover:bg-cyan-400 hover:text-black text-cyan-300 border-cyan-400/90 shadow-[0_0_16px_rgba(34,211,238,0.45)]'
+                  : 'bg-cyan-400 hover:bg-cyan-300 text-black border-yellow-300 shadow-[0_0_18px_rgba(34,211,238,0.75)]'
+              }`}
+              title="Переключить режим показа экрана: Чистый кокпит (без боковой панели и загромождающих блоков) ↔ Полный режим (все блоки и боковая панель) · Горячая клавиша [Tab]"
+            >
+              <span>
+                {cockpitDisplayMode === 'CLEAN_COCKPIT'
+                  ? '🎛️ ПОКАЗАТЬ БЛОКИ И ПАНЕЛЬ [TAB]'
+                  : '🕹️ ЧИСТЫЙ КОКПИТ [TAB]'}
+              </span>
+            </button>
+            {cockpitDisplayMode === 'CLEAN_COCKPIT' && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-2 py-1.5 border-2 border-rose-500/80 bg-slate-950/85 hover:bg-rose-500 hover:text-black text-rose-400 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1"
+                title="Выйти на карту G. Bell"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* БЫСТРЫЕ КНОПКИ СТАЦИОНАРНОЙ ОРБИТЫ (X) И АВТОПИЛОТА (Q) НА 3D-ЭКРАНЕ (ТОЛЬКО В ПОЛНОМ РЕЖИМЕ С БЛОКАМИ) */}
+          {screenMode === 'FLIGHT' && !sentContactBanner && cockpitDisplayMode === 'FULL' && (
+            <div
+              onMouseEnter={() => {
+                flightStateRef.current.cabinMouseIn3DWindow = false;
+                flightStateRef.current.cabinYawRate = 0;
+                flightStateRef.current.cabinPitchRate = 0;
+              }}
+              onMouseMove={(e) => {
+                e.stopPropagation();
+                flightStateRef.current.cabinMouseIn3DWindow = false;
+                flightStateRef.current.cabinYawRate = 0;
+                flightStateRef.current.cabinPitchRate = 0;
+              }}
+              className="absolute top-3 left-3 z-20 flex items-center gap-2 flex-wrap pointer-events-auto pr-56"
+            >
               <button
                 type="button"
                 onClick={handleToggleStationaryOrbit}
                 className={`px-3.5 py-2 border-2 font-extrabold text-xs transition-all shadow-lg flex items-center gap-2 ${
                   stationaryOrbitInfo
                     ? 'bg-emerald-400 text-black border-yellow-300 shadow-[0_0_20px_rgba(16,185,129,0.6)]'
-                    : 'bg-slate-950/90 hover:bg-emerald-500 hover:text-black text-emerald-300 border-emerald-400'
+                    : nearestPlanetOrbitUi?.canLock
+                    ? 'bg-slate-950/90 hover:bg-emerald-500 hover:text-black text-emerald-300 border-emerald-400'
+                    : 'bg-slate-950/85 hover:border-amber-400 text-slate-400 hover:text-amber-300 border-slate-600'
                 }`}
-                title="Нажмите клавишу X, чтобы закрепиться на стационарной орбите планеты (осевое вращение планеты остановится, а корабль будет двигаться вокруг оси вместе с планетой) или повторно X — чтобы открепиться"
+                title="Нажмите клавишу X, чтобы закрепиться на стационарной орбите планеты (доступно только на расстоянии менее 400 ед. от планеты) или повторно X — чтобы открепиться"
               >
                 <span>
                   {stationaryOrbitInfo
                     ? `🛰 НА СТАЦИОНАРНОЙ ОРБИТЕ: ${stationaryOrbitInfo.cleanName.toUpperCase()} · ОТКРЕПИТЬСЯ (X)`
-                    : '🛰 ЗАКРЕПИТЬСЯ НА СТАЦИОНАРНОЙ ОРБИТЕ (X)'}
+                    : nearestPlanetOrbitUi?.canLock
+                    ? `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД. < 400) [X]`
+                    : `🛰 ОРБИТА (X): НУЖНО < 400 ЕД. ДО ПЛАНЕТЫ${
+                        nearestPlanetOrbitUi
+                          ? ` (ДО «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» ${nearestPlanetOrbitUi.distanceUnits} ЕД.)`
+                          : ''
+                      }`}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('DEATH_STAR')}
+                className="px-3 py-2 border-2 border-slate-300 bg-slate-900/90 hover:bg-emerald-400 hover:text-black hover:border-emerald-300 text-slate-100 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="Мгновенно подлететь вплотную к Звезде Смерти на орбите Марса в противофазе относительно Солнца (клавиша 8)"
+              >
+                <span>💀 ЗВЕЗДА СМЕРТИ [8]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('TORUS_SHIP')}
+                className="px-3 py-2 border-2 border-cyan-300 bg-slate-900/90 hover:bg-cyan-400 hover:text-black hover:border-yellow-300 text-cyan-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="Мгновенно подлететь вплотную к Космическому Кораблю-Бублику с 4 внутренними лучами-переходами и центробежной силой на орбите Земли в противофазе с Землёй (клавиша 9)"
+              >
+                <span>🍩 КОРАБЛЬ-БУБЛИК [9]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('STARGATE')}
+                className="px-3 py-2 border-2 border-purple-400 bg-slate-900/90 hover:bg-purple-400 hover:text-black hover:border-yellow-300 text-purple-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="Мгновенно подлететь вплотную к невращающимся Звёздным Вратам размером с планету на орбите Венеры в противофазе с Венерой (клавиша 0)"
+              >
+                <span>⛩️ ЗВЁЗДНЫЕ ВРАТА [0]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('BURAN_SHUTTLE')}
+                className="px-3 py-2 border-2 border-sky-300 bg-slate-900/90 hover:bg-sky-400 hover:text-black hover:border-yellow-300 text-sky-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="Переключаться между 4 стандартными кораблями «Буран / Шаттл» в Поясе Астероидов (равномерно распределены, летят на ½ скорости, стреляют по астероидам и собирают металлы, без контактов, можно уничтожить и забрать их груз)"
+              >
+                <span>🚀 4 БУРАНА В ПОЯСЕ</span>
               </button>
               {autopilotTargetUi && (
                 <button
@@ -8948,18 +17379,23 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   Осевое вращение планеты остановлено · Вся система вращается вокруг оси планеты [X — открепить]
                 </div>
               )}
+              {dictatorSwarmUi && dictatorSwarmUi.activeCount > 0 && (
+                <div className="px-3 py-1.5 bg-rose-950/95 border-2 border-rose-500 text-[11px] text-rose-200 font-extrabold shadow-[0_0_18px_rgba(244,63,94,0.65)] animate-pulse">
+                  🚨 КАРА ДИКТАТОРА «{dictatorSwarmUi.originPlanetName.toUpperCase()}»: РОЙ ДРОНОВ ({dictatorSwarmUi.activeCount}/5) · V={dictatorSwarmUi.droneSpeed} ЕД/С (2× КОРАБЛЯ) · УРОН 5% (1/20)
+                </div>
+              )}
             </div>
           )}
 
           {/* ИНФОРМАЦИОННАЯ ТАБЛИЧКА АВТОПИЛОТА В УГЛУ ЭКРАНА (КЛАВИША Q):
-              Не перекрывает центр 3D-экрана! Показывает предупреждение о захвате автопилотом,
-              расстояние до корабля и массу (корабля и объекта), а также позволяет выбрать любой угол (↖ ↗ ↙ ↘) */}
+              Отображается только в полном режиме с блоками! */}
           {screenMode === 'FLIGHT' &&
+            cockpitDisplayMode === 'FULL' &&
             autopilotTargetUi &&
             (() => {
               const apCornerStyle: React.CSSProperties =
                 autopilotCardCorner === 'TOP_RIGHT'
-                  ? {top: '10px', right: '10px'}
+                  ? {top: '48px', right: '12px'}
                   : autopilotCardCorner === 'TOP_LEFT'
                   ? {top: '48px', left: '12px'}
                   : autopilotCardCorner === 'BOTTOM_RIGHT'
@@ -8968,6 +17404,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
               return (
                 <div
+                  onMouseEnter={() => {
+                    isHoveringAutopilotCardRef.current = true;
+                    flightStateRef.current.cabinMouseIn3DWindow = false;
+                    flightStateRef.current.cabinYawRate = 0;
+                    flightStateRef.current.cabinPitchRate = 0;
+                  }}
+                  onMouseMove={(e) => {
+                    e.stopPropagation();
+                    isHoveringAutopilotCardRef.current = true;
+                    flightStateRef.current.cabinMouseIn3DWindow = false;
+                    flightStateRef.current.cabinYawRate = 0;
+                    flightStateRef.current.cabinPitchRate = 0;
+                  }}
+                  onMouseLeave={() => {
+                    isHoveringAutopilotCardRef.current = false;
+                  }}
                   style={{
                     ...apCornerStyle,
                     width: '286px',
@@ -9090,16 +17542,27 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               );
             })()}
 
-          {/* КАРТОЧКА ПРОФИЛЯ ЛЮБОГО ОБЪЕКТА (СОЛНЦЕ, ПЛАНЕТА, ГРУППА, БИЗНЕС, ОБЪЯВЛЕНИЕ, МОДУЛЬ, ГРУЗ, АСТЕРОИД) — ПОЯВЛЯЕТСЯ РЯДОМ С ОБЪЕКТОМ ТОЛЬКО КОГДА ОБЪЕКТ В ЗОНЕ ДЕЙСТВИЯ КУРСОРА МЫШИ И НАЖАТА КЛАВИША I */}
+          {/* КАРТОЧКА ПРОФИЛЯ ЛЮБОГО ОБЪЕКТА (СОЛНЦЕ, ПЛАНЕТА, ГРУППА, БИЗНЕС, ОБЪЯВЛЕНИЕ, МОДУЛЬ, ГРУЗ, АСТЕРОИД) — ПОЯВЛЯЕТСЯ РЯДОМ С ОБЪЕКТОМ ТОЛЬКО КОГДА ОБЪЕКТ В ЗОНЕ ДЕЙСТВИЯ КУРСОРА МЫШИ И НАЖАТА КЛАВИША I (ИЛИ ПОЛНАЯ ТАБЛИЧКА ПО ЗАПЯТОЙ «,» РЯДОМ С 0; ЗАКРЫТИЕ ПО «0») */}
           <SpaceObjectProfileModal
             profile={screenMode === 'FLIGHT' ? activeObjectProfile : null}
+            isFullPlacard={isObjectProfileFullPlacard}
+            onToggleFullPlacard={(full) => {
+              setIsObjectProfileFullPlacard(full);
+              flightStateRef.current.cabinYawRate = 0;
+              flightStateRef.current.cabinPitchRate = 0;
+              flightStateRef.current.cabinMouseIn3DWindow = false;
+            }}
             onClose={() => {
               isHoveringObjectCardRef.current = false;
               activeObjectProfileRef.current = null;
               setActiveObjectProfile(null);
+              setIsObjectProfileFullPlacard(false);
             }}
             onMouseEnterCard={() => {
               isHoveringObjectCardRef.current = true;
+              flightStateRef.current.cabinMouseIn3DWindow = false;
+              flightStateRef.current.cabinYawRate = 0;
+              flightStateRef.current.cabinPitchRate = 0;
             }}
             onMouseLeaveCard={() => {
               isHoveringObjectCardRef.current = false;
@@ -9119,7 +17582,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             isStationaryOrbitLocked={Boolean(stationaryOrbitInfo)}
             onTractorCaptureObject={(prof) => {
               handleFocusObjectFromProfile(prof);
-              handleTractorCapture();
+              handleTractorCapture(prof.name || prof.nickname || 'Объект');
             }}
             onDestroyObjectAsAsteroid={(prof) => {
               handleDestroyCargoOrDebrisAsAsteroid(prof.entityId);
@@ -9128,6 +17591,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               setActiveObjectProfile(null);
             }}
             onDockStation={handleToggleDocking}
+            onHyperspaceJumpToConstellationStar={handleHyperspaceJumpToConstellationStar}
             onSendContactRequest={(targetName, planetOrSectorName, category, note, groupTag) => {
               playZxBeep('MISSION');
               setEarnedGoBellKarma((k) => k + 1);
@@ -9153,9 +17617,18 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 note,
               });
               setFlightMessage(
-                `✓ ЗАПРОС НА КОНТАКТ ДОСТАВЛЕН В CHAT GOBELL: «${targetName}» (${planetOrSectorName.toUpperCase()})`
+                `✓ ЗАПРОС НА КОНТАКТ ДОСТАВЛЕН В CHAT G. BELL: «${targetName}» (${planetOrSectorName.toUpperCase()})`
               );
             }}
+            capturedPlanetsMap={capturedPlanetsMap}
+            activeSystemDictatorPlanets={
+              getStarSystemFullAssignment(activeSystemKey).planets
+            }
+            onCaptureAndAnnexPlanet={handleCaptureAndAnnexActivePlanet}
+            onCollectPlanetClanIncomeNow={handleCollectPlanetClanIncomeNow}
+            onUpgradePlanetClanInfrastructure={handleUpgradePlanetClanInfrastructure}
+            onRaisePlanetAuctionBid={handleRaisePlanetAuctionBid}
+            onSellPlanetOnAuction={handleSellPlanetOnAuction}
             ironStock={ironStock}
             aluminumStock={aluminumStock}
             foodWaterCargoStock={foodWaterCargoStock}
@@ -9167,14 +17640,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             pirateSellDivisor={pirateSellDivisor}
           />
 
-          {/* УВЕДОМЛЕНИЕ ОБ ОТПРАВЛЕННОМ ЗАПРОСЕ НА КОНТАКТ С ПЛАНЕТЫ В GOBELL CHAT */}
+          {/* УВЕДОМЛЕНИЕ ОБ ОТПРАВЛЕННОМ ЗАПРОСЕ НА КОНТАКТ С ПЛАНЕТЫ В G. BELL CHAT */}
           {sentContactBanner && (
             <div className="absolute top-3 left-3 right-3 z-30 bg-slate-950/95 border-2 border-emerald-400 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap shadow-2xl font-sans">
               <div className="space-y-0.5 text-xs">
                 <div className="font-extrabold text-emerald-300 flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
-                    Запрос на контакт отправлен в Chat GoBell: «{sentContactBanner.targetName}» (планета {sentContactBanner.planetName}) · +1 Карма GoBell!
+                    Запрос на контакт отправлен в Chat G. Bell: «{sentContactBanner.targetName}» (планета {sentContactBanner.planetName}) · +1 Карма G. Bell!
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-300">
@@ -9198,7 +17671,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     }}
                     className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-extrabold"
                   >
-                    Открыть в Chat GoBell →
+                    Открыть в Chat G. Bell →
                   </button>
                 )}
                 <button
@@ -9212,7 +17685,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             </div>
           )}
 
-          {/* МОДАЛЬНОЕ ОКНО «ФОРМА ЗАПРОСА НА КОНТАКТ» (ТОЧНО КАК НА КАРТЕ GOBELL) */}
+          {/* МОДАЛЬНОЕ ОКНО «ФОРМА ЗАПРОСА НА КОНТАКТ» (ТОЧНО КАК НА КАРТЕ G. BELL) */}
           {planetContactTarget && (
             <div className="fixed inset-0 z-[150] bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150 font-sans">
               <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
@@ -9247,7 +17720,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     onEarnKarmaAndBonus?.(
                       1,
                       150,
-                      `Запрос на контакт с планетарным объектом GoBell: ${targetObj.title}`
+                      `Запрос на контакт с планетарным объектом G. Bell: ${targetObj.title}`
                     );
                     onSendPlanetContactRequest?.({
                       id: targetObj.id,
@@ -9266,7 +17739,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       note: planetContactNote.trim(),
                     });
                     setFlightMessage(
-                      `✓ ЗАПРОС НА КОНТАКТ ДОСТАВЛЕН В CHAT GOBELL: «${targetObj.title}» (ПЛАНЕТА ${targetObj.planetCleanName.toUpperCase()})`
+                      `✓ ЗАПРОС НА КОНТАКТ ДОСТАВЛЕН В CHAT G. BELL: «${targetObj.title}» (ПЛАНЕТА ${targetObj.planetCleanName.toUpperCase()})`
                     );
                     setPlanetContactTarget(null);
                   }}
@@ -9277,7 +17750,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       Планета: <strong className="text-sky-300">{planetContactTarget.planetName}</strong>
                     </div>
                     <div>
-                      Объект GoBell:{' '}
+                      Объект G. Bell:{' '}
                       <strong className="text-white">{planetContactTarget.obj.title}</strong>
                     </div>
                     <div>
@@ -9330,7 +17803,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   <div className="space-y-1">
                     <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400 text-emerald-300 text-xs font-extrabold uppercase">
                       <Navigation className="w-3.5 h-3.5" />
-                      <span>Обязательное условие запуска GoBell : ELITE 3D</span>
+                      <span>Обязательное условие запуска G. Bell : ELITE 3D</span>
                     </div>
                     <h2 className="text-lg sm:text-xl font-extrabold text-white pt-1">
                       Для активации игры должна быть включена геолокация на смартфоне!
@@ -9340,7 +17813,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     type="button"
                     onClick={onClose}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white"
-                    title="Вернуться на карту GoBell"
+                    title="Вернуться на карту G. Bell"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -9348,10 +17821,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
                 <div className="p-4 rounded-xl bg-slate-950 border border-emerald-500/40 space-y-2.5 text-xs text-slate-200 leading-relaxed">
                   <div className="font-extrabold text-emerald-300 text-sm">
-                    📡 Как работает связка космоса и реальной карты GoBell:
+                    📡 Как работает связка космоса и реальной карты G. Bell:
                   </div>
                   <div>
-                    • <b className="text-white">Когда игрок играет в космосе — он светится на реальной карте GoBell</b> в своих физических координатах смартфона (<span className="font-mono text-cyan-300">{smartphoneGeoCoords.lat.toFixed(4)}, {smartphoneGeoCoords.lng.toFixed(4)}</span>).
+                    • <b className="text-white">Когда игрок играет в космосе — он светится на реальной карте G. Bell</b> в своих физических координатах смартфона (<span className="font-mono text-cyan-300">{smartphoneGeoCoords.lat.toFixed(4)}, {smartphoneGeoCoords.lng.toFixed(4)}</span>).
                   </div>
                   <div>
                     • <b className="text-amber-300">Преодоление холодного старта:</b> пока пилоты проводят время в звёздной системе (добывают элементы в Поясе астероидов, выполняют контракты правительств планет или фиксируют подпространственные слоты), их реальные профили со всеми тегами образуют живую светящуюся сеть на карте города и принимают запросы на контакт!
@@ -9367,7 +17840,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     onClick={onClose}
                     className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
                   >
-                    Вернуться на карту GoBell
+                    Вернуться на карту G. Bell
                   </button>
                   <button
                     type="button"
@@ -9375,7 +17848,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       playZxBeep('MISSION');
                       onToggleSmartphoneGeo?.(true);
                       setFlightMessage(
-                        `📡 ГЕОЛОКАЦИЯ СМАРТФОНА АКТИВИРОВАНА (${smartphoneGeoCoords.lat.toFixed(4)}, ${smartphoneGeoCoords.lng.toFixed(4)})! ВЫ СВЕТИТЕСЬ НА РЕАЛЬНОЙ КАРТЕ GOBELL!`
+                        `📡 ГЕОЛОКАЦИЯ СМАРТФОНА АКТИВИРОВАНА (${smartphoneGeoCoords.lat.toFixed(4)}, ${smartphoneGeoCoords.lng.toFixed(4)})! ВЫ СВЕТИТЕСЬ НА РЕАЛЬНОЙ КАРТЕ G. BELL!`
                       );
                     }}
                     className="w-full sm:w-auto px-5 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.7)] flex items-center justify-center gap-2"
@@ -9396,7 +17869,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                     <h3 className="text-sm font-extrabold text-emerald-300 uppercase">
-                      📡 Маяк смартфона активен · Вы светитесь на реальной карте GoBell
+                      📡 Маяк смартфона активен · Вы светитесь на реальной карте G. Bell
                     </h3>
                   </div>
                   <button
@@ -9417,7 +17890,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-slate-300">Ваши реальные координаты на карте GoBell:</span>
+                      <span className="text-slate-300">Ваши реальные координаты на карте G. Bell:</span>
                       <span className="font-mono font-extrabold text-cyan-300">
                         {smartphoneGeoCoords.lat.toFixed(6)}, {smartphoneGeoCoords.lng.toFixed(6)}
                       </span>
@@ -9431,7 +17904,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     {pilotProfileTags.length > 0 && (
                       <div className="pt-1 border-t border-emerald-500/30">
                         <div className="text-[11px] text-slate-300 mb-1">
-                          Ваши активные слова-теги, которые прямо сейчас светятся в поиске GoBell:
+                          Ваши активные слова-теги, которые прямо сейчас светятся в поиске G. Bell:
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {pilotProfileTags.map((tag) => (
@@ -9448,7 +17921,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   </div>
 
                   <div className="text-[11px] text-slate-300 leading-relaxed">
-                    Пока вы находитесь в <b>GoBell : ELITE 3D</b>, ваш смартфон транслирует геолокацию, а ваш аватар подсвечен пульсирующим маяком на реальной карте GoBell. Любой пользователь в радиусе поиска видит вас на карте и может отправить вам запрос на контакт!
+                    Пока вы находитесь в <b>G. Bell : ELITE 3D</b>, ваш смартфон транслирует геолокацию, а ваш аватар подсвечен пульсирующим маяком на реальной карте G. Bell. Любой пользователь в радиусе поиска видит вас на карте и может отправить вам запрос на контакт!
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-800">
@@ -9473,7 +17946,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                           }}
                           className="px-3.5 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-xs shadow-md"
                         >
-                          👁 Посмотреть как я свечусь на карте GoBell
+                          👁 Посмотреть как я свечусь на карте G. Bell
                         </button>
                       )}
                       <button
@@ -9498,7 +17971,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-fuchsia-400" />
                     <h3 className="text-sm font-extrabold text-fuchsia-300 uppercase">
-                      🏢 Бизнес-Аккаунт GoBell · Создание Бизнеса с Меньшей Маржой
+                      🏢 Бизнес-Аккаунт G. Bell · Создание Бизнеса с Меньшей Маржой
                     </h3>
                   </div>
                   <button
@@ -9714,7 +18187,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       </span>
                     </div>
                     <div className="text-slate-200 leading-relaxed text-[11px]">
-                      Аналог <b>Аукциона слота объявления GoBell</b>: вы можете зафиксировать объявление <b>прямо возле себя</b> или <b>в любой точке звёздной системы</b>, либо передать канал в <b>Пул Аукциона</b>, чтобы получать <b>долю в пуле аукциона</b> (начислено дивидендов:{' '}
+                      Аналог <b>Аукциона слота объявления G. Bell</b>: вы можете зафиксировать объявление <b>прямо возле себя</b> или <b>в любой точке звёздной системы</b>, либо передать канал в <b>Пул Аукциона</b>, чтобы получать <b>долю в пуле аукциона</b> (начислено дивидендов:{' '}
                       <b className="text-emerald-300">+{subspacePoolDividendsCr} CR</b> · погашение подписки:{' '}
                       <b className="text-cyan-300">${subspaceSubscriptionPayoffUsd.toFixed(2)}</b>).
                     </div>
@@ -10088,7 +18561,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 <div>
                   <div className="text-sm sm:text-base font-extrabold text-yellow-300 flex items-center gap-2">
                     <Bell className="w-4 h-4 text-emerald-400" />
-                    <span>ОРБИТАЛЬНЫЙ ТЕРМИНАЛ GOBELL · {currentSystem.name}</span>
+                    <span>ОРБИТАЛЬНЫЙ ТЕРМИНАЛ G. BELL · {currentSystem.name}</span>
                   </div>
                   <div className="text-[11px] text-cyan-300">
                     {currentSystem.gov} · Экономика: {currentSystem.econ} · Уровень опасности:{' '}
@@ -10106,7 +18579,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         : 'bg-black text-emerald-400 border-emerald-500/60 hover:border-emerald-400'
                     }`}
                   >
-                    🔔 МИССИИ GOBELL ({missions.filter((m) => m.status !== 'COMPLETED').length})
+                    🔔 МИССИИ G. BELL ({missions.filter((m) => m.status !== 'COMPLETED').length})
                   </button>
                   <button
                     type="button"
@@ -10145,7 +18618,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 <div className="flex-1 overflow-y-auto pt-3 space-y-2.5 pr-1">
                   <div className="px-3 py-2 border border-emerald-500/50 bg-emerald-950/20 text-xs text-emerald-300 flex items-center justify-between flex-wrap gap-2">
                     <span>
-                      Выбирайте космические миссии, созданные из реальных объявлений ADVERT, сигналов SOS и заказов экосистемы GoBell!
+                      Выбирайте космические миссии, созданные из реальных объявлений ADVERT, сигналов SOS и заказов экосистемы G. Bell!
                     </span>
                     <span className="text-yellow-300 font-bold">
                       Активных миссий: {missions.filter((m) => m.status === 'ACTIVE').length}
@@ -10182,7 +18655,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                               НАГРАДА: +{m.rewardCredits} CR
                             </span>
                             <span className="text-emerald-400">
-                              КАРМА GOBELL: +{m.rewardKarma}
+                              КАРМА G. BELL: +{m.rewardKarma}
                             </span>
                             <span className="text-cyan-300">
                               ЦЕЛЬ: {destSys.name}
@@ -10202,7 +18675,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                               onClick={() => handleAcceptMission(m.id, m.targetSystemId)}
                               className="px-3.5 py-2 bg-emerald-400 hover:bg-emerald-300 text-black font-extrabold text-xs"
                             >
-                              ПРИНЯТЬ МИССИЮ GOBELL
+                              ПРИНЯТЬ МИССИЮ G. BELL
                             </button>
                           )}
                           {m.status === 'ACTIVE' && (
@@ -10318,7 +18791,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         ТОПЛИВО ГИПЕРДВИГАТЕЛЯ (HYPERSPACE FUEL · 7.0 LY MAX)
                       </div>
                       <div className="text-slate-300">
-                        Текущий запас: {fuel.toFixed(1)} / 7.0 световых лет. Полная заправка для прыжков по системам GoBell.
+                        Текущий запас: {fuel.toFixed(1)} / 7.0 световых лет. Полная заправка для прыжков по системам G. Bell.
                       </div>
                     </div>
                     <button
@@ -10451,7 +18924,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               <div className="flex items-center justify-between border-b border-yellow-400/60 pb-2">
                 <div>
                   <div className="text-base font-extrabold text-yellow-300">
-                    ГАЛАКТИЧЕСКАЯ КАРТА СЕКТОРОВ GOBELL · ВЫБОР ГИПЕРПРЫЖКА
+                    ГАЛАКТИЧЕСКАЯ КАРТА СЕКТОРОВ G. BELL · ВЫБОР ГИПЕРПРЫЖКА
                   </div>
                   <div className="text-xs text-cyan-300">
                     Выберите целевую звёздную систему и нажмите «СОВЕРШИТЬ ГИПЕРПРЫЖОК (H)»
@@ -10495,7 +18968,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         )}
                         {activeMissionsHere > 0 && (
                           <span className="text-[10px] font-extrabold text-yellow-300">
-                            ★ МИССИЙ GOBELL: {activeMissionsHere}
+                            ★ МИССИЙ G. BELL: {activeMissionsHere}
                           </span>
                         )}
                       </div>
@@ -10530,14 +19003,37 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           )}
         </div>
 
-        {/* Правая панель быстрого управления и активных миссий GoBell */}
-        <div className="w-full lg:w-80 border-t-2 lg:border-t-0 lg:border-l-2 border-cyan-400 bg-black p-3 flex flex-col justify-between gap-3 overflow-y-auto">
-          <div className="space-y-3">
-            <div className="border border-yellow-400/70 p-2.5 space-y-2">
-              <div className="text-xs font-extrabold text-yellow-300 border-b border-yellow-500/40 pb-1 flex items-center justify-between gap-1">
-                <span>ПУЛЬТ УПРАВЛЕНИЯ COBRA MK III</span>
-                <span className="text-[9px] text-cyan-300">ИГРОВАЯ ПАНЕЛЬ</span>
-              </div>
+        {/* Правая панель быстрого управления и активных миссий GoBell (скрыта в режиме «Чистый кокпит») */}
+        {cockpitDisplayMode === 'FULL' && (
+          <div className="w-full lg:w-80 border-t-2 lg:border-t-0 lg:border-l-2 border-cyan-400 bg-black p-3 flex flex-col justify-between gap-3 overflow-y-auto">
+            <div className="space-y-3">
+              <div className="border border-yellow-400/70 p-2.5 space-y-2">
+                <div className="text-xs font-extrabold text-yellow-300 border-b border-yellow-500/40 pb-1 flex items-center justify-between gap-1">
+                  <span>ПУЛЬТ УПРАВЛЕНИЯ COBRA MK III</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playZxBeep('DOCK');
+                      setCockpitDisplayMode('CLEAN_COCKPIT');
+                    }}
+                    className="px-1.5 py-0.5 bg-cyan-400 hover:bg-cyan-300 text-black font-extrabold text-[9px] shrink-0"
+                    title="Скрыть боковую панель и блоки — перейти в режим «Чистый кокпит» (Tab)"
+                  >
+                    🕹️ ЧИСТЫЙ КОКПИТ
+                  </button>
+                </div>
+              <button
+                type="button"
+                onClick={() => {
+                  playZxBeep('DOCK');
+                  setObjectsGalleryTargetId(undefined);
+                  setIsObjectsGalleryOpen(true);
+                }}
+                className="w-full py-2 px-2.5 border-2 border-cyan-400 bg-cyan-400 hover:bg-cyan-300 text-black font-black text-[11px] flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(6,182,212,0.6)] transition-colors"
+                title="Открыть раздел «ОБЪЕКТЫ»: список космических тел (начиная с планет) с интерактивным 3D-вращением мышью и техническим описанием свойств"
+              >
+                <span>🔭 РАЗДЕЛ «ОБЪЕКТЫ» (3D МОДЕЛИ И СВОЙСТВА)</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setIsFullConfigDocOpen(true)}
@@ -10569,14 +19065,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   className={`py-2 px-2 border-2 font-extrabold flex items-center justify-center gap-1.5 col-span-2 transition-colors ${
                     stationaryOrbitInfo
                       ? 'border-yellow-300 bg-emerald-400 text-black hover:bg-emerald-300'
-                      : 'border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300'
+                      : nearestPlanetOrbitUi?.canLock
+                      ? 'border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300'
+                      : 'border-slate-600 bg-slate-900/60 hover:border-amber-400 text-slate-400 hover:text-amber-300'
                   }`}
-                  title="Клавиша X — закрепиться на стационарной орбите планеты (осевое вращение планеты прекращается, корабль двигается вокруг оси вместе с планетой) / повторное нажатие X — открепиться"
+                  title="Клавиша X — закрепиться на стационарной орбите планеты (только при расстоянии менее 400 ед. до планеты) / повторное нажатие X — открепиться"
                 >
                   <span>
                     {stationaryOrbitInfo
                       ? `🔓 ОТКРЕПИТЬСЯ ОТ СТАЦИОНАРНОЙ ОРБИТЫ «${stationaryOrbitInfo.cleanName.toUpperCase()}» (X)`
-                      : '🛰 ЗАКРЕПИТЬСЯ НА СТАЦИОНАРНОЙ ОРБИТЕ (X)'}
+                      : nearestPlanetOrbitUi?.canLock
+                      ? `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД.) [X]`
+                      : `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ (X) · НУЖНО < 400 ЕД.${
+                          nearestPlanetOrbitUi
+                            ? ` (СЕЙЧАС ${nearestPlanetOrbitUi.distanceUnits} ЕД.)`
+                            : ''
+                        }`}
                   </span>
                 </button>
                 <button
@@ -10588,7 +19092,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   <span>
                     {screenMode === 'DOCKED'
                       ? 'ВЗЛЁТ СО СТАНЦИИ (T)'
-                      : 'СТЫКОВКА · МИССИИ GOBELL И ТОРГОВЛЯ (T)'}
+                      : 'СТЫКОВКА · МИССИИ G. BELL И ТОРГОВЛЯ (T)'}
                   </span>
                 </button>
                 <button
@@ -10690,31 +19194,413 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
               {/* СЦЕНА ВНУТРИ СФЕРЫ СИСТЕМЫ: ЗВЕЗДА В ЦЕНТРЕ, 4 ПЛАНЕТЫ И ПОЯС АСТЕРОИДОВ */}
               <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-yellow-300 font-extrabold">
-                    ☀ ЗАРЯДКА ОТ ЗВЕЗДЫ: {solarChargeUi.fluxPct}%
-                  </span>
-                  <span className="text-[10px] text-cyan-300 font-bold">
-                    До звезды: {solarChargeUi.starDist} ед ({solarChargeUi.etaToStar})
-                  </span>
+                {/* ГЭУ — ГЛАВНАЯ ЭНЕРГЕТИЧЕСКАЯ УСТАНОВКА И ОНТОЛОГИЯ ИСТОЧНИКОВ ЭНЕРГИИ */}
+                <div className="p-2 border border-amber-400/80 bg-slate-950 space-y-1.5 text-[9px]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-amber-300 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-yellow-400" />
+                      <span>ГЭУ (ГЛАВНАЯ ЭНЕРГОУСТАНОВКА):</span>
+                    </span>
+                    <span
+                      className={`px-1.5 py-0.5 font-extrabold border ${
+                        geuActiveSource === 'WIND_ACCUMULATOR'
+                          ? 'border-cyan-400 bg-cyan-950/60 text-cyan-300'
+                          : geuActiveSource === 'REACTOR'
+                          ? 'border-orange-400 bg-orange-950/60 text-orange-300'
+                          : geuActiveSource === 'VACUUM_DOMINATOR'
+                          ? 'border-purple-400 bg-purple-950/80 text-purple-200 shadow-[0_0_10px_rgba(192,132,252,0.5)]'
+                          : 'border-rose-400 bg-rose-950/60 text-rose-300'
+                      }`}
+                    >
+                      {geuActiveSource === 'VACUUM_DOMINATOR'
+                        ? '👑 ВАКУУМ ДОМИНАТОРА'
+                        : geuActiveSource === 'WIND_ACCUMULATOR'
+                        ? '☀️ ВОЗОБНОВЛЯЕМЫЙ ВЕТЕР'
+                        : geuActiveSource === 'REACTOR'
+                        ? '☢️ РЕАКТОР'
+                        : '♻️ КОНВЕРТОР ТРЮМА'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1 text-[8px]">
+                    <div className="p-1 border border-cyan-500/40 bg-black/60">
+                      <div className="text-cyan-300 font-bold">1. АККУМУЛЯТОР:</div>
+                      <div className="text-white font-extrabold text-[10px]">
+                        {windAccumulatorEnergy.toFixed(1)} / {totalShipMassTons} ед.
+                      </div>
+                      <div className="text-slate-400">макс = масса {totalShipMassTons}т</div>
+                    </div>
+                    <div className="p-1 border border-orange-500/40 bg-black/60">
+                      <div className="text-orange-300 font-bold">2. ТОПЛИВО:</div>
+                      <div className="text-white font-extrabold text-[10px]">
+                        Уран: {uraniumFuelStockKg.toFixed(1)} кг
+                      </div>
+                      <div className="text-slate-400">дефект массы Δm~0.1%</div>
+                    </div>
+                    <div className="p-1 border border-purple-500/50 bg-purple-950/40">
+                      <div className="text-purple-300 font-bold">3. ГРАНИЧНОЕ:</div>
+                      <div className="text-white font-extrabold text-[10px]">
+                        {boundaryMatterFuelStockKg.toFixed(1)} кг
+                      </div>
+                      <div className="text-emerald-300 font-bold text-[7.5px]">100% массы в энергию (E=mc²)</div>
+                    </div>
+                    <div className="p-1 border border-rose-500/40 bg-black/60">
+                      <div className="text-rose-300 font-bold">4. МАССА ТРЮМА:</div>
+                      <div className="text-white font-extrabold text-[10px]">
+                        {usedCargoTons.toFixed(2)} т (конв. {cargoMassConvertedKg}кг)
+                      </div>
+                      <div className="text-slate-400">Δm~0.01% (на порядок ниже)</div>
+                    </div>
+                  </div>
+
+                  {/* ПАНЕЛЬ ЭЛИТНОГО КЛАССА «ДОМИНАТОРЫ» */}
+                  <div className="p-1.5 border border-purple-400/80 bg-purple-950/30 space-y-1">
+                    <div className="flex items-center justify-between text-[9px] font-extrabold text-purple-200">
+                      <span>👑 КЛАСС «ДОМИНАТОРЫ» · УСТАНОВЩИКИ ЗВЁЗДНЫХ ВРАТ:</span>
+                      <span className="text-yellow-300">ВРАТ: {deployedStargatesCount}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      <button
+                        type="button"
+                        onClick={handleToggleVacuumConversion}
+                        className={`py-1 px-1 border font-extrabold text-[8px] truncate ${
+                          isVacuumConversionActive
+                            ? 'bg-purple-400 text-black border-white shadow-[0_0_10px_rgba(192,132,252,0.6)]'
+                            : 'border-purple-400/60 bg-black text-purple-300 hover:bg-purple-400 hover:text-black'
+                        }`}
+                        title="Установка вакуумной конвертации: 100% массы критического вещества в минуту трансформируется в эквивалентную энергию из вакуума"
+                      >
+                        {isVacuumConversionActive
+                          ? '🌌 ВАКУУМ (ВКЛ)'
+                          : '🌌 Вакуум-Конвертер'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeployDominatorStargate}
+                        className="py-1 px-1 border border-cyan-400 bg-cyan-950/40 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-[8px] truncate"
+                        title="Развернуть Звёздные Врата в текущем секторе (технология пространства-времени Доминаторов)"
+                      >
+                        ⛩️ Развернуть Врата
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsSpacetimeJumpModalOpen(true)}
+                        className="py-1 px-1 border border-yellow-400 bg-yellow-400/20 hover:bg-yellow-400 hover:text-black text-yellow-300 font-extrabold text-[8px] truncate"
+                        title="Прыжок Пространства-Времени: расчёт и мгновенный переход в ЛЮБУЮ конечную точку назначения галактики"
+                      >
+                        🌀 Прыжок Времени
+                      </button>
+                    </div>
+                    <div className="text-[7.5px] text-purple-200/90 leading-tight">
+                      • <b>Вакуумная конвертация:</b> 100% массы критического вещества в минуту из вакуума (1 кг/экв/мин).<br />
+                      • <b>Граничное вещество:</b> 100% массы переходит в энергию (E = mc²).<br />
+                      • <b>Технология Пространства-Времени:</b> создание любой конечной точки назначения в гиперпрыжке!
+                    </div>
+                  </div>
+
+                  {/* ПАНЕЛЬ АВТОНОМНОГО ЧАСОВОГО «СЕНТИНЕЛ-Ω» (БЕЗ ДВИГАТЕЛЯ · 0 кН) */}
+                  {(() => {
+                    const activeSentinel =
+                      sentinelNetwork.find((s) => s.id === activeSentinelId) ||
+                      sentinelNetwork[0];
+                    if (!activeSentinel) return null;
+                    const strikeSpec = SENTINEL_STRIKE_MODES[activeSentinel.strikeMode];
+                    const isDestroyOnly = activeSentinel.engagementDirective === 'DESTROY_ONLY';
+                    return (
+                      <div className="p-1.5 border border-cyan-400/80 bg-cyan-950/30 space-y-1">
+                        <div className="flex items-center justify-between text-[9px] font-extrabold text-cyan-200">
+                          <span className="flex items-center gap-1">
+                            <span>🛰️ ЧАСОВОЙ [{activeSentinel.locationLabelRu.toUpperCase()}]:</span>
+                            {activeSentinel.swarmClusterId && (
+                              <span className="px-1 py-0.2 rounded text-[7.5px] bg-purple-950 border border-purple-400 text-purple-300">
+                                🌪️ ОБЛАКО #{activeSentinel.swarmPlatformIndex ?? 1}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-emerald-300 font-mono">
+                            {Math.round(activeSentinel.batteryChargeGeu)}/{activeSentinel.batteryCapacityGeu} ГЭУ ({activeSentinel.batteryPercent}%)
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[8px] font-mono text-slate-300">
+                          <span>
+                            Сила: <b className="text-yellow-300">{strikeSpec.codeName} ({strikeSpec.strikePowerLabel})</b>
+                          </span>
+                          <span className={isDestroyOnly ? 'text-rose-400 font-bold' : 'text-sky-300 font-bold'}>
+                            {isDestroyOnly ? '⚡ ТОЛЬКО УНИЧТОЖИТЬ' : '🛡️ ОТПУГНУТЬ & УНИЧТОЖИТЬ'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setIsSentinelModalOpen(true)}
+                            className="py-1 px-1 border border-cyan-400 bg-cyan-400/20 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-[8px] truncate"
+                            title="Открыть Терминал Автономного Часового (клавиша J)"
+                          >
+                            🛰️ Терминал (J)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newDir: SentinelEngagementDirective = isDestroyOnly
+                                ? 'DETER_AND_DESTROY'
+                                : 'DESTROY_ONLY';
+                              handleUpdateSentinel({
+                                ...activeSentinel,
+                                engagementDirective: newDir,
+                              });
+                              playZxBeep('DOCK');
+                              setFlightMessage(
+                                `🛰️ ЧАСОВОЙ: ДИРЕКТИВА ПЕРЕКЛЮЧЕНА НА [${
+                                  newDir === 'DESTROY_ONLY'
+                                    ? '⚡ ТОЛЬКО УНИЧТОЖИТЬ (ЗАСАДА)'
+                                    : '🛡️ СТАНДАРТ: ОТПУГНУТЬ И УНИЧТОЖИТЬ'
+                                }]`
+                              );
+                            }}
+                            className={`py-1 px-1 border font-extrabold text-[8px] truncate ${
+                              isDestroyOnly
+                                ? 'border-rose-500 bg-rose-950/70 text-rose-200 hover:bg-rose-500 hover:text-black'
+                                : 'border-sky-400 bg-sky-950/50 text-sky-200 hover:bg-sky-400 hover:text-black'
+                            }`}
+                            title="Переключение между 'Отпугнуть и уничтожить' (эскалация по приближению) и 'Только уничтожить' (засада/ловушка без предупреждений)"
+                          >
+                            {isDestroyOnly ? '⚡ Уничтожить' : '🛡️ Отпугнуть'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const modes: SentinelStrikePowerMode[] = [
+                                'LIGHT_PULSE',
+                                'MEDIUM_QUASAR',
+                                'HEAVY_GAMMA_HAMMER',
+                                'OVERCHARGE_SHOCKWAVE',
+                              ];
+                              const nextIdx = (modes.indexOf(activeSentinel.strikeMode) + 1) % modes.length;
+                              const nextMode = modes[nextIdx];
+                              const spec = SENTINEL_STRIKE_MODES[nextMode];
+                              handleUpdateSentinel({
+                                ...activeSentinel,
+                                strikeMode: nextMode,
+                              });
+                              playZxBeep('DOCK');
+                              setFlightMessage(
+                                `🛰️ ЧАСОВОЙ [${activeSentinel.locationLabelRu.toUpperCase()}]: СИЛА УДАРА ПЕРЕКЛЮЧЕНА НА [${spec.codeName}] (${spec.strikePowerLabel})`
+                              );
+                            }}
+                            className="py-1 px-1 border border-yellow-400 bg-yellow-950/40 hover:bg-yellow-400 hover:text-black text-yellow-300 font-extrabold text-[8px] truncate"
+                            title="Циклическое переключение силы удара часового: 35 кг ➔ 125 кг ➔ 380 кг ➔ 1100 кг"
+                          >
+                            ⚡ Смена Силы
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              activeSentinel.cooldownRemainingSeconds > 0 ||
+                              activeSentinel.batteryChargeGeu < strikeSpec.energyCostGeu
+                            }
+                            onClick={() => {
+                              const res = executeSentinelStrike(activeSentinel, 'Оперативный залп из кокпита');
+                              if (!res.success) {
+                                playZxBeep('HIT');
+                                setFlightMessage(`⚠️ ЧАСОВОЙ: ${res.failReasonRu}`);
+                                return;
+                              }
+                              handleUpdateSentinel(res.updatedTelemetry);
+                              playZxBeep(strikeSpec.id === 'OVERCHARGE_SHOCKWAVE' ? 'EXPLODE' : 'LASER');
+                              setFlightMessage(
+                                `💥 ЧАСОВОЙ: ПРОИЗВЕДЁН ЗАЛП [${strikeSpec.codeName}] СИЛА ${strikeSpec.strikePowerLabel}!`
+                              );
+                            }}
+                            className="py-1 px-1 border border-rose-500 bg-rose-950/50 hover:bg-rose-500 hover:text-black text-rose-200 font-extrabold text-[8px] truncate disabled:opacity-40"
+                            title="Произвести немедленный залп часового с выбранной силой удара"
+                          >
+                            🔥 Залп
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Блок радиационного потенциала звезды текущей системы */}
+                  {solarChargeUi.starRad && (
+                    <div className="p-1.5 border border-yellow-500/30 bg-slate-950/80 rounded space-y-1">
+                      <div className="flex items-center justify-between gap-1 text-[9px] pb-1 border-b border-slate-800">
+                        <span className="font-extrabold flex items-center gap-1" style={{color: solarChargeUi.starRad.starColorHex}}>
+                          <span>★ {solarChargeUi.starRad.badgeShort}</span>
+                        </span>
+                        <span className={`font-mono font-bold px-1 py-0.2 rounded border text-[8px] ${
+                          solarChargeUi.starRad.isGiant
+                            ? 'bg-cyan-950/70 border-cyan-400 text-cyan-300'
+                            : solarChargeUi.starRad.isDwarf
+                            ? 'bg-rose-950/70 border-rose-400 text-rose-300'
+                            : 'bg-yellow-950/70 border-yellow-400 text-yellow-300'
+                        }`}>
+                          {solarChargeUi.starRad.ratioToSunLabel}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] pt-0.5">
+                        <span className="text-yellow-300 font-extrabold">
+                          ☀ ЗАРЯДКА ВЕТРА ЗВЕЗДЫ: {solarChargeUi.fluxPct}% / мин
+                        </span>
+                        <span className="text-[9px] text-cyan-300 font-bold">
+                          Дистанция: {solarChargeUi.starDist} ед.
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-900 border border-yellow-500/40">
+                        <div
+                          className="h-full bg-yellow-400 transition-all"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, solarChargeUi.fluxPct))}%`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[8px] font-mono text-slate-300 pt-0.5">
+                        <span className="text-yellow-400" title="Фотонный потенциал (оптическое излучение, Солнце = 1.0)">
+                          ☀️ Фотон: {solarChargeUi.starRad.photonPotential.toFixed(2)}&times;
+                        </span>
+                        <span className="text-purple-300" title="Гаммаквантовый потенциал (жёсткий поток, Солнце = 1.0)">
+                          ⚡ Гамма: {solarChargeUi.starRad.gammaPotential.toFixed(2)}&times;
+                        </span>
+                        <span className="text-emerald-400" title="Интегральный множитель накачки аккумулятора ГЭУ">
+                          🌀 K_rad: {solarChargeUi.starRad.totalRadCoeff.toFixed(2)}&times;
+                        </span>
+                      </div>
+
+                      <div className="text-[7.5px] text-slate-400 leading-tight">
+                        • <b>Класс звезды в созвездии:</b> прямо определяет фотонный и гаммаквантовый потенциал.<br />
+                        • <b>Для Солнца (G2V):</b> эталон = <b>1.00×</b>. <b>У карлика:</b> меньше (&lt; 1.0). <b>У голубого гиганта:</b> больше (&gt; 1.0, сверхбыстрая зарядка ГЭУ)!
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="w-full h-1.5 bg-slate-900 border border-yellow-500/40">
-                  <div
-                    className="h-full bg-yellow-400 transition-all"
-                    style={{width: `${solarChargeUi.fluxPct}%`}}
-                  />
+
+                {/* МАСШТАБИРОВАНИЕ 3D-РАДАРА, ПРОЕКЦИИ И НАВИГАЦИИ (КЛАВИШИ + И -, ШАГ 10 000, ПРИ ≤10 000 ШАГ 2 000) И ФИЛЬТРЫ */}
+                <div className="p-2 border border-cyan-500/50 bg-cyan-950/40 rounded space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-cyan-300 font-extrabold tracking-wide">
+                        3D RADAR & NAV / 3D-РАДАР:
+                      </span>
+                      <span className="font-mono text-white text-[12px] font-black flex items-center gap-1.5">
+                        <span>{radarScaleUnits.toLocaleString()} KM</span>
+                        <span className="text-[9px] font-normal px-1 py-0.2 rounded bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
+                          {radarScaleUnits <= 10000 ? 'STEP 2,000' : 'STEP 10,000'}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleStepRadarScale(-1)}
+                        className="px-2 py-1 bg-slate-900 hover:bg-cyan-500 hover:text-black border border-cyan-400 text-cyan-300 font-mono font-bold text-[11px] rounded transition-colors"
+                        title={
+                          radarScaleUnits <= 10000
+                            ? 'Zoom in (step 2,000 down to 2,000) · Key «-»'
+                            : 'Zoom in (step 10,000) · Key «-»'
+                        }
+                      >
+                        {radarScaleUnits <= 10000 ? '-2K [−]' : '-10K [−]'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStepRadarScale(1)}
+                        className="px-2 py-1 bg-slate-900 hover:bg-cyan-500 hover:text-black border border-cyan-400 text-cyan-300 font-mono font-bold text-[11px] rounded transition-colors"
+                        title={
+                          radarScaleUnits < 10000
+                            ? 'Zoom out (step 2,000 up to 10,000) · Key «+»'
+                            : 'Zoom out (step 10,000) · Key «+»'
+                        }
+                      >
+                        {radarScaleUnits < 10000 ? '+2K [+]' : '+10K [+]'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Быстрые пресеты зума 3D-радара */}
+                  <div className="flex items-center gap-1 text-[9px] font-mono">
+                    <span className="text-slate-400 shrink-0">ZOOM:</span>
+                    {[2000, 4000, 6000, 8000, 10000, 30000, 100000].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => handleSetRadarScale(preset)}
+                        className={`flex-1 py-0.5 rounded border transition-colors ${
+                          radarScaleUnits === preset
+                            ? 'bg-cyan-500 text-black border-cyan-300 font-black'
+                            : 'bg-slate-900 text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400 font-bold'
+                        }`}
+                        title={`Set 3D radar scale to ${preset.toLocaleString()} KM`}
+                      >
+                        {preset >= 1000 ? `${preset / 1000}K` : preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Кнопка фильтра радара [Num *] */}
+                  <button
+                    type="button"
+                    onClick={handleToggleRadarShipsOnlyFilter}
+                    className={`w-full py-1 px-2 border font-mono font-bold text-[10px] rounded flex items-center justify-between transition-all ${
+                      radarShipsOnlyFilter
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-sm shadow-amber-500/20'
+                        : 'bg-slate-900/90 text-slate-300 hover:text-white border-slate-700 hover:border-cyan-400'
+                    }`}
+                    title="Key * on Numpad: toggles filter between ships only (powered craft) and all celestial objects"
+                  >
+                    <span className="flex items-center gap-1">
+                      <span>{radarShipsOnlyFilter ? '🎯' : '🌐'}</span>
+                      <span>RADAR: {radarShipsOnlyFilter ? 'SHIPS ONLY (PROPULSION)' : 'ALL SYSTEM BODIES'}</span>
+                    </span>
+                    <span className="text-[9px] px-1 py-0.2 bg-black/60 rounded border border-current">
+                      [Num *]
+                    </span>
+                  </button>
+
+                  {/* Кнопка фильтра типов двигателей [Num /] — работает только в паре с фильтром кораблей */}
+                  {(() => {
+                    const activeEngMeta =
+                      RADAR_ENGINE_FILTERS.find((f) => f.id === radarEngineFilter) ||
+                      RADAR_ENGINE_FILTERS[0];
+                    return (
+                      <button
+                        type="button"
+                        onClick={handleCycleRadarEngineFilter}
+                        className={`w-full py-1 px-2 border font-mono font-bold text-[10px] rounded flex items-center justify-between transition-all ${
+                          radarShipsOnlyFilter
+                            ? 'bg-purple-950/40 text-purple-200 border-purple-400 hover:border-purple-300 shadow-sm shadow-purple-500/20'
+                            : 'bg-slate-900/60 text-slate-500 border-slate-800 hover:border-slate-700 opacity-75'
+                        }`}
+                        title="Клавиша «/» на Numpad / NumLock: фильтр кораблей по типам двигателей (все, паруса, реактивные, импульсные, ионные, плазменные, фотонный, гравитационные, подпространственные). Работает только в паре с фильтром кораблей [Num *]"
+                      >
+                        <span className="flex items-center gap-1.5 truncate">
+                          <span>{activeEngMeta.icon}</span>
+                          <span className="truncate">
+                            ENGINE / ДВИГАТЕЛЬ: <span className="text-amber-300 font-extrabold">{activeEngMeta.badgeEn} ({activeEngMeta.badgeRu})</span>
+                          </span>
+                        </span>
+                        <span className="text-[9px] px-1 py-0.2 bg-black/60 rounded border border-current shrink-0 ml-1">
+                          [Num /]
+                        </span>
+                      </button>
+                    );
+                  })()}
                 </div>
+
                 <div className="text-[9px] text-slate-400 leading-tight">
-                  Сфера системы (R=30 000): с окраины звезда и 4 планеты — цветные точки с маркерами. На макс. скорости (100 ед/с) пролёт до звезды = <b>5 мин</b>, между планетами = <b>1 мин</b>:
+                  Сфера системы: масштаб настраивается клавишами <b>+</b> и <b>-</b> с шагом <b>10 000</b>. Все 4 планеты и объекты сохранены на своих местах и орбитах:
                 </div>
                 <div className="grid grid-cols-2 gap-1 text-[10px]">
                   <button
                     type="button"
                     onClick={() => handleNavigateSystemView('SYSTEM_EDGE')}
                     className="py-1 px-1.5 border border-cyan-400 text-cyan-300 hover:bg-cyan-400 hover:text-black font-extrabold text-left truncate col-span-2"
-                    title="Встать на окраину Сферы Системы (30 000 ед. = 5 минут до Звезды, все планеты и звезда — цветные точки с текстовыми маркерами)"
+                    title="Встать на окраину Сферы Системы (100 000 ед., все планеты и звезда на своих орбитах)"
                   >
-                    🔭 1. ОКРАИНА СФЕРЫ (30 000 ед · 5 МИН ДО ЗВЕЗДЫ)
+                    🔭 1. ОКРАИНА СФЕРЫ (100 000 ед · ПАНОРАМА СИСТЕМЫ)
                   </button>
                   <button
                     type="button"
@@ -10764,6 +19650,110 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   >
                     🔴 6. МАРС (ТИТАН)
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('DEATH_STAR')}
+                    className="py-1 px-1.5 border border-slate-300 bg-slate-900/80 text-emerald-300 hover:bg-emerald-400 hover:text-black font-extrabold text-left truncate"
+                    title="Орбитальная боевая станция-планетоид Диктатора «Звезда Смерти» на орбите Марса в противофазе относительно Солнца (клавиша 8)"
+                  >
+                    💀 8. ЗВЕЗДА СМЕРТИ (КЛ. 8)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('TORUS_SHIP')}
+                    className="py-1 px-1.5 border border-cyan-300 bg-cyan-950/50 text-cyan-200 hover:bg-cyan-400 hover:text-black font-extrabold text-left truncate"
+                    title="Космический корабль размером с планету в виде бублика с 4 внутренними лучами-переходами по центру и центробежной силой в противофазе с Землёй (клавиша 9)"
+                  >
+                    🍩 9. КОРАБЛЬ-БУБЛИК (КЛ. 9)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('STARGATE')}
+                    className="py-1 px-1.5 border border-purple-400 bg-purple-950/50 text-purple-200 hover:bg-purple-400 hover:text-black font-extrabold text-left truncate"
+                    title="Невращающиеся Звёздные Врата в нашем стиле размером с планету в противофазе с Венерой (клавиша 0)"
+                  >
+                    ⛩️ 0. ЗВЁЗДНЫЕ ВРАТА (КЛ. 0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('BURAN_SHUTTLE')}
+                    className="py-1 px-1.5 border border-sky-300 bg-sky-950/60 text-sky-200 hover:bg-sky-400 hover:text-black font-extrabold text-left truncate"
+                    title="4 стандартных корабля «Буран / Шаттл» в Поясе Астероидов (равномерно распределены, V=½ скорости, обстрел астероидов и сбор металлов, без контактов, при уничтожении оставляют груз — клавиша -)"
+                  >
+                    🚀 -. 4 БУРАНА В ПОЯСЕ (КЛ. -)
+                  </button>
+                </div>
+
+                {/* ПЕРЕКЛЮЧАТЕЛЬ РЕЖИМА ПЛАНЕТАРИЯ: 10 ЗНАМЕНИТЫХ СОЗВЕЗДИЙ (ЗВЁЗДОЧКИ ★ БЕЗ ТРАССИРОВКИ) + КАРТОЧКИ С ГИПЕРПРЫЖКОМ */}
+                <div className="p-1.5 border border-indigo-400/60 bg-indigo-950/30 space-y-1.5 text-[9px]">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-extrabold text-indigo-200 truncate">
+                      ★ СОЗВЕЗДИЯ (БЕЗ ТРАССИРОВКИ · ГИПЕРПРЫЖОК К ЗВЁЗДАМ)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setConstellationDisplayMode('LABELS_AND_LINES')}
+                      className={`py-0.5 px-1 border font-extrabold text-[8px] truncate ${
+                        constellationDisplayMode === 'LABELS_AND_LINES'
+                          ? 'bg-indigo-400 text-black border-white'
+                          : 'border-indigo-400/50 text-indigo-200 hover:border-indigo-300'
+                      }`}
+                      title="Показывать звёздочки 10 созвездий, соседние галактики и подписи созвездий (без соединительных линий)"
+                    >
+                      ★ Звёздочки + Подписи
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConstellationDisplayMode('STARS_ONLY')}
+                      className={`py-0.5 px-1 border font-extrabold text-[8px] truncate ${
+                        constellationDisplayMode === 'STARS_ONLY'
+                          ? 'bg-amber-400 text-black border-white'
+                          : 'border-slate-700 text-slate-300 hover:border-amber-300'
+                      }`}
+                      title="Показывать только звёздочки созвездий и соседние галактики без подписей"
+                    >
+                      ⭐ Только звёздочки
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1 pt-0.5">
+                    {FAMOUS_CELESTIAL_CONSTELLATIONS.map((con) => (
+                      <button
+                        key={con.id}
+                        type="button"
+                        onClick={() => {
+                          const alphaStar = con.stars.find((s) => s.isAlpha) || con.stars[0];
+                          const nextProfile: SpaceObjectProfileData = {
+                            id: con.id,
+                            kind: 'STAR',
+                            systemTag: con.nameLat.toUpperCase(),
+                            color: alphaStar.color,
+                            name: `Созвездие ${con.nameRu}`,
+                            nickname: `${con.nameLat} · Главная звезда: ${con.alphaStar}`,
+                            description: con.description,
+                            groupsTitle: `Астрономический сектор: ${con.nameRu} (${con.nameLat})`,
+                            groupsDescription: `Звёзд в системе созвездия: ${con.stars.length} · Выберите любую звезду для гиперпрыжка.`,
+                            businessesTitle: `Главная звезда (α): ${con.alphaStar}`,
+                            businessesDescription:
+                              'Каждая звезда созвездия связана с навигационным маяком гиперпространства G. Bell.',
+                            constellationStars: buildConstellationStarsJumpList(con, 0),
+                            karmaPlus: 50,
+                            karmaMinus: 0,
+                            distanceUnits: 65000,
+                            coordsLabel: `Небесная сфера: ${con.nameLat}`,
+                          };
+                          activeObjectProfileRef.current = nextProfile;
+                          setActiveObjectProfile(nextProfile);
+                          setScreenMode('FLIGHT');
+                        }}
+                        className="py-0.5 px-1 border border-indigo-400/40 bg-slate-950/80 hover:bg-indigo-400 hover:text-black text-indigo-200 font-bold text-[8px] truncate"
+                        title={`Открыть карточку созвездия «${con.nameRu}» (${con.stars.length} звёзд системы с функцией Гиперпрыжка)`}
+                      >
+                        ★ {con.nameRu.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* БОРТОВАЯ СВОДКА: ПРАВИТЕЛЬСТВА ПЛАНЕТ (ГРУППЫ), МЕЖПЛАНЕТНАЯ ЛОГИСТИКА (5 CR / 1 CR СКИДКА → 10 CR), ТАРИФ GOBELL И ПОЯС АСТЕРОИДОВ */}
@@ -10814,7 +19804,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     {/* Быстрая смена тарифа GoBell (включая BUSINESS аккаунт) для расширения групп и создания бизнеса с меньшей маржой */}
                     <div className="pt-1 space-y-1">
                       <div className="text-[9px] text-amber-300 font-bold">
-                        Тариф GoBell (группы + Бизнес-аккаунт с меньшей маржой):
+                        Тариф G. Bell (группы + Бизнес-аккаунт с меньшей маржой):
                       </div>
                       <div className="grid grid-cols-5 gap-1">
                         {(
@@ -11290,18 +20280,19 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               <div className="pt-1.5 border-t border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-cyan-300 font-bold">РУД (ТЯГА / СКОРОСТЬ):</span>
-                  <span className="text-yellow-300 font-extrabold">{throttleUi}%</span>
+                  <span className="text-yellow-300 font-extrabold">
+                    {throttleUi} ед./с ({throttleUi}%)
+                  </span>
                 </div>
                 <input
                   type="range"
                   min={0}
                   max={100}
-                  value={throttleUi}
+                  value={Math.min(100, throttleUi)}
                   onChange={(e) => {
-                    const pct = Number(e.target.value);
-                    setThrottleUi(pct);
-                    flightStateRef.current.targetSpeed =
-                      (pct / 100) * flightStateRef.current.maxSpeed;
+                    const nextSpd = Number(e.target.value);
+                    setThrottleUi(nextSpd);
+                    flightStateRef.current.targetSpeed = nextSpd;
                   }}
                   className="w-full accent-cyan-400 cursor-pointer"
                 />
@@ -11314,28 +20305,27 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     }}
                     className="py-1 border border-slate-600 text-slate-300 hover:border-cyan-400 font-bold"
                   >
-                    СТОП (0%)
+                    СТОП (0)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setThrottleUi(50);
-                      flightStateRef.current.targetSpeed =
-                        flightStateRef.current.maxSpeed * 0.5;
+                      flightStateRef.current.targetSpeed = 50;
                     }}
                     className="py-1 border border-cyan-500/60 text-cyan-300 hover:border-cyan-400 font-bold"
                   >
-                    КРЕЙСЕР (50%)
+                    КРЕЙСЕР (50)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setThrottleUi(100);
-                      flightStateRef.current.targetSpeed = flightStateRef.current.maxSpeed;
+                      flightStateRef.current.targetSpeed = MAX_SYSTEM_SPEED;
                     }}
                     className="py-1 border border-yellow-400 text-yellow-300 hover:bg-yellow-400 hover:text-black font-extrabold"
                   >
-                    ФОРСАЖ (100%)
+                    МАКС (100)
                   </button>
                 </div>
               </div>
@@ -11384,54 +20374,6 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   >
                     ⚙️ Крафт 10%/80%
                   </button>
-                </div>
-
-                {/* Наглядные шкалы компромисса: Скорость ↔ Манёвренность (Инерция) и Масса ↔ Защищённость */}
-                <div className="space-y-1.5 text-[10px]">
-                  <div>
-                    <div className="flex justify-between text-fuchsia-300 font-bold">
-                      <span>МАНЁВРЕННОСТЬ (ОТ МАССЫ И СКОРОСТИ)</span>
-                      <span>{maneuverabilityPct}%</span>
-                    </div>
-                    <div className="text-[9px] text-slate-400 flex justify-between pb-0.5">
-                      <span>База от массы: {baseMassManeuverPct}%</span>
-                      <span className="text-cyan-300">
-                        Инерция скорости ({throttleUi}%): -{Math.max(0, baseMassManeuverPct - maneuverabilityPct)}%
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-900 border border-fuchsia-500/40">
-                      <div
-                        className="h-full bg-fuchsia-400 transition-all"
-                        style={{width: `${maneuverabilityPct}%`}}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-cyan-300 font-bold">
-                      <span>СИЛА ИНЕРЦИИ (СНОС НА ВИРАЖЕ)</span>
-                      <span>{inertiaForcePct}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-900 border border-cyan-500/40">
-                      <div
-                        className="h-full bg-cyan-400 transition-all"
-                        style={{width: `${inertiaForcePct}%`}}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-emerald-300 font-bold">
-                      <span>ЗАЩИЩЁННОСТЬ (ПОГЛОЩЕНИЕ УРОНА)</span>
-                      <span>{armorProtectionPct}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-slate-900 border border-emerald-500/40">
-                      <div
-                        className="h-full bg-emerald-400 transition-all"
-                        style={{width: `${armorProtectionPct}%`}}
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* Блок Простой Дебет / Кредит игровых очков (Опыт = уничтоженные тонны врага ТОЛЬКО после его уничтожения) и Командного учёта попаданий */}
@@ -11587,10 +20529,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               <div className="text-[11px] text-slate-300 space-y-0.5 pt-1 border-t border-slate-800">
                 <div>• <b className="text-emerald-300">Зона огневого поражения</b> — от <b>100 до 500 ед.</b> урон <b>100%</b> · от <b>500 до 1000 ед.</b> снижается градиентно до <b>0%</b> · свыше <b>1000 ед.</b> урон <b>0%</b> (догоняйте цель!)</div>
                 <div>• <b className="text-amber-300">Курсор мыши + Клавиша Q</b> — Автопилот: захват объекта, плавное помещение в центр экрана и движение к нему (предупреждение о захвате, расстоянии и массе + пунктир на радаре; любая клавиша кроме колёсика скорости и кнопок мыши огня выключает автопилот)</div>
-                <div>• <b className="text-cyan-300">Курсор мыши + Клавиша I</b> — Карточка профиля любого объекта (Солнце, Планета, Группа, Бизнес, Объявление, Модуль, Груз, Астероид)</div>
+                <div>• <b className="text-orange-400">Клавиша « NumLock » (кнопка numLK)</b> — Включение / Выключение единого прибора <b>«Конвертор»</b> (на <b>100 ед.</b> щит = <b>100%</b>; увеличение скорости сверх 100 ед. снижает щит вплоть до <b>200% скорости = 0% щита</b>; уменьшение скорости ниже 100 ед. увеличивает щит вплоть до <b>полной остановки 0% скорости = 200% щита</b>)</div>
+                <div>• <b className="text-orange-300">Колёсико мыши и клавиши « + » / « - »</b> — Плавная регулировка скорости и баланса Конвертора (от <b>0% скорости / 200% щита</b> через <b>100% / 100%</b> до <b>200% скорости / 0% щита</b>)</div>
+                <div>• <b className="text-cyan-300">Курсор мыши + Клавиша I</b> — Компактная табличка объекта в углу экрана (на время открытия таблички Огневая Рубка автоматически фиксируется, чтобы курсор не вращал рубку у края экрана)</div>
+                <div>• <b className="text-amber-300">Клавиша « , » (запятая рядом с 0)</b> — Открыть <b>Полную табличку</b> объекта со всеми разделами (Клан, Доход, Аукцион, Группы, Бизнесы, Контакт)</div>
+                <div>• <b className="text-rose-400">Клавиша « 0 » (цифра ноль)</b> — Закрыть табличку и разблокировать движение Огневой Рубки</div>
                 <div>• <b className="text-emerald-400">Клавиша X</b> — Закрепиться / Открепиться на стационарной орбите планеты</div>
                 <div>• <b className="text-yellow-300">Указатель мыши</b> — Прицел Огневой Башни (чистая геометрия без текстов)</div>
-                <div>• <b className="text-white">W / S (↑ / ↓)</b> — тангаж · <b className="text-white">A / D (← / →)</b> — крен корабля</div>
+                <div>• <b className="text-white">W / S (↑ / ↓)</b> — тангаж (вверх / вниз) · <b className="text-white">A / D (← / →)</b> — крен корабля</div>
                 <div>• <b className="text-yellow-300">Колёсико мыши (крутить)</b> — управление скоростью (0..100%)</div>
                 <div>• <b className="text-cyan-300">ЛКМ (Левая кнопка)</b> — Запрос на контакт по объекту / Лазер башни</div>
                 <div>• <b className="text-rose-400">ПКМ (Правая кнопка)</b> — Оружие №2 (Плазма башни в прицел мыши)</div>
@@ -11603,7 +20549,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             <div className="border border-emerald-400/70 p-2.5 space-y-2">
               <div className="flex items-center justify-between border-b border-emerald-500/40 pb-1">
                 <span className="text-xs font-extrabold text-emerald-300">
-                  КОСМИЧЕСКИЙ ВЫБОР МИССИИ GOBELL
+                  КОСМИЧЕСКИЙ ВЫБОР МИССИИ G. BELL
                 </span>
                 <button
                   type="button"
@@ -11683,6 +20629,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             <span className="text-emerald-400">60 FPS WIREFRAME</span>
           </div>
         </div>
+        )}
       </div>
 
       {/* МОДАЛЬНОЕ ОКНО: АВТОМАТИЧЕСКИЕ ЛОГИСТИЧЕСКИЕ СТАНДАРТНЫЕ МОДУЛИ ПЛАНЕТ И СТРОГИЕ ТРАЕКТОРИИ (БЕЗ ХАОСА) */}
@@ -11850,6 +20797,19 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         onSellItem={handleSellCraftedItem}
       />
 
+      {/* МОДАЛЬНОЕ ОКНО: РЕЕСТР ВСЕХ ПЛАНЕТ В СОЗВЕЗДИЯХ, ЗВЁЗД СМЕРТИ И КОСМИЧЕСКИХ СТАНЦИЙ (ПРЕФИКСЫ/СУФФИКСЫ ФРАКЦИЙ И ДВОЙНЫЕ ИМЕНА) */}
+      <StandardConstellationWorldsModal
+        isOpen={isStandardWorldsModalOpen}
+        onClose={() => setIsStandardWorldsModalOpen(false)}
+        activeSystemKey={activeSystemKey}
+        onJumpToSystemKey={handleJumpFromWorldsCatalog}
+        capturedPlanetsMap={capturedPlanetsMap}
+        onCaptureAndRenamePlanetByIndex={handleCaptureAndRenamePlanetByIndex}
+        onCollectPlanetClanIncomeNow={handleCollectPlanetClanIncomeNow}
+        onSellPlanetOnAuction={handleSellPlanetOnAuction}
+        onOpenPlanetCardByOrbit={handleOpenPlanetCardByOrbit}
+      />
+
       {/* МОДАЛЬНОЕ ОКНО: ДОКУМЕНТ «ПОЛНОЕ ОПИСАНИЕ ФИНАЛЬНОЙ КОНФИГУРАЦИИ ИГРЫ» */}
       <FullGameConfigDocModal
         isOpen={isFullConfigDocOpen}
@@ -11861,6 +20821,64 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         spentSalvoDebitKg={spentSalvoDebitKg}
         pilotLegalStatus={pilotLegalStatus}
         earnedGoBellKarma={earnedGoBellKarma}
+      />
+
+      {/* МОДАЛЬНОЕ ОКНО: ЭЛИТНЫЙ КЛАСС «ДОМИНАТОРЫ» · ВАКУУМНАЯ КОНВЕРТАЦИЯ & ПРОСТРАНСТВО-ВРЕМЯ */}
+      <DominatorSpacetimeModal
+        isOpen={isSpacetimeJumpModalOpen}
+        onClose={() => setIsSpacetimeJumpModalOpen(false)}
+        currentSystemId={currentSystemId}
+        systems={GALAXY_SYSTEMS}
+        isVacuumConversionActive={isVacuumConversionActive}
+        onToggleVacuumConversion={handleToggleVacuumConversion}
+        boundaryMatterKg={boundaryMatterFuelStockKg}
+        uraniumKg={uraniumFuelStockKg}
+        plutoniumKg={plutoniumFuelStockKg}
+        deployedStargatesCount={deployedStargatesCount}
+        onDeployStargate={handleDeployDominatorStargate}
+        onSpacetimeJump={handleDominatorSpacetimeJump}
+        onAddFuelStock={handleAddFuelStock}
+      />
+
+      {/* МОДАЛЬНОЕ ОКНО: АВТОНОМНЫЙ ЧАСОВОЙ (БЕЗ ДВИГАТЕЛЯ · СОЛНЕЧНЫЙ КОНВЕРТОР · НАКОПИТЕЛЬ · 4 СИЛЫ УДАРА · «СВОЙ-ЧУЖОЙ» · РАЗВЁРТЫВАНИЕ В ЛЮБОЙ ТОЧКЕ СИСТЕМЫ) */}
+      <AutonomousSentinelModal
+        isOpen={isSentinelModalOpen}
+        onClose={() => setIsSentinelModalOpen(false)}
+        sentinelNetwork={sentinelNetwork}
+        activeSentinelId={activeSentinelId}
+        onSelectActiveSentinel={setActiveSentinelId}
+        onUpdateSentinel={handleUpdateSentinel}
+        onDeployNewSentinel={handleDeployNewSentinel}
+        onDeploySwarmCloud={handleDeploySwarmCloud}
+        onBatchUpdateDirectives={handleBatchUpdateDirectives}
+        onPlayBeep={playZxBeep}
+        pilotName={pilotName}
+        currentShipPos={{
+          x: Math.round(-flightStateRef.current.starPos.x),
+          y: Math.round(-flightStateRef.current.starPos.y),
+          z: Math.round(SYSTEM_SPHERE_RADIUS - flightStateRef.current.starPos.z),
+        }}
+      />
+
+      {/* РАЗДЕЛ «ОБЪЕКТЫ»: 3D КАТАЛОГ КОСМИЧЕСКИХ ТЕЛ (ПЕРВЫЙ ОБЪЕКТ — ПЛАНЕТА) С ВРАЩЕНИЕМ МЫШЬЮ И ОПИСАНИЕМ СВОЙСТВ */}
+      <SpaceObjectsGalleryModal
+        isOpen={isObjectsGalleryOpen}
+        onClose={() => setIsObjectsGalleryOpen(false)}
+        onPlayBeep={playZxBeep}
+        initialObjectId={objectsGalleryTargetId}
+        onOpenShipyard={() => setIsShipyardBuilderOpen(true)}
+      />
+
+      {/* ОРБИТАЛЬНАЯ ВЕРФЬ · МОДУЛЬНЫЙ КОНСТРУКТОР КОРАБЛЕЙ НА 6-ЛУЧЕВОМ КАРКАСЕ XYZ */}
+      <ShipyardBuilderModal
+        isOpen={isShipyardBuilderOpen}
+        onClose={() => setIsShipyardBuilderOpen(false)}
+        onApplyAsPlayerShip={(customShip, customStats) => {
+          playZxBeep('MISSION');
+          setFlightMessage(
+            `🚀 ФЛАГМАН ОБНОВЛЁН: «${customShip.name.toUpperCase()}» (МАССА: ${customStats.totalMassTons} Т · ТЯГА: ${customStats.totalThrustKn} КН · ТРЮМ: ${customStats.cargoCapacityTons} Т)`
+          );
+        }}
       />
     </div>
   );

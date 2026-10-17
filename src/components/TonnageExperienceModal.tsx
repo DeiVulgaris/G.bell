@@ -1028,6 +1028,92 @@ export const TonnageExperienceModal: React.FC<TonnageExperienceModalProps> = ({
           </div>
         </div>
 
+        {/* ЧЕРТЁЖ-СХЕМА СТАНДАРТНОГО КОРАБЛЯ «БУРАН / ШАТТЛ» (50 Т) */}
+        <div className="p-3 border-2 border-sky-400/80 bg-slate-900/90 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+          <div className="md:col-span-5 flex items-center justify-center bg-black/80 border border-sky-500/40 p-2">
+            <svg viewBox="0 0 320 150" className="w-full max-w-[320px] h-auto">
+              {/* Сетка чертежа */}
+              <line x1="10" y1="75" x2="310" y2="75" stroke="#0c4a6e" strokeWidth="1" strokeDasharray="3 3" />
+              <line x1="160" y1="8" x2="160" y2="142" stroke="#0c4a6e" strokeWidth="1" strokeDasharray="3 3" />
+              {/* Двойное дельта-крыло «Буран / Шаттл» (вид сверху + профиль киля) */}
+              <polygon
+                points="295,75 245,62 195,56 105,14 45,14 35,48 35,102 45,136 105,136 195,94 245,88"
+                fill="rgba(14,165,233,0.12)"
+                stroke="#38bdf8"
+                strokeWidth="2"
+              />
+              {/* Чёрная теплозащитная кромка крыла */}
+              <polyline
+                points="295,75 245,62 195,56 105,14 45,14"
+                fill="none"
+                stroke="#22d3ee"
+                strokeWidth="3"
+              />
+              <polyline
+                points="295,75 245,88 195,94 105,136 45,136"
+                fill="none"
+                stroke="#22d3ee"
+                strokeWidth="3"
+              />
+              {/* Цилиндрический фюзеляж и грузовой отсек */}
+              <polygon
+                points="295,75 255,63 195,58 50,58 50,92 195,92 255,87"
+                fill="rgba(2,132,199,0.22)"
+                stroke="#e0f2fe"
+                strokeWidth="1.6"
+              />
+              {/* Створки грузового отсека (Payload Bay) */}
+              <rect x="82" y="61" width="105" height="28" fill="none" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="4 2" />
+              <line x1="82" y1="75" x2="187" y2="75" stroke="#7dd3fc" strokeWidth="1.2" />
+              <line x1="117" y1="61" x2="117" y2="89" stroke="#38bdf8" strokeWidth="1" />
+              <line x1="152" y1="61" x2="152" y2="89" stroke="#38bdf8" strokeWidth="1" />
+              {/* Остекление кабины пилотов (4 лобовых окна) */}
+              <polygon points="248,66 230,61 215,61 232,75 215,89 230,89 248,84" fill="rgba(34,211,238,0.45)" stroke="#22d3ee" strokeWidth="1.4" />
+              {/* Высокий вертикальный киль (хвостовой стабилизатор) */}
+              <polygon points="90,75 30,72 22,75 30,78" fill="#fbbf24" stroke="#fde047" strokeWidth="1.5" />
+              {/* 3 маршевых сопла + 2 маневровых двигателя OMS */}
+              <circle cx="42" cy="66" r="5" fill="rgba(249,115,22,0.4)" stroke="#f97316" strokeWidth="1.6" />
+              <circle cx="42" cy="84" r="5" fill="rgba(249,115,22,0.4)" stroke="#f97316" strokeWidth="1.6" />
+              <circle cx="34" cy="75" r="5.5" fill="rgba(250,204,21,0.5)" stroke="#fde047" strokeWidth="1.8" />
+              {/* Подписи узлов */}
+              <text x="14" y="20" fill="#7dd3fc" fontSize="9" fontWeight="bold">БУРАН / ШАТТЛ (КЛ. 11 · 50 Т)</text>
+              <text x="95" y="53" fill="#bae6fd" fontSize="8">ГРУЗОВОЙ ОТСЕК + 55 Т БОЕЗАПАСА</text>
+              <text x="200" y="128" fill="#22d3ee" fontSize="8">ДВОЙНОЕ ДЕЛЬТА-КРЫЛО</text>
+            </svg>
+          </div>
+
+          <div className="md:col-span-7 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sky-300 font-extrabold text-sm">
+                🚀 МОДЕЛЬ СТАНДАРТНОГО КОРАБЛЯ: ОРБИТАЛЬНЫЙ РАКЕТОПЛАН «БУРАН / ШАТТЛ»
+              </span>
+              <span className="px-2 py-0.5 bg-sky-400 text-black font-extrabold text-[10px]">
+                МАССА: {myTotalShipMassTons} Т (БАЗА 50 Т + БРОНЯ {purchasedArmorWeightTons} Т)
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-300 leading-relaxed">
+              Аэрокосмический корабль-ракетоплан с <b className="text-sky-300">двойным дельта-крылом</b> (стреловидность 80°/45°), теплозащитной кромкой,
+              остеклением кабины из <b className="text-cyan-300">4 панорамных секций</b>, центральным грузовым отсеком со створками, высоким{' '}
+              <b className="text-yellow-300">вертикальным килем</b> и <b className="text-orange-300">3 маршевыми двигателями + 2 маневровыми OMS</b>.
+              Кнопка <b className="text-sky-300">«🚀 БУРАН / ШАТТЛ [-]»</b> на верхней панели 3D-сцены мгновенно переносит камеру к флагманскому ракетоплану на орбите!
+            </div>
+            <div className="grid grid-cols-3 gap-2 pt-1 text-[10px]">
+              <div className="p-1.5 bg-black/60 border border-sky-500/40">
+                <div className="text-slate-400">КОРПУС И КРЫЛО:</div>
+                <div className="text-sky-300 font-extrabold">Двойная дельта · {baseStandardShipMassTons} т</div>
+              </div>
+              <div className="p-1.5 bg-black/60 border border-amber-500/40">
+                <div className="text-slate-400">ДОП. БРОНЯ (ВЕС):</div>
+                <div className="text-amber-300 font-extrabold">+{purchasedArmorWeightTons} т (Итого {myTotalShipMassTons} т)</div>
+              </div>
+              <div className="p-1.5 bg-black/60 border border-emerald-500/40">
+                <div className="text-slate-400">ОГНЕВАЯ ЁМКОСТЬ:</div>
+                <div className="text-emerald-300 font-extrabold">{(maxAmmoCapacityKg / 1000).toFixed(1)} т ({maxStandard100KgShots} выстр.)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* БЛОК 2: ДОКУПКА БРОНИ КАК ВЕСА И РАСШИРЕНИЕ ЁМКОСТИ БОЕКОМПЛЕКТА + КОМБИНИРОВАНИЕ ОРУЖИЯ */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Левая колонка: Докупка брони как веса (увеличивает тоннаж корабля сверх стандартных 50 т) и ёмкости оружия */}
