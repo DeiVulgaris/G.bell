@@ -66,6 +66,40 @@ function drawOrbits(){
  orbits.forEach(o=>{ctx.beginPath();ctx.ellipse(0,0,m*o.a,m*o.b,0,0,Math.PI*2);ctx.stroke()});
  ctx.restore();
 }
+
+function drawHUD(){
+ // Minimal flight instruments: scene remains full-screen; no menus or controls.
+ ctx.save();
+ const cyan='#65e8ee', dim='#65e8ee88', amber='#ffc76b';
+ // Radar
+ const rx=w-105, ry=105, rr=Math.min(72,Math.max(48,w*.065));
+ ctx.fillStyle='rgba(2,12,23,.72)';ctx.beginPath();ctx.arc(rx,ry,rr+9,0,Math.PI*2);ctx.fill();
+ ctx.strokeStyle=dim;ctx.lineWidth=1;
+ ctx.beginPath();ctx.arc(rx,ry,rr,0,Math.PI*2);ctx.stroke();
+ for(let i=1;i<=3;i++){ctx.beginPath();ctx.arc(rx,ry,rr*i/4,0,Math.PI*2);ctx.stroke()}
+ ctx.beginPath();ctx.moveTo(rx-rr,ry);ctx.lineTo(rx+rr,ry);ctx.moveTo(rx,ry-rr);ctx.lineTo(rx,ry+rr);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(rx+rr*.55,ry-rr*.72);ctx.strokeStyle=cyan;ctx.globalAlpha=.8;ctx.stroke();ctx.globalAlpha=1;
+ const blips=[[-.36,-.25],[.22,-.4],[.48,.18],[-.18,.52],[.08,.12]];
+ blips.forEach((p,i)=>{ctx.fillStyle=i===2?amber:cyan;ctx.beginPath();ctx.arc(rx+p[0]*rr,ry+p[1]*rr,i===2?3:2,0,Math.PI*2);ctx.fill()});
+ ctx.font='10px monospace';ctx.fillStyle=cyan;ctx.textAlign='center';ctx.fillText('РАДАР',rx,ry-rr-15);
+ // Speed / heading / shield
+ const left=28, bottom=h-30;
+ ctx.textAlign='left';ctx.fillStyle=dim;ctx.font='10px monospace';ctx.fillText('СКОРОСТЬ',left,bottom-68);
+ ctx.fillStyle='#e7fbff';ctx.font='25px monospace';ctx.fillText('0.82 c',left,bottom-40);
+ ctx.fillStyle=dim;ctx.font='10px monospace';ctx.fillText('КУРС  027°   ·   ДИСТАНЦИЯ  1.42 AU',left,bottom-15);
+ const sw=Math.min(220,w*.28), sx=w/2-sw/2, sy=h-34;
+ ctx.fillStyle=dim;ctx.font='10px monospace';ctx.fillText('ЩИТ',sx,sy-12);
+ ctx.strokeStyle=dim;ctx.strokeRect(sx,sy,sw,7);
+ const sg=ctx.createLinearGradient(sx,0,sx+sw,0);sg.addColorStop(0,'#ff6b6b');sg.addColorStop(.5,'#ffc76b');sg.addColorStop(1,cyan);
+ ctx.fillStyle=sg;ctx.fillRect(sx,sy,sw*.76,7);
+ ctx.fillStyle='#dffcff';ctx.textAlign='right';ctx.fillText('152%',sx+sw,sy-12);
+ // Small corner reticle, no text panels or buttons.
+ ctx.strokeStyle='#65e8ee66';ctx.lineWidth=1;
+ const cx=w/2,cy=h/2, len=12, gap=7;
+ ctx.beginPath();ctx.moveTo(cx-gap-len,cy);ctx.lineTo(cx-gap,cy);ctx.moveTo(cx+gap,cy);ctx.lineTo(cx+gap+len,cy);
+ ctx.moveTo(cx,cy-gap-len);ctx.lineTo(cx,cy-gap);ctx.moveTo(cx,cy+gap);ctx.lineTo(cx,cy+gap+len);ctx.stroke();
+ ctx.restore();
+}
 function draw(){
  ctx.clearRect(0,0,w,h);ctx.fillStyle='#020711';ctx.fillRect(0,0,w,h);
  const grad=ctx.createRadialGradient(w*.5,h*.5,10,w*.5,h*.5,Math.max(w,h)*.7);
@@ -95,6 +129,7 @@ function draw(){
   ctx.globalAlpha=1;
   ctx.restore();
  }
+ drawHUD();
  requestAnimationFrame(draw);
 }
 resize();draw();
