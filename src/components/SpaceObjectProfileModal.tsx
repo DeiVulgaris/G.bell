@@ -17,6 +17,10 @@ import {
   GOBELL_SPACE_TARIFF_META,
 } from './GoBellEliteGame';
 import { KuiperBeltBodyDef } from '../data/kuiperBeltData';
+import { JupiterPlanetDef, GalileanMoonDef } from '../data/jupiterSystemData';
+import { SaturnPlanetDef, SaturnMoonDef } from '../data/saturnSystemData';
+import { UranusPlanetDef, UranusMoonDef } from '../data/uranusSystemData';
+import { NeptunePlanetDef, NeptuneMoonDef } from '../data/neptuneSystemData';
 import {
   CapturedPlanetClanRecord,
   ClanAffiliationKind,
@@ -120,6 +124,26 @@ export interface SpaceObjectProfileData {
   noContactsAllowed?: boolean;
   isKuiperBelt?: boolean;
   kuiperMeta?: KuiperBeltBodyDef;
+  isJupiter?: boolean;
+  jupiterMeta?: JupiterPlanetDef;
+  galileanMoonMeta?: GalileanMoonDef;
+  isSaturn?: boolean;
+  saturnMeta?: SaturnPlanetDef;
+  saturnMoonMeta?: SaturnMoonDef;
+  isUranus?: boolean;
+  uranusMeta?: UranusPlanetDef;
+  uranusMoonMeta?: UranusMoonDef;
+  isNeptune?: boolean;
+  neptuneMeta?: NeptunePlanetDef;
+  neptuneMoonMeta?: NeptuneMoonDef;
+  isBusinessCenter?: boolean;
+  isProducerStation?: boolean;
+  isShipyardStation?: boolean;
+  isCoriolisBank?: boolean;
+  isDeathStar?: boolean;
+  isTorusShip?: boolean;
+  residentBusinesses?: string[];
+  producedProducts?: string[];
   initialTab?: 'PROFILE' | 'GROUPS' | 'BUSINESS' | 'CONTACT';
 }
 
@@ -164,7 +188,19 @@ interface SpaceObjectProfileModalProps {
   isStationaryOrbitLocked: boolean;
   onTractorCaptureObject?: (profile: SpaceObjectProfileData) => void;
   onDestroyObjectAsAsteroid?: (profile: SpaceObjectProfileData) => void;
-  onDockStation?: () => void;
+  onDockStation?: (station?: 'BANK' | 'BUSINESS_CENTER' | 'PRODUCER' | 'SHIPYARD') => void;
+  onOpenShipyard?: () => void;
+  credits?: number;
+  bankDepositCredits?: number;
+  bankLoanCredits?: number;
+  hasShipInsurance?: boolean;
+  onDepositBank?: (amount: number) => void;
+  onWithdrawBank?: (amount: number) => void;
+  onTakeBankLoan?: (amount: number) => void;
+  onRepayBankLoan?: (amount: number) => void;
+  onBuyInsurance?: () => void;
+  onRentOffice?: () => void;
+  onProduceProduct?: (productName: string, costCr: number) => void;
   onHyperspaceJumpToConstellationStar?: (
     starItem: ConstellationStarJumpItem,
     constellationName: string
@@ -272,6 +308,18 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
   isPirateStatus,
   pirateBuyMultiplier,
   pirateSellDivisor,
+  onOpenShipyard,
+  credits = 100,
+  bankDepositCredits = 0,
+  bankLoanCredits = 0,
+  hasShipInsurance = false,
+  onDepositBank,
+  onWithdrawBank,
+  onTakeBankLoan,
+  onRepayBankLoan,
+  onBuyInsurance,
+  onRentOffice,
+  onProduceProduct,
 }) => {
   const [activeTab, setActiveTab] = useState<'PROFILE' | 'GROUPS' | 'BUSINESS' | 'CONTACT'>(
     'PROFILE'
@@ -682,88 +730,20 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
         </div>
       </div>
 
-      {/* Компактные вкладки карточки объекта (как в профиле пользователя GoBell) */}
-      <div
-        className={`px-3 py-1.5 bg-slate-950 border-b border-slate-800 grid ${
-          profile.noContactsAllowed ? 'grid-cols-1' : 'grid-cols-4'
-        } gap-1`}
-      >
-        <button
-          type="button"
-          onClick={() => setActiveTab('PROFILE')}
-          className={`py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition-colors flex items-center justify-center gap-1 ${
-            activeTab === 'PROFILE'
-              ? 'bg-cyan-400 text-slate-950'
-              : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-          }`}
-        >
-          <User className="w-3 h-3 shrink-0" />
-          <span className="truncate">
-            {profile.noContactsAllowed
-              ? 'Профиль автономного корабля (Без контактов · Можно уничтожить и забрать груз)'
-              : 'Профиль'}
-          </span>
-        </button>
-
-        {!profile.noContactsAllowed && (
-          <>
-            <button
-              type="button"
-              onClick={() => setActiveTab('GROUPS')}
-              className={`py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition-colors flex items-center justify-center gap-1 ${
-                activeTab === 'GROUPS'
-                  ? 'bg-emerald-400 text-slate-950'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-              }`}
-            >
-              <Users className="w-3 h-3 shrink-0" />
-              <span className="truncate">Группы</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('BUSINESS')}
-              className={`py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition-colors flex items-center justify-center gap-1 ${
-                activeTab === 'BUSINESS'
-                  ? 'bg-amber-400 text-slate-950'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-              }`}
-            >
-              <Sparkles className="w-3 h-3 shrink-0" />
-              <span className="truncate">Бизнесы</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('CONTACT')}
-              className={`py-1 px-1.5 rounded-lg text-[10px] font-extrabold transition-colors flex items-center justify-center gap-1 ${
-                activeTab === 'CONTACT'
-                  ? 'bg-sky-400 text-slate-950'
-                  : 'bg-slate-900 text-slate-300 hover:text-white border border-slate-800'
-              }`}
-            >
-              <MessageSquare className="w-3 h-3 shrink-0" />
-              <span className="truncate">Контакт</span>
-            </button>
-          </>
-        )}
+      {/* Шапка объекта */}
+      <div className="p-2 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between text-xs text-slate-300">
+        <div className="flex items-center gap-1.5 font-bold text-cyan-300">
+          <Compass className="w-3.5 h-3.5" />
+          <span>Бортовой инспектор космического объекта</span>
+        </div>
+        <span className="text-[10px] font-mono text-slate-400">
+          Клавиша « I » / « , »
+        </span>
       </div>
 
-      {/* Содержимое карточки объекта (в режиме Полной таблички [ , ] отображаются сразу все разделы в 2 колонки) */}
-      <div
-        className={`p-3 overflow-y-auto text-[11px] text-slate-200 flex-1 ${
-          isFullPlacard && !profile.noContactsAllowed
-            ? 'grid grid-cols-1 lg:grid-cols-12 gap-3 items-start'
-            : 'space-y-2.5'
-        }`}
-      >
-        {/* ВКЛАДКА 1: ПРОФИЛЬ ОБЪЕКТА (ИМЯ, НИКНЕЙМ, СУВЕРЕНИТЕТ / КЛАН / АУКЦИОН, ОПИСАНИЕ) */}
-        {(activeTab === 'PROFILE' || isFullPlacard) && (
-          <div
-            className={`space-y-2.5 ${
-              isFullPlacard && !profile.noContactsAllowed ? 'lg:col-span-7' : ''
-            }`}
-          >
+      {/* Содержимое карточки объекта */}
+      <div className="p-3 overflow-y-auto text-[11px] text-slate-200 flex-1 space-y-2.5">
+        <div className="space-y-2.5">
             {/* СПЕЦИАЛЬНЫЙ АСТРОФИЗИЧЕСКИЙ БЛОК: КЛАСС ЗВЕЗДЫ, ФОТОННЫЙ И ГАММАКВАНТОВЫЙ ПОТЕНЦИАЛ ГЭУ */}
             {profile.kind === 'STAR' && (() => {
               const starRad = getStarRadiationProfile(`${profile.name} ${profile.nickname} ${profile.description}`);
@@ -1401,6 +1381,384 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
               </div>
             )}
 
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ ЮПИТЕРА (R = 45 000 ЕД. ОТ ЗВЕЗДЫ) */}
+            {profile.jupiterMeta && (
+              <div className="p-3 rounded-xl border-2 border-amber-400/80 bg-gradient-to-b from-amber-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-amber-500/30 border border-amber-400 text-amber-200">
+                    ⚡ ЮПИТЕР · ЦАРЬ ПЛАНЕТ (R: 45 000 ЕД.)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-yellow-500/25 border border-yellow-400 text-yellow-200 font-mono">
+                    {profile.jupiterMeta.diameterLabelRu}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-amber-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-amber-300 flex items-center justify-between">
+                    <span>Газовый гигант · Большое Красное Пятно · Гравитационный щит</span>
+                    <span className="font-mono text-emerald-400 text-[9px]">4 спутника (СТАЦИОНАР)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.jupiterMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🌪️ Атмосфера и пояса штормов:</span>
+                    <span className="text-slate-200">{profile.jupiterMeta.atmosphereRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">⚖️ Расчётная масса:</span>
+                    <span className="text-amber-300">{profile.jupiterMeta.massLabelRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/40 text-[9px] space-y-1">
+                  <div className="flex items-center justify-between font-bold text-amber-300">
+                    <span>🌙 Галилеевы спутники (стационарные орбиты R: 2400 — 9500 ед.):</span>
+                    <span className="text-emerald-400 font-mono text-[8px] uppercase">0 рад/с (Стационар)</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-[8.5px]">
+                    {profile.jupiterMeta.moons.map((m) => (
+                      <div key={m.id} className="p-1 rounded bg-black/50 border border-slate-800">
+                        <span className="font-bold text-white block">• {m.cleanName} ({m.orbitRadiusFromJupiter} ед.)</span>
+                        <span className="text-emerald-300 text-[8px]">{m.specialFeatureBadge}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ САТУРНА (R = 60 000 ЕД. ОТ ЗВЕЗДЫ) */}
+            {profile.saturnMeta && (
+              <div className="p-3 rounded-xl border-2 border-yellow-400/80 bg-gradient-to-b from-yellow-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-yellow-500/30 border border-yellow-400 text-yellow-200">
+                    🪐 САТУРН · ВЛАСТЕЛИН КОЛЕЦ (R: 60 000 ЕД.)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/25 border border-amber-400 text-amber-200 font-mono">
+                    {profile.saturnMeta.diameterLabelRu}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-yellow-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-yellow-300 flex items-center justify-between">
+                    <span>3D-кольца A/B/C · Щель Кассини · Северный Гексагон</span>
+                    <span className="font-mono text-emerald-400 text-[9px]">7 спутников (СТАЦИОНАР)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.saturnMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">✨ Система колец и атмосфера:</span>
+                    <span className="text-slate-200">{profile.saturnMeta.atmosphereRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">⚖️ Расчётная масса:</span>
+                    <span className="text-yellow-300">{profile.saturnMeta.massLabelRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-yellow-950/40 border border-yellow-500/40 text-[9px] space-y-1">
+                  <div className="flex items-center justify-between font-bold text-yellow-300">
+                    <span>🛰️ 7 стационарных спутников (R: 2 000 — 8 000 ед. от Сатурна):</span>
+                    <span className="text-emerald-400 font-mono text-[8px] uppercase">0 рад/с (Стационар)</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-[8.5px]">
+                    {profile.saturnMeta.moons.map((m) => (
+                      <div key={m.id} className="p-1 rounded bg-black/50 border border-slate-800">
+                        <span className="font-bold text-white block">• {m.cleanName} ({m.orbitRadiusFromSaturn} ед.)</span>
+                        <span className="text-amber-300 text-[8px]">{m.specialFeatureBadge}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ ГАЛИЛЕЕВА СПУТНИКА ЮПИТЕРА */}
+            {profile.galileanMoonMeta && (
+              <div className="p-3 rounded-xl border-2 border-emerald-400/80 bg-gradient-to-b from-emerald-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-emerald-500/30 border border-emerald-400 text-emerald-200">
+                    🌙 {profile.galileanMoonMeta.specialFeatureBadge}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/25 border border-amber-400 text-amber-200 font-mono">
+                    R = {profile.galileanMoonMeta.orbitRadiusFromJupiter} ед. · СТАЦИОНАР ЮПИТЕРА
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-emerald-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-emerald-300 flex items-center justify-between">
+                    <span>{profile.galileanMoonMeta.folkName}</span>
+                    <span className="font-mono text-slate-400 text-[9px]">{profile.galileanMoonMeta.diameterLabelRu}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.galileanMoonMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Состав и поверхность:</span>
+                    <span className="text-slate-200">{profile.galileanMoonMeta.surfaceCompositionRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🌊 Океан / Атмосфера:</span>
+                    <span className="text-cyan-300">{profile.galileanMoonMeta.atmosphereOrOceanRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-[9px] text-slate-300 space-y-1">
+                  <div className="flex items-center justify-between text-amber-200 font-bold">
+                    <span>🚀 Статус орбиты:</span>
+                    <span className="font-mono text-emerald-300">СТАЦИОНАРНАЯ (0 рад/с · НЕПОДВИЖНО)</span>
+                  </div>
+                  <div>{profile.galileanMoonMeta.orbitLoreRu}</div>
+                  <div className="text-slate-400 pt-0.5 italic">{profile.galileanMoonMeta.scientificHistoryRu}</div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ СПУТНИКА САТУРНА */}
+            {profile.saturnMoonMeta && (
+              <div className="p-3 rounded-xl border-2 border-yellow-400/80 bg-gradient-to-b from-yellow-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-yellow-500/30 border border-yellow-400 text-yellow-200">
+                    🪐 {profile.saturnMoonMeta.specialFeatureBadge}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/25 border border-amber-400 text-amber-200 font-mono">
+                    R = {profile.saturnMoonMeta.orbitRadiusFromSaturn} ед. · СТАЦИОНАР САТУРНА
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-yellow-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-yellow-300 flex items-center justify-between">
+                    <span>{profile.saturnMoonMeta.folkName}</span>
+                    <span className="font-mono text-slate-400 text-[9px]">{profile.saturnMoonMeta.diameterLabelRu}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.saturnMoonMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Состав и геофизика:</span>
+                    <span className="text-slate-200">{profile.saturnMoonMeta.surfaceCompositionRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">💨 Атмосфера / Озёра / Гейзеры:</span>
+                    <span className="text-amber-300">{profile.saturnMoonMeta.atmosphereOrOceanRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-[9px] text-slate-300 space-y-1">
+                  <div className="flex items-center justify-between text-yellow-200 font-bold">
+                    <span>🚀 Статус орбиты:</span>
+                    <span className="font-mono text-emerald-300">СТАЦИОНАРНАЯ (0 рад/с · НЕПОДВИЖНО)</span>
+                  </div>
+                  <div>{profile.saturnMoonMeta.orbitLoreRu}</div>
+                  <div className="text-slate-400 pt-0.5 italic">{profile.saturnMoonMeta.scientificHistoryRu}</div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ УРАНА (R = 70 000 ЕД. ОТ ЗВЕЗДЫ · НАКЛОН ОСИ 90°) */}
+            {profile.uranusMeta && (
+              <div className="p-3 rounded-xl border-2 border-cyan-400/80 bg-gradient-to-b from-cyan-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-cyan-500/30 border border-cyan-400 text-cyan-200">
+                    🌀 УРАН · ЛЕДЯНОЙ ГИГАНТ (R: 70 000 ЕД. · НАКЛОН ОСИ 90°)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-sky-500/25 border border-sky-400 text-sky-200 font-mono">
+                    {profile.uranusMeta.diameterLabelRu}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-cyan-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-cyan-300 flex items-center justify-between">
+                    <span>Планета «лежит на боку» (90°) · Тонкие кольца перпендикулярно эклиптике</span>
+                    <span className="font-mono text-emerald-400 text-[9px]">5 спутников (СТАЦИОНАР)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.uranusMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Атмосфера и метановые льды:</span>
+                    <span className="text-slate-200">{profile.uranusMeta.atmosphereRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">⚖️ Расчётная масса и наклон:</span>
+                    <span className="text-cyan-300">{profile.uranusMeta.massLabelRu} · Наклон: 90.0°</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/40 text-[9px] space-y-1">
+                  <div className="flex items-center justify-between font-bold text-cyan-300">
+                    <span>🛰️ 5 стационарных спутников (50% водяной лёд / 50% камень, R: 2 000 — 10 000 ед.):</span>
+                    <span className="text-emerald-400 font-mono text-[8px] uppercase">0 рад/с (Стационар)</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 text-[8.5px]">
+                    {profile.uranusMeta.moons.map((m) => (
+                      <div key={m.id} className="p-1 rounded bg-black/50 border border-slate-800">
+                        <span className="font-bold text-white block">• {m.cleanName}</span>
+                        <span className="text-cyan-300 text-[8px] font-mono">{m.orbitRadiusFromUranus} ед.</span>
+                        <span className="text-amber-300 text-[7.5px] block truncate">{m.specialFeatureBadge}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ СПУТНИКА УРАНА */}
+            {profile.uranusMoonMeta && (
+              <div className="p-3 rounded-xl border-2 border-cyan-400/80 bg-gradient-to-b from-cyan-950/70 to-slate-950/90 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-cyan-500/30 border border-cyan-400 text-cyan-200">
+                    🌀 {profile.uranusMoonMeta.specialFeatureBadge}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-500/25 border border-amber-400 text-amber-200 font-mono">
+                    R = {profile.uranusMoonMeta.orbitRadiusFromUranus} ед. · СТАЦИОНАР УРАНА
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-cyan-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-cyan-300 flex items-center justify-between">
+                    <span>{profile.uranusMoonMeta.folkName}</span>
+                    <span className="font-mono text-slate-400 text-[9px]">{profile.uranusMoonMeta.diameterLabelRu}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.uranusMoonMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Состав (лед / силикаты):</span>
+                    <span className="text-slate-200">{profile.uranusMoonMeta.surfaceCompositionRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">💨 Атмосфера и геология:</span>
+                    <span className="text-cyan-300">{profile.uranusMoonMeta.atmosphereOrOceanRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-[9px] text-slate-300 space-y-1">
+                  <div className="flex items-center justify-between text-cyan-200 font-bold">
+                    <span>🚀 Статус орбиты:</span>
+                    <span className="font-mono text-emerald-300">СТАЦИОНАРНАЯ (0 рад/с · НАКЛОН 90°)</span>
+                  </div>
+                  <div>{profile.uranusMoonMeta.orbitLoreRu}</div>
+                  <div className="text-slate-400 pt-0.5 italic">{profile.uranusMoonMeta.scientificHistoryRu}</div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ НЕПТУНА (R = 80 000 ЕД. ОТ ЗВЕЗДЫ · НАКЛОН ОСИ 30°) */}
+            {profile.neptuneMeta && (
+              <div className="p-3 rounded-xl border-2 border-blue-500/80 bg-gradient-to-b from-blue-950/80 to-slate-950/95 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-blue-500/30 border border-blue-400 text-blue-200">
+                    🔱 НЕПТУН · САПФИРОВЫЙ ГИГАНТ (R: 80 000 ЕД. · НАКЛОН ОСИ 30°)
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-sky-500/25 border border-sky-400 text-sky-200 font-mono">
+                    {profile.neptuneMeta.diameterLabelRu}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-blue-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-blue-300 flex items-center justify-between">
+                    <span>Сверхзвуковые ветры 2100 км/ч · Большое Тёмное Пятно и дуги Адамса</span>
+                    <span className="font-mono text-emerald-400 text-[9px]">7 спутников (СТАЦИОНАР)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.neptuneMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Атмосфера и метановые штормы:</span>
+                    <span className="text-slate-200">{profile.neptuneMeta.atmosphereRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">⚖️ Расчётная масса и наклон:</span>
+                    <span className="text-blue-300">{profile.neptuneMeta.massLabelRu} · Наклон: 30.0°</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-blue-950/40 border border-blue-500/40 text-[9px] space-y-1">
+                  <div className="flex items-center justify-between font-bold text-blue-300">
+                    <span>🛰️ 7 стационарных спутников Нептуна (R: 2 000 — 10 000 ед.):</span>
+                    <span className="text-emerald-400 font-mono text-[8px] uppercase">0 рад/с (Стационар)</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1 text-[8px]">
+                    {profile.neptuneMeta.moons.map((m) => (
+                      <div key={m.id} className="p-1 rounded bg-black/50 border border-slate-800">
+                        <span className="font-bold text-white block truncate">• {m.cleanName}</span>
+                        <span className="text-blue-300 text-[7.5px] font-mono">{m.orbitRadiusFromNeptune} ед.</span>
+                        <span className="text-cyan-300 text-[7px] block truncate">{m.specialFeatureBadge}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* СПЕЦИАЛЬНЫЙ БЛОК ДЛЯ СПУТНИКА НЕПТУНА */}
+            {profile.neptuneMoonMeta && (
+              <div className="p-3 rounded-xl border-2 border-blue-500/80 bg-gradient-to-b from-blue-950/80 to-slate-950/95 space-y-2.5 shadow-inner">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider bg-blue-500/30 border border-blue-400 text-blue-200">
+                    🔱 {profile.neptuneMoonMeta.specialFeatureBadge}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-sky-500/25 border border-sky-400 text-sky-200 font-mono">
+                    R = {profile.neptuneMoonMeta.orbitRadiusFromNeptune} ед. · СТАЦИОНАР НЕПТУНА
+                  </span>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-blue-400/40 space-y-1">
+                  <div className="text-[10px] font-extrabold text-blue-300 flex items-center justify-between">
+                    <span>{profile.neptuneMoonMeta.folkName}</span>
+                    <span className="font-mono text-slate-400 text-[9px]">{profile.neptuneMoonMeta.diameterLabelRu}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-200 leading-relaxed">
+                    {profile.neptuneMoonMeta.summaryRu}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">🧪 Состав и поверхность:</span>
+                    <span className="text-slate-200">{profile.neptuneMoonMeta.surfaceCompositionRu}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-slate-900/90 border border-slate-800 space-y-0.5">
+                    <span className="text-slate-400 block font-bold">💨 Атмосфера и гейзеры:</span>
+                    <span className="text-blue-300">{profile.neptuneMoonMeta.atmosphereOrOceanRu}</span>
+                  </div>
+                </div>
+
+                <div className="p-2 rounded-lg bg-black/60 border border-slate-800 text-[9px] text-slate-300 space-y-1">
+                  <div className="flex items-center justify-between text-blue-200 font-bold">
+                    <span>🚀 Статус орбиты:</span>
+                    <span className="font-mono text-emerald-300">СТАЦИОНАРНАЯ (0 рад/с · НАКЛОН 30°)</span>
+                  </div>
+                  <div>{profile.neptuneMoonMeta.orbitLoreRu}</div>
+                  <div className="text-slate-400 pt-0.5 italic">{profile.neptuneMoonMeta.scientificHistoryRu}</div>
+                </div>
+              </div>
+            )}
+
             {/* 1. ИМЯ */}
             <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
               <div className="flex items-center justify-between gap-1">
@@ -1615,92 +1973,26 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
               </div>
             )}
 
-            {/* 3. ГРУППЫ И БИЗНЕСЫ (наглядно в карточке) */}
-            {profile.noContactsAllowed ? (
-              <div className="p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/60 space-y-1">
-                <div className="text-[10px] font-extrabold uppercase text-rose-300">
-                  🚫 Контакты отсутствуют (Автономный корабль-сборщик металлов в Поясе Астероидов)
+            {/* 3. ПЛАНЕТАРНЫЕ РЕСУРСЫ */}
+            {profile.planetOrder && profile.planetOrder <= 4 && (
+              <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/60 space-y-2">
+                <div className="flex items-center justify-between text-[10px] font-extrabold uppercase text-slate-300">
+                  <span>📦 Планетарные ресурсы ({profile.planetCleanName}):</span>
                 </div>
-                <div className="text-[11px] text-slate-200 leading-snug">
-                  На этом корабле «Буран / Шаттл» нет никаких групп, бизнесов и контактов. Он летит в Поясе Астероидов на половине скорости (50 ед/с), стреляет по астероидам и собирает металлы. Его можно уничтожить (ЛКМ/ПКМ/V), а оставшийся после него груз металлов — забрать (СКМ)!
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                <div className="p-2 rounded-xl bg-slate-900/90 border border-emerald-500/40 space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-extrabold uppercase text-emerald-300">
-                      👥 Группы: {profile.groupsTitle}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('GROUPS')}
-                      className="text-[10px] font-extrabold text-emerald-400 underline"
-                    >
-                      Открыть →
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-300 leading-snug">
-                    {profile.groupsDescription}
-                  </div>
-                  {pTag && profile.planetCleanName && (
-                    <button
-                      type="button"
-                      onClick={() => onToggleJoinPlanetGroup(pTag, profile.planetCleanName!)}
-                      className={`mt-1 w-full py-1 px-2 rounded-lg font-extrabold text-[10px] transition-colors ${
-                        isMemberOfPlanetGroup
-                          ? 'bg-slate-800 hover:bg-rose-600 text-emerald-300 hover:text-white'
-                          : 'bg-emerald-400 hover:bg-emerald-300 text-slate-950'
-                      }`}
-                    >
-                      {isMemberOfPlanetGroup
-                        ? `✓ Вы в группе #${pTag} (цена ресурса 1 CR) · Выйти`
-                        : `+ Вступить в группу #${pTag} (скидка с 5 CR до 1 CR)`}
-                    </button>
-                  )}
-                </div>
-
-                <div className="p-2 rounded-xl bg-slate-900/90 border border-amber-500/40 space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-extrabold uppercase text-amber-300">
-                      💼 Бизнесы: {profile.businessesTitle}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('BUSINESS')}
-                      className="text-[10px] font-extrabold text-amber-400 underline"
-                    >
-                      Торговля →
-                    </button>
-                  </div>
-                  <div className="text-[11px] text-slate-300 leading-snug">
-                    {profile.businessesDescription}
-                  </div>
-                  {profile.planetOrder && (
-                    <button
-                      type="button"
-                      onClick={() => onSupplyFromPlanet(profile.planetOrder!)}
-                      className="mt-1 w-full py-1 px-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[10px]"
-                    >
-                      {profile.planetOrder === 1 &&
-                        `⚙️ Купить Железо +1т (${
-                          isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                        } CR) [Запас: ${ironStock}т]`}
-                      {profile.planetOrder === 2 &&
-                        `🔩 Купить Алюминий +1т (${
-                          isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                        } CR) [Запас: ${aluminumStock}т]`}
-                      {profile.planetOrder === 3 &&
-                        `🍎💧 Купить Продовольствие и Воду +1т (${
-                          isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                        } CR) [Запас: ${foodWaterCargoStock}т]`}
-                      {profile.planetOrder === 4 &&
-                        `🛡️ Купить Титан +1т (${
-                          isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                        } CR) [Запас: ${titaniumStock}т]`}
-                    </button>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onSupplyFromPlanet(profile.planetOrder!)}
+                  className="w-full py-1.5 px-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[10px]"
+                >
+                  {profile.planetOrder === 1 &&
+                    `⚙️ Купить Железо +1т (${5 * pirateBuyMultiplier} CR) [Запас: ${ironStock}т]`}
+                  {profile.planetOrder === 2 &&
+                    `🔩 Купить Алюминий +1т (${5 * pirateBuyMultiplier} CR) [Запас: ${aluminumStock}т]`}
+                  {profile.planetOrder === 3 &&
+                    `🍎💧 Купить Продовольствие и Воду +1т (${5 * pirateBuyMultiplier} CR) [Запас: ${foodWaterCargoStock}т]`}
+                  {profile.planetOrder === 4 &&
+                    `🛡️ Купить Титан +1т (${5 * pirateBuyMultiplier} CR) [Запас: ${titaniumStock}т]`}
+                </button>
               </div>
             )}
 
@@ -1798,6 +2090,321 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
               </div>
             )}
 
+            {/* 🏢 1. СТАНЦИЯ БУБЛИК: БИЗНЕС-ЦЕНТР (В СКОБКАХ ПРИСУТСТВУЮЩИЕ БИЗНЕСЫ) */}
+            {(profile.isBusinessCenter ||
+              profile.isTorusShip ||
+              profile.name?.includes('БУБЛИК') ||
+              profile.name?.includes('БИЗНЕС-ЦЕНТР') ||
+              profile.id?.includes('torus')) && (
+              <div className="p-3 rounded-xl bg-slate-900/95 border-2 border-cyan-400 space-y-2.5 shadow-xl">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap border-b border-cyan-500/40 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🏢</span>
+                    <div>
+                      <div className="text-xs font-black uppercase text-cyan-300">
+                        СТАНЦИЯ «БУБЛИК» · БИЗНЕС-ЦЕНТР
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        Присутствующие бизнесы (ТД «Антарес», Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера)
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400">
+                    ЦЕНТРОБЕЖНЫЙ БИОМ 1G
+                  </span>
+                </div>
+
+                <div className="text-[10px] text-slate-300 leading-relaxed bg-black/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
+                  <div className="text-yellow-300 font-bold flex items-center justify-between">
+                    <span>📋 ПРИСУТСТВУЮЩИЕ БИЗНЕСЫ И КОРПОРАЦИИ:</span>
+                    <span className="text-[9px] text-slate-400 font-normal">Свободных офисов: 42</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[9px]">
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">1. ТД «Антарес»</span>
+                      <span className="text-slate-400">Сырьевые фьючерсы, экспорт руды · Доходность 14%</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">2. «Астро-Логистика»</span>
+                      <span className="text-slate-400">Межпланетные караваны, складские доки · Доходность 18%</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">3. «Орбитал-Ритейл»</span>
+                      <span className="text-slate-400">Сеть супермаркетов экипажей · Доходность 12%</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">4. «Квант-Сервис»</span>
+                      <span className="text-slate-400">Сервис импульсных движков и конвертеров · Доходность 22%</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">5. «Био-Сфера»</span>
+                      <span className="text-slate-400">Гидропоника 1G, продовольствие, вода/O₂ · Доходность 10%</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-cyan-500/30">
+                      <span className="text-cyan-300 font-bold block">6. Лизинговая Палата</span>
+                      <span className="text-slate-400">Финансовый лизинг модулей и кораблей · Доходность 15%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {onRentOffice && (
+                    <button
+                      type="button"
+                      onClick={onRentOffice}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-[10px] shadow"
+                    >
+                      📑 Арендовать офис на луче (-150 CR · +45 CR/мин)
+                    </button>
+                  )}
+                  {onDockStation && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDockStation('BUSINESS_CENTER');
+                        onClose();
+                      }}
+                      className="py-1.5 px-3 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-[10px]"
+                    >
+                      🏢 Стыковка в Бизнес-центре (T)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 🏭 2. ПРОИЗВОДИТЕЛЬ (В СКОБКАХ ПРОДУКЦИЯ) */}
+            {(profile.isProducerStation ||
+              profile.isDeathStar ||
+              profile.name?.includes('ПРОИЗВОДИТЕЛЬ') ||
+              profile.id?.includes('deathstar')) && (
+              <div className="p-3 rounded-xl bg-slate-900/95 border-2 border-emerald-400 space-y-2.5 shadow-xl">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap border-b border-emerald-500/40 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🏭</span>
+                    <div>
+                      <div className="text-xs font-black uppercase text-emerald-300">
+                        ПРОИЗВОДИТЕЛЬ: ТЯЖЁЛЫЙ ИНДУСТРИАЛЬНЫЙ КОМПЛЕКС
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        Продукция (Титановая броня, Дюрасталь, Фотонные орудия, Плазменные реакторы, Гиперматерия)
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400">
+                    ЗАВОДСКИЕ ЦЕНЫ (-40%)
+                  </span>
+                </div>
+
+                <div className="text-[10px] text-slate-300 leading-relaxed bg-black/60 p-2 rounded-lg border border-slate-800 space-y-1.5">
+                  <div className="text-yellow-300 font-bold">🛠️ КАТАЛОГ ПРОИЗВОДИМОЙ ПРОДУКЦИИ:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[9px]">
+                    <div className="p-1.5 rounded bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-300 font-bold block">1. Титановая броня</span>
+                        <span className="text-slate-400">+35 HP прочности корпуса</span>
+                      </div>
+                      <span className="text-yellow-300 font-bold font-mono">120 CR</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-300 font-bold block">2. Дюрасталевые балки</span>
+                        <span className="text-slate-400">+10т ёмкости трюма</span>
+                      </div>
+                      <span className="text-yellow-300 font-bold font-mono">180 CR</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-300 font-bold block">3. Фотонная батарея</span>
+                        <span className="text-slate-400">+25% к урону лазеров</span>
+                      </div>
+                      <span className="text-yellow-300 font-bold font-mono">240 CR</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-emerald-500/30 flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-300 font-bold block">4. Плазменный реактор</span>
+                        <span className="text-slate-400">Охлаждение орудий в 2 раза</span>
+                      </div>
+                      <span className="text-yellow-300 font-bold font-mono">320 CR</span>
+                    </div>
+                    <div className="p-1.5 rounded bg-slate-950 border border-emerald-500/30 col-span-1 sm:col-span-2 flex items-center justify-between">
+                      <div>
+                        <span className="text-emerald-300 font-bold block">5. Очищенная Гиперматерия</span>
+                        <span className="text-slate-400">Прыжки без потери запаса топлива</span>
+                      </div>
+                      <span className="text-yellow-300 font-bold font-mono">80 CR</span>
+                    </div>
+                  </div>
+                  <div className="text-[9px] text-amber-300 font-mono pt-0.5">
+                    ♻️ Сдача сырья (Fe, Al, Ti) на переработку даёт скидку 40% на готовую продукцию!
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {onDockStation && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDockStation('PRODUCER');
+                        onClose();
+                      }}
+                      className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-[10px]"
+                    >
+                      🏭 Стыковка на Заводе Производителя (T)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 🏗️ 3. ВЕРФЬ (КОНСТРУКТОР XYZ И МОДУЛИ КОРПУСА) */}
+            {(profile.isShipyardStation ||
+              profile.name?.includes('ВЕРФЬ') ||
+              profile.id?.includes('shipyard')) && (
+              <div className="p-3 rounded-xl bg-slate-900/95 border-2 border-purple-400 space-y-2.5 shadow-xl">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap border-b border-purple-500/40 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🏗️</span>
+                    <div>
+                      <div className="text-xs font-black uppercase text-purple-300">
+                        ОРБИТАЛЬНАЯ ВЕРФЬ «ТАЛИОН»
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        Модульное кораблестроение на 6-лучевом каркасе XYZ
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-400">
+                    30 СТАПЕЛЕЙ СБОРКИ
+                  </span>
+                </div>
+
+                <div className="text-[10px] text-slate-300 leading-relaxed bg-black/60 p-2 rounded-lg border border-slate-800 space-y-1">
+                  <div>
+                    Сборочные стапели формы Среднего Ромботриаконтаэдра (0.5 диаметра планеты). Здесь пилот монтирует кабину, двигатели, крылья, модули трюма и генераторы щита.
+                  </div>
+                  <div className="text-amber-300 font-mono text-[9px]">
+                    🔒 Скупщик верфи выкупает любые демонтированные модули за 50% номинала!
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {onOpenShipyard && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenShipyard();
+                        onClose();
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-purple-500 hover:bg-purple-400 text-white font-extrabold text-[10px] shadow"
+                    >
+                      🛠️ ОТКРЫТЬ 3D-КОНСТРУКТОР ВЕРФИ (XYZ)
+                    </button>
+                  )}
+                  {onDockStation && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDockStation('SHIPYARD');
+                        onClose();
+                      }}
+                      className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-400 font-extrabold text-[10px]"
+                    >
+                      Стыковка на Верфи (T)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 🏦 4. СТАНЦИЯ КОРИОЛИС: БАНК (ДЕПОЗИТЫ, КРЕДИТЫ, ОБМЕН, СТРАХОВКА) */}
+            {(profile.isCoriolisBank ||
+              profile.kind === 'STATION' ||
+              profile.name?.includes('Кориолис') ||
+              profile.name?.includes('Банк')) && (
+              <div className="p-3 rounded-xl bg-slate-900/95 border-2 border-yellow-400 space-y-2.5 shadow-xl">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap border-b border-yellow-500/40 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">🏦</span>
+                    <div>
+                      <div className="text-xs font-black uppercase text-yellow-300">
+                        СТАНЦИЯ КОРИОЛИС · ОРБИТАЛЬНЫЙ БАНК
+                      </div>
+                      <div className="text-[10px] text-slate-300 font-mono">
+                        Депозиты под 5% годовых, Кредиты до 25 000 CR, Страхование кораблей 80%
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-400">
+                    ЦЕНТРАЛЬНЫЙ БАНК
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] font-mono">
+                  <div className="p-2 rounded bg-black/60 border border-slate-800">
+                    <span className="text-slate-400 block text-[9px]">НАЛИЧНЫЙ БАЛАНС:</span>
+                    <span className="text-yellow-300 font-black text-xs">{credits ?? 100} CR</span>
+                  </div>
+                  <div className="p-2 rounded bg-black/60 border border-slate-800">
+                    <span className="text-slate-400 block text-[9px]">ДЕПОЗИТ (+5%):</span>
+                    <span className="text-emerald-400 font-black text-xs">{bankDepositCredits ?? 0} CR</span>
+                  </div>
+                  <div className="p-2 rounded bg-black/60 border border-slate-800">
+                    <span className="text-slate-400 block text-[9px]">КРЕДИТНЫЙ ДОЛГ:</span>
+                    <span className="text-rose-400 font-black text-xs">{bankLoanCredits ?? 0} CR</span>
+                  </div>
+                  <div className="p-2 rounded bg-black/60 border border-slate-800">
+                    <span className="text-slate-400 block text-[9px]">СТРАХОВКА (80%):</span>
+                    <span className={hasShipInsurance ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                      {hasShipInsurance ? 'АКТИВНА' : 'НЕТ'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  {onDepositBank && (
+                    <button
+                      type="button"
+                      onClick={() => onDepositBank(250)}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-extrabold text-[10px]"
+                    >
+                      💰 Внести 250 CR (+5%)
+                    </button>
+                  )}
+                  {onTakeBankLoan && (!bankLoanCredits || bankLoanCredits === 0) && (
+                    <button
+                      type="button"
+                      onClick={() => onTakeBankLoan(2500)}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-[10px]"
+                    >
+                      💳 Кредит +2 500 CR
+                    </button>
+                  )}
+                  {onBuyInsurance && !hasShipInsurance && (
+                    <button
+                      type="button"
+                      onClick={onBuyInsurance}
+                      className="flex-1 py-1.5 px-2 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-extrabold text-[10px]"
+                    >
+                      🛡️ Страховка (-250 CR)
+                    </button>
+                  )}
+                  {onDockStation && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDockStation('BANK');
+                        onClose();
+                      }}
+                      className="py-1.5 px-3 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-[10px]"
+                    >
+                      🏦 Стыковка в Банке (T)
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Быстрые кнопки управления объектом прямо в карточке */}
             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
               <button
@@ -1821,22 +2428,34 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
                       : 'bg-slate-900 hover:bg-emerald-500 hover:text-slate-950 text-emerald-300 border-emerald-400'
                   }`}
                 >
-                  {isStationaryOrbitLocked ? '🔓 Открепить орбиту (X)' : '🛰 Стац. орбита (X)'}
+                  {isStationaryOrbitLocked ? '🔓 Открепить орбиту (СКМ)' : '🛰 Стац. орбита (СКМ)'}
                 </button>
               )}
 
-              {profile.kind === 'STATION' && onDockStation && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onDockStation();
-                    onClose();
-                  }}
-                  className="flex-1 py-1.5 px-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-[10px]"
-                >
-                  Стыковка (T)
-                </button>
-              )}
+              {onDockStation &&
+                (profile.kind === 'STATION' ||
+                  profile.isCoriolisBank ||
+                  profile.isTorusShip ||
+                  profile.isDeathStar ||
+                  profile.name?.includes('Кориолис') ||
+                  profile.name?.includes('БУБЛИК') ||
+                  profile.name?.includes('ПРОИЗВОДИТЕЛЬ')) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const stationTarget = profile.isTorusShip || profile.name?.includes('БУБЛИК')
+                        ? 'BUSINESS_CENTER'
+                        : profile.isDeathStar || profile.name?.includes('ПРОИЗВОДИТЕЛЬ')
+                        ? 'PRODUCER'
+                        : 'BANK';
+                      onDockStation(stationTarget);
+                      onClose();
+                    }}
+                    className="flex-1 py-1.5 px-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-extrabold text-[10px]"
+                  >
+                    Стыковка (T)
+                  </button>
+                )}
 
               {(profile.kind === 'CARGO' ||
                 profile.kind === 'SOS_POD' ||
@@ -1912,286 +2531,6 @@ export const SpaceObjectProfileModal: React.FC<SpaceObjectProfileModalProps> = (
               </div>
             </div>
           </div>
-        )}
-
-        {/* ПРАВАЯ КОЛОНКА В ПОЛНОЙ ТАБЛИЧКЕ (ИЛИ ОТДЕЛЬНЫЕ ВКЛАДКИ В КОМПАКТНОМ ВИДЕ) */}
-        {(isFullPlacard || activeTab !== 'PROFILE') && !profile.noContactsAllowed && (
-          <div
-            className={`space-y-2.5 ${
-              isFullPlacard ? 'lg:col-span-5' : ''
-            }`}
-          >
-            {/* ВКЛАДКА 2: ГРУППЫ (ПРАВИТЕЛЬСТВО И ГОСУДАРСТВЕННЫЕ КОНТРАКТЫ 10 CR) */}
-            {(activeTab === 'GROUPS' || isFullPlacard) && (
-              <div className="space-y-2.5">
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-emerald-500/40 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="font-extrabold text-emerald-300 text-xs">
-                  {profile.groupsTitle}
-                </div>
-                {pTag && (
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-mono text-[10px] font-extrabold">
-                    #{pTag}
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-slate-300 leading-snug">
-                {profile.groupsDescription}
-              </div>
-
-              {pTag && profile.planetCleanName && (
-                <div className="pt-1.5 border-t border-slate-800 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => onToggleJoinPlanetGroup(pTag, profile.planetCleanName!)}
-                    className={`w-full py-1.5 px-3 rounded-xl font-extrabold text-xs ${
-                      isMemberOfPlanetGroup
-                        ? 'bg-slate-800 hover:bg-rose-600 text-slate-200'
-                        : 'bg-emerald-400 hover:bg-emerald-300 text-slate-950'
-                    }`}
-                  >
-                    {isMemberOfPlanetGroup
-                      ? `✓ Вы состоите в #${pTag} (скидка 1 CR) · Выйти`
-                      : `+ Вступить в #${pTag} (${joinedPlanetGroups.length}/${maxAllowedPlanetGroups})`}
-                  </button>
-
-                  <div className="flex items-center justify-between gap-1 flex-wrap">
-                    <span className="text-[10px] text-slate-400">
-                      Тариф: <b className="text-amber-300">{GOBELL_SPACE_TARIFF_META[gobellTariff].badge}</b>
-                    </span>
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {(['FREE', 'PRO', 'PRO_PLUS_1', 'PRO_PLUS_2', 'BUSINESS'] as GoBellSpaceTariff[]).map(
-                        (tKey) => (
-                          <button
-                            key={tKey}
-                            type="button"
-                            onClick={() => onSelectGoBellTariff(tKey)}
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold border ${
-                              gobellTariff === tKey
-                                ? 'bg-amber-400 text-slate-950 border-amber-300'
-                                : 'bg-slate-950 text-slate-300 border-slate-700'
-                            }`}
-                          >
-                            {GOBELL_SPACE_TARIFF_META[tKey].badge}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {profile.planetOrder && (
-                <div className="pt-2 border-t border-slate-800 space-y-1.5">
-                  <div className="font-extrabold text-emerald-300 text-[10px]">
-                    📦 Контракты Правительства «{profile.planetCleanName}» (+
-                    {Number((10 / pirateSellDivisor).toFixed(1))} CR):
-                  </div>
-                  {profile.planetOrder === 3 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Земля', 'IRON')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        ⚙️ Сдать 1т ЖЕЛЕЗА с Меркурия → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {ironStock}т)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Земля', 'ALUMINUM')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🔩 Сдать 1т АЛЮМИНИЯ с Венеры → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {aluminumStock}т)
-                      </button>
-                    </>
-                  )}
-                  {profile.planetOrder === 1 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Меркурий', 'FOOD_WATER')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🍎💧 Сдать 1т ЕДЫ И ВОДЫ с Земли → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {foodWaterCargoStock}т)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Меркурий', 'TITANIUM')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🛡️ Сдать 1т ТИТАНА с Марса → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {titaniumStock}т)
-                      </button>
-                    </>
-                  )}
-                  {profile.planetOrder === 2 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Венера', 'IRON')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        ⚙️ Сдать 1т ЖЕЛЕЗА с Меркурия → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {ironStock}т)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Венера', 'FOOD_WATER')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🍎💧 Сдать 1т ЕДЫ И ВОДЫ с Земли → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {foodWaterCargoStock}т)
-                      </button>
-                    </>
-                  )}
-                  {profile.planetOrder === 4 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Марс', 'FOOD_WATER')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🍎💧 Сдать 1т ЕДЫ И ВОДЫ с Земли → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {foodWaterCargoStock}т)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDeliverGovernmentContract('Марс', 'ALUMINUM')}
-                        className="w-full py-1.5 px-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-[10px] text-left"
-                      >
-                        🔩 Сдать 1т АЛЮМИНИЯ с Венеры → +{Number((10 / pirateSellDivisor).toFixed(1))} CR (в трюме: {aluminumStock}т)
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={onSellAllPeriodicElements}
-                    className="w-full py-1.5 px-2 rounded-lg bg-fuchsia-400 hover:bg-fuchsia-300 text-slate-950 font-extrabold text-[10px]"
-                  >
-                    💎 Продать редкие элементы Пояса ({usedCargoTons}/{maxCargoCapacity}т)
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ВКЛАДКА 3: БИЗНЕСЫ И ОБЪЯВЛЕНИЯ */}
-        {(activeTab === 'BUSINESS' || isFullPlacard) && (
-          <div className="space-y-2.5">
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-amber-500/40 space-y-2">
-              <div className="font-extrabold text-amber-300 text-xs">
-                {profile.businessesTitle}
-              </div>
-              <div className="text-[11px] text-slate-300 leading-snug">
-                {profile.businessesDescription}
-              </div>
-
-              {profile.planetOrder && (
-                <button
-                  type="button"
-                  onClick={() => onSupplyFromPlanet(profile.planetOrder!)}
-                  className="w-full py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs"
-                >
-                  {profile.planetOrder === 1 &&
-                    `⚙️ Купить ЖЕЛЕЗО +1т (${
-                      isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                    } CR) [Запас: ${ironStock}т]`}
-                  {profile.planetOrder === 2 &&
-                    `🔩 Купить АЛЮМИНИЙ +1т (${
-                      isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                    } CR) [Запас: ${aluminumStock}т]`}
-                  {profile.planetOrder === 3 &&
-                    `🍎💧 Купить ПРОДОВОЛЬСТВИЕ И ВОДУ +1т (${
-                      isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                    } CR) [Запас: ${foodWaterCargoStock}т]`}
-                  {profile.planetOrder === 4 &&
-                    `🛡️ Купить ТИТАН +1т (${
-                      isMemberOfPlanetGroup ? 1 * pirateBuyMultiplier : 5 * pirateBuyMultiplier
-                    } CR) [Запас: ${titaniumStock}т]`}
-                </button>
-              )}
-
-              {profile.adverts && profile.adverts.length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-slate-800">
-                  <div className="text-[10px] font-extrabold uppercase text-emerald-300">
-                    Объявления бизнеса (ADVERT · 4 слота):
-                  </div>
-                  {profile.adverts.map((adv) => (
-                    <div
-                      key={adv.slotId}
-                      className="p-2 rounded-lg bg-slate-950 border border-slate-800 space-y-1"
-                    >
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-amber-300 font-extrabold">{adv.title}</span>
-                        <span className="text-emerald-400 font-mono">+{adv.karmaPlus}</span>
-                      </div>
-                      <div className="text-[11px] text-white leading-snug">{adv.description}</div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setContactNote(
-                            `Здравствуйте, «${adv.authorName}»! Обращаюсь по объявлению #${adv.slotId}: «${adv.description}».`
-                          );
-                          setActiveTab('CONTACT');
-                        }}
-                        className="w-full py-1 px-2 rounded bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-[10px]"
-                      >
-                        Запрос на контакт по объявлению #{adv.slotId}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ВКЛАДКА 4: ЗАПРОС НА КОНТАКТ В GOBELL CHAT */}
-        {(activeTab === 'CONTACT' || isFullPlacard) && (
-          <div className="space-y-2.5">
-            <div className="p-2.5 rounded-xl bg-slate-900 border border-sky-500/40 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs font-extrabold text-white">
-                <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
-                <span>Запрос на контакт в Chat GoBell</span>
-              </div>
-
-              {contactSentBanner && (
-                <div className="p-2 rounded-lg bg-emerald-950/80 border border-emerald-400 text-emerald-200 font-bold text-[10px] flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>{contactSentBanner}</span>
-                </div>
-              )}
-
-              <textarea
-                rows={3}
-                value={contactNote}
-                onChange={(e) => setContactNote(e.target.value)}
-                className="w-full rounded-lg bg-slate-950 border border-slate-700 focus:border-sky-400 p-2 text-xs text-white focus:outline-none"
-                placeholder="Сопроводительная записка..."
-              />
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (!contactNote.trim()) return;
-                  onSendContactRequest(
-                    `${displayName} (${displayNickname})`,
-                    profile.planetCleanName || displayName,
-                    profile.kind === 'PLANET' ? 'GROUPS' : 'BUSINESS',
-                    contactNote.trim(),
-                    pTag
-                  );
-                  setContactSentBanner(
-                    `Запрос для «${displayName}» (${displayNickname}) отправлен в Chat GoBell (+1 Карма)!`
-                  );
-                }}
-                className="w-full py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Отправить в Chat GoBell (+1 Карма)</span>
-              </button>
-            </div>
-          </div>
-        )}
-          </div>
-        )}
       </div>
     </div>
   );

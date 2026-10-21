@@ -59,10 +59,34 @@ import {
   KuiperBeltBodyDef,
   KuiperMoonDef,
 } from '../data/kuiperBeltData';
+import {
+  JUPITER_SYSTEM_DEF,
+  JupiterPlanetDef,
+  GalileanMoonDef,
+} from '../data/jupiterSystemData';
+import {
+  SATURN_SYSTEM_DEF,
+  SaturnPlanetDef,
+  SaturnMoonDef,
+  SATURN_RING_TRACKS,
+} from '../data/saturnSystemData';
+import {
+  URANUS_SYSTEM_DEF,
+  UranusPlanetDef,
+  UranusMoonDef,
+  URANUS_RING_TRACKS,
+} from '../data/uranusSystemData';
+import {
+  NEPTUNE_SYSTEM_DEF,
+  NeptunePlanetDef,
+  NeptuneMoonDef,
+  NEPTUNE_RING_TRACKS,
+} from '../data/neptuneSystemData';
 import {StandardConstellationWorldsModal} from './StandardConstellationWorldsModal';
 import {AutonomousSentinelModal} from './AutonomousSentinelModal';
 import {SpaceObjectsGalleryModal} from './SpaceObjectsGalleryModal';
 import {ShipyardBuilderModal} from './ShipyardBuilderModal';
+import {ObjectLandingModal, ObjectLandingData} from './ObjectLandingModal';
 import {
   SentinelPlatformTelemetry,
   createDefaultSentinelTelemetry,
@@ -2842,6 +2866,30 @@ interface SystemPlanet {
   hasHeartFeature?: boolean;
   isSnowmanContactBinary?: boolean;
   kuiperMoons?: KuiperMoonDef[];
+  isJupiter?: boolean;
+  jupiterMeta?: JupiterPlanetDef;
+  galileanMoons?: Array<{
+    def: GalileanMoonDef;
+    orbitAngle: number;
+  }>;
+  isSaturn?: boolean;
+  saturnMeta?: SaturnPlanetDef;
+  saturnMoons?: Array<{
+    def: SaturnMoonDef;
+    orbitAngle: number;
+  }>;
+  isUranus?: boolean;
+  uranusMeta?: UranusPlanetDef;
+  uranusMoons?: Array<{
+    def: UranusMoonDef;
+    orbitAngle: number;
+  }>;
+  isNeptune?: boolean;
+  neptuneMeta?: NeptunePlanetDef;
+  neptuneMoons?: Array<{
+    def: NeptuneMoonDef;
+    orbitAngle: number;
+  }>;
   gobellObjects: PlanetGoBellObject[];
 }
 
@@ -3170,6 +3218,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const hoveredPlanetObjRef = useRef<PlanetGoBellObject | null>(null);
   const projectedPlanetObjectsRef = useRef<ProjectedPlanetObjectHit[]>([]);
   const kuiperCycleIndexRef = useRef<number>(0);
+  const jupiterCycleIndexRef = useRef<number>(0);
+  const saturnCycleIndexRef = useRef<number>(0);
+  const uranusCycleIndexRef = useRef<number>(0);
+  const neptuneCycleIndexRef = useRef<number>(0);
 
   // Модальное окно «Форма запроса на контакт» (точно как на карте GoBell)
   const [planetContactTarget, setPlanetContactTarget] = useState<{
@@ -4022,37 +4074,6 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     };
     setPilotBusiness(updatedBiz);
 
-    // Добавляем или обновляем маркер Бизнеса пилота на выбранной планете 3D-сцены
-    const st = flightStateRef.current;
-    const pIdx = updatedBiz.planetOrder - 1;
-    const targetP =
-      st.planets.find((pl) => !pl.isDeathStar && pl.orbitOrder === updatedBiz.planetOrder) ||
-      st.planets[pIdx];
-    if (targetP) {
-      const pilotBizObjId = `pilot-custom-biz-${updatedBiz.planetOrder}`;
-      const existingFiltered = targetP.gobellObjects.filter((o) => o.id !== pilotBizObjId);
-      const marginPct = safeSell - safeBuy;
-      targetP.gobellObjects = [
-        ...existingFiltered,
-        {
-          id: pilotBizObjId,
-          planetId: targetP.id,
-          planetCleanName: targetP.cleanName,
-          planetOrder: updatedBiz.planetOrder,
-          specializationBadge: `💼 БИЗНЕС ПИЛОТА (МАРЖА ${marginPct}% ПРОТИВ 50% У ПРАВИТЕЛЬСТВ)`,
-          specializationPurpose: `Закупает по ЗАВЫШЕННОЙ (${safeBuy}% вместо 50% у правительств), продаёт по ЗАНИЖЕННОЙ (${safeSell}% вместо 100% у правительств)!`,
-          kind: 'BUSINESS',
-          title: updatedBiz.name,
-          description: updatedBiz.description,
-          authorName: `${pilotName} · ${updatedBiz.name}`,
-          karmaPlus: 35,
-          karmaMinus: 0,
-          latDeg: -4,
-          lonOffsetDeg: -8,
-        },
-      ];
-    }
-
     playZxBeep('MISSION');
     setFlightMessage(
       `💼 БИЗНЕС СОЗДАН («${updatedBiz.name}»): ЗАКУПКА ${safeBuy}% (У ПРАВИТЕЛЬСТВ 50%), ПРОДАЖА ${safeSell}% (У ПРАВИТЕЛЬСТВ 100%) · МАРЖА ${
@@ -4121,9 +4142,25 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
 
   // Режим экрана: FLIGHT (полёт), DOCKED (станция: GoBell Миссии и Торговля), GALAXY_MAP (выбор гиперпрыжка)
   const [screenMode, setScreenMode] = useState<'FLIGHT' | 'DOCKED' | 'GALAXY_MAP'>('FLIGHT');
-  const [stationTab, setStationTab] = useState<'GOBELL_MISSIONS' | 'MARKET' | 'OUTFITTING'>(
-    'GOBELL_MISSIONS'
-  );
+  const [stationTab, setStationTab] = useState<
+    'BANK' | 'BUSINESS_CENTER' | 'PRODUCER' | 'SHIPYARD' | 'GOBELL_MISSIONS' | 'MARKET' | 'OUTFITTING'
+  >('BANK');
+
+  // 1. БАНК (СТАНЦИЯ КОРИОЛИС): Депозиты под 5%, Кредитование, Страхование
+  const [bankDepositCredits, setBankDepositCredits] = useState<number>(0);
+  const [bankLoanCredits, setBankLoanCredits] = useState<number>(0);
+  const [hasShipInsurance, setHasShipInsurance] = useState<boolean>(false);
+  const [bankTotalInterestEarned, setBankTotalInterestEarned] = useState<number>(0);
+
+  // 2. БИЗНЕС-ЦЕНТР (СТАНЦИЯ БУБЛИК): Присутствующие бизнесы, аренда офисов
+  const [rentedBusinessOffices, setRentedBusinessOffices] = useState<number>(0);
+  const [investedCompanies, setInvestedCompanies] = useState<Record<string, number>>({});
+
+  // 3. ПРОИЗВОДИТЕЛЬ (БЫВШАЯ ЗВЕЗДА СМЕРТИ): Каталог продукции, титановая броня, балки
+  const [reinforcedArmorUnits, setReinforcedArmorUnits] = useState<number>(0);
+  const [expandedCargoBeamUnits, setExpandedCargoBeamUnits] = useState<number>(0);
+  const [photonBatteryUnits, setPhotonBatteryUnits] = useState<number>(0);
+  const [plasmaReactorUnits, setPlasmaReactorUnits] = useState<number>(0);
 
   // Лог бортового компьютера ZX Spectrum
   const [flightMessage, setFlightMessage] = useState<string>(
@@ -4672,13 +4709,20 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     starRad: getStarRadiationProfile('G2 V Солнце (Жёлтый карлик)'),
   });
 
-  // Состояние закрепления корабля на стационарной орбите планеты (клавиша X)
+  // Состояние закрепления корабля на стационарной орбите (колёсико мыши СКМ, высота 10 ед.)
   const [stationaryOrbitInfo, setStationaryOrbitInfo] = useState<{
     planetId: string;
     planetName: string;
     cleanName: string;
     color: string;
+    kind?: 'PLANET' | 'STATION' | 'PLANETOID' | 'MOON' | 'ASTEROID' | 'STARGATE';
+    parentPlanetCleanName?: string;
+    moonSummary?: string;
+    asteroidSummary?: string;
+    distanceUnits?: number;
   } | null>(null);
+  const [isObjectLandingOpen, setIsObjectLandingOpen] = useState<boolean>(false);
+  const [objectLandingData, setObjectLandingData] = useState<ObjectLandingData | null>(null);
   const [nearestPlanetOrbitUi, setNearestPlanetOrbitUi] = useState<{
     planetId: string;
     cleanName: string;
@@ -4746,6 +4790,10 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     standoffDist: number;
     targetMassTons: number;
     targetMassLabel: string;
+    moonParentName?: string;
+    moonParentGenitive?: string;
+    isShip?: boolean;
+    shipClassLabel?: string;
   }
 
   interface AutopilotLockState {
@@ -4779,6 +4827,180 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   const isHoveringAutopilotCardRef = useRef<boolean>(false);
   const autopilotTargetRef = useRef<AutopilotLockState | null>(null);
   const [autopilotTargetUi, setAutopilotTargetUi] = useState<AutopilotLockState | null>(null);
+
+  // Ссылка и состояние для краткой информационной строки об объекте в курсоре внизу панели управления
+  const lastBriefHudTextRef = useRef<string>('');
+  const lastTargetIdRef = useRef<string>('');
+  const lastTargetUiTimeRef = useRef<number>(0);
+  const defaultHudTextRef = useRef<string>('');
+  const [hoveredTargetBriefUi, setHoveredTargetBriefUi] = useState<string>('');
+
+  useEffect(() => {
+    const isCapCritical = (flightStateRef.current.gravConverterTons ?? totalShipMassTons) <= 0;
+    const isUnderAttack = flightStateRef.current.enemyFireCooldown > 80;
+    const effConverterTons = Math.max(
+      0,
+      Number((flightStateRef.current.gravConverterTons ?? totalShipMassTons).toFixed(1))
+    );
+    const effMaxMass = Math.max(10, Math.round(totalShipMassTons || 60));
+    const sysName = GALAXY_SYSTEMS[currentSystemId]?.name || 'LAVE';
+
+    defaultHudTextRef.current = isCapCritical
+      ? `⚠️ КРИТИЧЕСКИЙ ОТКАЗ: ЕМКОСТЬ ГРАВИ-КОНВЕРТОРА 0 Т! РАСПАД СВЯЗКИ — КОРАБЛЬ РАЗЛЕТЕЛСЯ НА БЛОКИ!`
+      : isUnderAttack
+      ? `⚠️ ТРЕВОГА: КОРАБЛЬ АТАКОВАН! УДАРЫ ПО ЩИТУ · ГРАВИ-КОНВЕРТОР: ${effConverterTons} Т / ${effMaxMass} Т`
+      : flightMessage
+      ? `БОРТОВОЙ ЖУРНАЛ: ${flightMessage}`
+      : autopilotTargetUi?.name
+      ? `КУРС: ЗАХВАТ ЦЕЛИ [${autopilotTargetUi.name}] · АВТОПИЛОТ ВЕДЁТ СБЛИЖЕНИЕ · РАДАР: ${radarScaleUnits.toLocaleString()} КМ`
+      : `СИСТЕМА: ${sysName} · ГРАВИ-КОНВЕРТОР: ${effConverterTons} Т / ${effMaxMass} Т · РАДАР: ${radarScaleUnits.toLocaleString()} КМ · ОРУДИЯ: ГОТОВЫ`;
+  }, [flightMessage, autopilotTargetUi, radarScaleUnits, currentSystemId, totalShipMassTons]);
+
+  const formatTonsRu = (tons: number): string => {
+    const rounded = Math.max(1, Math.round(tons));
+    const mod10 = rounded % 10;
+    const mod100 = rounded % 100;
+    if (mod100 >= 11 && mod100 <= 19) return `${rounded} тонн`;
+    if (mod10 === 1) return `${rounded} тонна`;
+    if (mod10 >= 2 && mod10 <= 4) return `${rounded} тонны`;
+    return `${rounded} тонн`;
+  };
+
+  const formatBriefTargetHudInfo = (target: ProjectedScreenTargetHit): string => {
+    const dist = Math.max(
+      1,
+      Math.round(Math.hypot(target.camPos.x, target.camPos.y, target.camPos.z))
+    );
+
+    // 1. Спутник планеты (Тритон, Европа, Ио, Ганимед, Каллисто, Титан, Миранда, Протей, Ларисса и др.)
+    if (target.moonParentGenitive) {
+      const moonName = target.profile.planetCleanName || target.profile.name;
+      return `🎯 ${moonName} спутник ${target.moonParentGenitive} ${dist} ед`;
+    }
+    if (target.profile.groupsTitle && target.profile.groupsTitle.includes('СПУТНИК')) {
+      const moonName = target.profile.planetCleanName || target.profile.name;
+      let parent = 'планеты';
+      const desc = `${target.profile.groupsDescription || ''} ${target.profile.description || ''}`;
+      if (desc.includes('Нептун') || desc.includes('НЕПТУН')) parent = 'Нептуна';
+      else if (desc.includes('Уран') || desc.includes('УРАН')) parent = 'Урана';
+      else if (desc.includes('Сатурн') || desc.includes('САТУРН')) parent = 'Сатурна';
+      else if (desc.includes('Юпитер') || desc.includes('ЮПИТЕР')) parent = 'Юпитера';
+      return `🎯 ${moonName} спутник ${parent} ${dist} ед`;
+    }
+
+    // 2. Корабль (боевой, торговец, пират, конвой, таргоид, патруль)
+    if (
+      target.isShip ||
+      target.profile.kind === 'COMBAT_SHIP' ||
+      target.id.startsWith('ship-') ||
+      target.id.startsWith('entity-') ||
+      target.profile.systemTag?.startsWith('SHIP-')
+    ) {
+      if (target.id.startsWith('drone-')) {
+        const droneMass = Math.round(target.targetMassTons || 2);
+        return `🎯 дрон Диктатора ${formatTonsRu(droneMass)} ${dist} ед`;
+      }
+      const mass = Math.round(target.targetMassTons || 50);
+      const tonsLabel = formatTonsRu(mass);
+      const sub =
+        target.shipClassLabel ||
+        (target.profile.nickname ? target.profile.nickname.split(' ')[0] : '');
+      const shipTitle = sub && sub !== 'корабль' && sub !== 'конвой' ? `корабль (${sub})` : 'корабль';
+      return `🎯 ${shipTitle} ${tonsLabel} ${dist} ед`;
+    }
+
+    // 3. Карательный дрон Диктатора
+    if (target.id.startsWith('drone-')) {
+      const mass = Math.round(target.targetMassTons || 2);
+      return `🎯 дрон Диктатора ${formatTonsRu(mass)} ${dist} ед`;
+    }
+
+    // 4. Стационарные объекты и станции звёздной системы:
+    // Станция Кориолис: Банк
+    if (
+      target.profile.isCoriolisBank ||
+      target.profile.kind === 'STATION' ||
+      target.profile.name?.includes('Кориолис') ||
+      target.id?.includes('coriolis')
+    ) {
+      return `🎯 Станция Кориолис: Банк (Депозиты под 5%, Кредиты, Обмен, Страховка) 25000 тонн ${dist} ед`;
+    }
+
+    // Станция Бублик: Бизнес-центр (в скобках присутствующие бизнесы)
+    if (
+      target.profile.isTorusShip ||
+      target.profile.isBusinessCenter ||
+      target.profile.name?.includes('БУБЛИК') ||
+      target.profile.name?.includes('БИЗНЕС-ЦЕНТР') ||
+      target.id?.includes('torus')
+    ) {
+      return `🎯 Бизнес-центр «Бублик» (ТД Антарес, Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера) ${dist} ед`;
+    }
+
+    // Производитель: бывшая Звезда Смерти (в скобках продукция)
+    if (
+      target.profile.isDeathStar ||
+      target.profile.isProducerStation ||
+      target.profile.name?.includes('ПРОИЗВОДИТЕЛЬ') ||
+      target.profile.name?.includes('ЗВЕЗДА СМЕРТИ') ||
+      target.id?.includes('deathstar')
+    ) {
+      return `🎯 Производитель (Титановая броня, Дюрасталь, Фотонные орудия, Реакторы) ${dist} ед`;
+    }
+
+    // Орбитальная Верфь: верфь
+    if (
+      target.profile.isShipyardStation ||
+      target.profile.name?.includes('ВЕРФЬ') ||
+      target.id?.includes('shipyard')
+    ) {
+      return `🎯 Орбитальная Верфь (Сборка кораблей XYZ, модули) ${dist} ед`;
+    }
+
+    // 5. Астероид
+    if (target.profile.kind === 'ASTEROID' || target.id.startsWith('ast-')) {
+      const mass = Math.round(target.targetMassTons || 100);
+      const elemName = target.profile.name?.match(/\(([^)]+)\)/)?.[1];
+      const astLabel = elemName ? `астероид (${elemName})` : 'астероид';
+      return `🎯 ${astLabel} ${formatTonsRu(mass)} ${dist} ед`;
+    }
+
+    // 6. Подпространственный маяк
+    if (target.profile.kind === 'SUBSPACE_BEACON' || target.id.startsWith('subspace-beacon-')) {
+      return `🎯 подпространственный маяк 5 тонн ${dist} ед`;
+    }
+
+    // 7. Спасательная капсула / Груз / Обломки
+    if (target.profile.kind === 'SOS_POD' || target.id.startsWith('sos-')) {
+      return `🎯 капсула SOS 1 тонна ${dist} ед`;
+    }
+    if (target.id.startsWith('cargo-') || target.profile.name?.includes('ГРУЗ')) {
+      return `🎯 контейнер с грузом 1 тонна ${dist} ед`;
+    }
+    if (target.id.startsWith('debris-') || target.profile.name?.includes('ОБЛОМКИ')) {
+      return `🎯 обломки 1 тонна ${dist} ед`;
+    }
+
+    // 8. Планета системы
+    if (target.profile.kind === 'PLANET') {
+      const pName = target.profile.planetCleanName || target.profile.name;
+      return `🎯 ${pName} ${dist} ед`;
+    }
+
+    // 9. Звезда системы
+    if (target.profile.kind === 'STAR') {
+      const starName = target.profile.name || 'Солнце';
+      return `🎯 ${starName} ${dist} ед`;
+    }
+
+    // Фолбэк для любого прочего объекта
+    const name = target.profile.name || target.id;
+    const massPart =
+      target.targetMassTons && target.targetMassTons < 100000
+        ? ` ${formatTonsRu(target.targetMassTons)}`
+        : '';
+    return `🎯 ${name}${massPart} ${dist} ед`;
+  };
 
   const handleUpdateCustomObjectOverride = useCallback(
     (objectId: string, patch: Partial<CustomObjectProfileOverride>) => {
@@ -5253,22 +5475,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           ? `${cap.clanIcon} ${cap.clanOrUnionName}`
           : dictPl.factionBadge,
         description: `${dictPl.dualNameLabel}. ${dictPl.loreDescription}`,
-        groupsTitle: `правительство (${stPl.cleanName} · #${
-          planetGroupObj?.groupTag || 'GO-EARTH'
-        })`,
-        groupsDescription:
-          planetGroupObj?.description ||
-          `Друзья планеты ${stPl.cleanName} · государственное управление.`,
-        groupTag: planetGroupObj?.groupTag,
-        businessesTitle: `торговля (${
-          planetBusinessObj?.title || `Торговая палата планеты ${stPl.cleanName}`
-        })`,
-        businessesDescription:
-          planetBusinessObj?.description ||
-          `Официальная торговля профильным ресурсом планеты ${stPl.cleanName}.`,
-        adverts: planetAdvertObjs,
-        karmaPlus: planetGroupObj?.karmaPlus ?? 30,
-        karmaMinus: planetGroupObj?.karmaMinus ?? 0,
+        groupsTitle: '',
+        groupsDescription: '',
+        groupTag: undefined,
+        businessesTitle: '',
+        businessesDescription: '',
+        adverts: [],
+        karmaPlus: 0,
+        karmaMinus: 0,
         distanceUnits: stPl.orbitRadius,
         coordsLabel: `Орбита ${dictPl.orbitRoman} (R=${stPl.orbitRadius} ед.)`,
         planetOrder: orbitOrder,
@@ -6075,6 +6289,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     asteroids: SystemAsteroid[];
     stationaryOrbitPlanetId: string | null;
     stationaryOrbitTurnRad: number;
+    orbitTransition: {
+      active: boolean;
+      startTime: number;
+      durationMs: number;
+      startStarPos: Vec3;
+      startSpeed: number;
+      targetPlanetId: string;
+      targetStandoff: number;
+      targetName: string;
+      targetCleanName: string;
+      targetKind: 'PLANET' | 'STATION' | 'PLANETOID' | 'MOON' | 'ASTEROID' | 'STARGATE';
+      targetColor: string;
+      parentPlanetCleanName?: string;
+      moonSummary?: string;
+      asteroidSummary?: string;
+    } | null;
     solarFluxPct: number;
     frameCounter: number;
     lastFrameTimeMs: number;
@@ -6140,6 +6370,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     asteroids: [],
     stationaryOrbitPlanetId: null,
     stationaryOrbitTurnRad: 0,
+    orbitTransition: null,
     solarFluxPct: 4,
     frameCounter: 0,
     lastFrameTimeMs: 0,
@@ -6188,134 +6419,17 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
   // 3) Четыре его объявления (ADVERT #1..#4)
   // Вращение всех планет замедлено в 3 раза для комфортного наведения курсора и отправки запроса на контакт!
   const buildPlanetGoBellObjects = (
-    planetId: string,
-    planetOrder: number,
-    cleanPlanetName: string,
-    groupTag: string,
-    specializationBadge: string,
-    specializationPurpose: string,
-    businessName: string,
-    businessDesc: string,
-    adverts: [string, string, string, string]
+    _planetId?: string,
+    _planetOrder?: number,
+    _cleanPlanetName?: string,
+    _groupTag?: string,
+    _specializationBadge?: string,
+    _specializationPurpose?: string,
+    _businessName?: string,
+    _businessDesc?: string,
+    _adverts?: [string, string, string, string]
   ): PlanetGoBellObject[] => {
-    const businessId = `${planetId}-business`;
-    return [
-      // 1. ГРУППА ПЛАНЕТЫ = ЕЁ ПРАВИТЕЛЬСТВО (координирует межпланетную логистику, очистку пояса астероидов и добычу редких элементов)
-      {
-        id: `${planetId}-group`,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge: `🏛️ ПРАВИТЕЛЬСТВО ПЛАНЕТЫ «${cleanPlanetName.toUpperCase()}» · ГРУППА #${groupTag}`,
-        specializationPurpose:
-          planetOrder === 3
-            ? 'Потребность Земли в Железе с Меркурия (платит 10 CR, на Меркурии 5 CR / в группе Меркурия 1 CR!), Алюминии и Титане + Очистка пояса астероидов и Редкие элементы'
-            : planetOrder === 1
-            ? 'Продажа Железа Fe (5 CR / в группе #GO-MERCURY скидка до 1 CR! На Земле за доставку платят 10 CR) + Контракты логистики и Пояса астероидов'
-            : planetOrder === 2
-            ? 'Продажа Алюминия Al (5 CR / в группе #GO-VENUS скидка до 1 CR! На Земле и Марсе платят 10 CR) + Контракты логистики и Пояса астероидов'
-            : 'Продажа Титана Ti (5 CR / в группе #GO-MARS скидка до 1 CR! На Земле и Меркурии платят 10 CR) + Очистка Пояса астероидов и Редкие элементы',
-        kind: 'GROUP',
-        title: `${cleanPlanetName} (Правительство)`,
-        description: 'Друзья планеты · Правительство: межпланетная логистика (10 CR), очистка пояса астероидов и редкие элементы',
-        authorName: `Правительство · Группа «${cleanPlanetName}» (#${groupTag})`,
-        groupTag,
-        karmaPlus: 18,
-        karmaMinus: 0,
-        latDeg: 10,
-        lonOffsetDeg: -27,
-      },
-      // 2. ОДИН БИЗНЕС ПЛАНЕТЫ (со специализацией планеты)
-      {
-        id: businessId,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge,
-        specializationPurpose,
-        kind: 'BUSINESS',
-        title: businessName,
-        description: businessDesc,
-        authorName: businessName,
-        karmaPlus: 25,
-        karmaMinus: 0,
-        latDeg: -15,
-        lonOffsetDeg: 18,
-      },
-      // 3. ЧЕТЫРЕ ОБЪЯВЛЕНИЯ ЭТОГО БИЗНЕСА (ADVERT #1..#4)
-      {
-        id: `${businessId}-adv-1`,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge,
-        specializationPurpose,
-        kind: 'ADVERT',
-        title: `Объявление #1 · ${businessName}`,
-        description: adverts[0],
-        authorName: businessName,
-        slotId: 1,
-        parentBusinessId: businessId,
-        karmaPlus: 25,
-        karmaMinus: 0,
-        latDeg: 7,
-        lonOffsetDeg: 1,
-      },
-      {
-        id: `${businessId}-adv-2`,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge,
-        specializationPurpose,
-        kind: 'ADVERT',
-        title: `Объявление #2 · ${businessName}`,
-        description: adverts[1],
-        authorName: businessName,
-        slotId: 2,
-        parentBusinessId: businessId,
-        karmaPlus: 25,
-        karmaMinus: 0,
-        latDeg: 22,
-        lonOffsetDeg: 12,
-      },
-      {
-        id: `${businessId}-adv-3`,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge,
-        specializationPurpose,
-        kind: 'ADVERT',
-        title: `Объявление #3 · ${businessName}`,
-        description: adverts[2],
-        authorName: businessName,
-        slotId: 3,
-        parentBusinessId: businessId,
-        karmaPlus: 25,
-        karmaMinus: 0,
-        latDeg: 22,
-        lonOffsetDeg: 25,
-      },
-      {
-        id: `${businessId}-adv-4`,
-        planetId,
-        planetCleanName: cleanPlanetName,
-        planetOrder,
-        specializationBadge,
-        specializationPurpose,
-        kind: 'ADVERT',
-        title: `Объявление #4 · ${businessName}`,
-        description: adverts[3],
-        authorName: businessName,
-        slotId: 4,
-        parentBusinessId: businessId,
-        karmaPlus: 25,
-        karmaMinus: 0,
-        latDeg: 7,
-        lonOffsetDeg: 36,
-      },
-    ];
+    return [];
   };
 
   const spawnSystemEntities = useCallback((sysId: number, customSystemKey?: string) => {
@@ -6591,7 +6705,157 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         ),
       },
       // =========================================================================
-      // 8..19. ПОЯС КОЙПЕРА (R = 90 000 .. 100 000 ЕД. НА САМОМ КРАЮ СИСТЕМЫ):
+      // 8. ЮПИТЕР (R = 45 000 ЕД. ОТ ЗВЕЗДЫ) И 4 СТАЦИОНАРНЫХ ГАЛИЛЕЕВЫХ СПУТНИКА
+      // (ИО, ЕВРОПА, ГАНИМЕД, КАЛЛИСТО НА ОРБИТАХ 2 400 .. 9 500 ЕД. ВОКРУГ ЮПИТЕРА):
+      // =========================================================================
+      {
+        id: `planet-${sysId}-jupiter`,
+        name: `VIII. ЮПИТЕР (ЦАРЬ ПЛАНЕТ · ГАЗОВЫЙ ГИГАНТ · 4 СТАЦИОНАРНЫХ ГАЛИЛЕЕВЫХ СПУТНИКА)`,
+        cleanName: 'Юпитер',
+        shortMarker: 'VIII. ЮПИТЕР [45k · 4 СТАЦИОНАР]',
+        specializationShort: '⚡ VIII ОРБИТА ГИГАНТА · ЮПИТЕР (R=45 000) · 4 ГАЛИЛЕЕВЫХ СПУТНИКА',
+        orbitOrder: 8,
+        orbitRadius: JUPITER_SYSTEM_DEF.orbitRadiusFromSun, // 45 000 ед. от Звезды (сдвинут ближе)
+        orbitAngle: JUPITER_SYSTEM_DEF.initialOrbitAngle,
+        orbitSpeed: JUPITER_SYSTEM_DEF.orbitSpeedRadPerSec,
+        radius3D: JUPITER_SYSTEM_DEF.radius3D, // 220 ед. (крупнейшая планета)
+        spinAngle: 0,
+        spinSpeed: JUPITER_SYSTEM_DEF.spinSpeed,
+        color: JUPITER_SYSTEM_DEF.primaryColor,
+        labelOffsetY: -28,
+        isJupiter: true,
+        jupiterMeta: JUPITER_SYSTEM_DEF,
+        galileanMoons: JUPITER_SYSTEM_DEF.moons.map((m) => ({
+          def: m,
+          orbitAngle: m.initialOrbitAngle,
+        })),
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-jupiter`,
+          8,
+          'Юпитер',
+          JUPITER_SYSTEM_DEF.groupTag,
+          JUPITER_SYSTEM_DEF.specializationBadge,
+          JUPITER_SYSTEM_DEF.specializationPurpose,
+          JUPITER_SYSTEM_DEF.consortiumTitle,
+          JUPITER_SYSTEM_DEF.consortiumDesc,
+          JUPITER_SYSTEM_DEF.adverts
+        ),
+      },
+      // =========================================================================
+      // 9. САТУРН (R = 60 000 ЕД. ОТ ЗВЕЗДЫ) С КОЛЬЦАМИ И 7 СТАЦИОНАРНЫХ СПУТНИКОВ
+      // (МИМАС, ЭНЦЕЛАД, ТЕФИЯ, ДИОНА, РЕЯ, ТИТАН, ЯПЕТ НА ОРБИТАХ 2 000 .. 8 000 ЕД.):
+      // =========================================================================
+      {
+        id: `planet-${sysId}-saturn`,
+        name: `IX. САТУРН (ВЛАСТЕЛИН КОЛЕЦ · ГАЗОВЫЙ ГИГАНТ · 7 СТАЦИОНАРНЫХ СПУТНИКОВ И ТИТАН)`,
+        cleanName: 'Сатурн',
+        shortMarker: 'IX. САТУРН [60k · 7 СТАЦИОНАР]',
+        specializationShort: '🪐 IX ОРБИТА ГИГАНТА · САТУРН (R=60 000) · 3D-КОЛЬЦА И 7 СПУТНИКОВ',
+        orbitOrder: 9,
+        orbitRadius: SATURN_SYSTEM_DEF.orbitRadiusFromSun, // 60 000 ед. от Звезды
+        orbitAngle: SATURN_SYSTEM_DEF.initialOrbitAngle,
+        orbitSpeed: SATURN_SYSTEM_DEF.orbitSpeedRadPerSec,
+        radius3D: SATURN_SYSTEM_DEF.radius3D, // 195 ед. (вторая по величине планета)
+        spinAngle: 0,
+        spinSpeed: SATURN_SYSTEM_DEF.spinSpeed,
+        color: SATURN_SYSTEM_DEF.primaryColor,
+        labelOffsetY: -28,
+        isSaturn: true,
+        saturnMeta: SATURN_SYSTEM_DEF,
+        saturnMoons: SATURN_SYSTEM_DEF.moons.map((m) => ({
+          def: m,
+          orbitAngle: m.initialOrbitAngle,
+        })),
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-saturn`,
+          9,
+          'Сатурн',
+          SATURN_SYSTEM_DEF.groupTag,
+          SATURN_SYSTEM_DEF.specializationBadge,
+          SATURN_SYSTEM_DEF.specializationPurpose,
+          SATURN_SYSTEM_DEF.consortiumTitle,
+          SATURN_SYSTEM_DEF.consortiumDesc,
+          SATURN_SYSTEM_DEF.adverts
+        ),
+      },
+      // =========================================================================
+      // 10. УРАН (R = 70 000 ЕД. ОТ ЗВЕЗДЫ · НАКЛОН ОСИ 90°)
+      // И 5 ОСНОВНЫХ СТАЦИОНАРНЫХ СПУТНИКОВ (МИРАНДА, АРИЭЛЬ, УМБРИЭЛЬ, ТИТАНИЯ, ОБЕРОН)
+      // НА ОРБИТАХ 2 000 .. 10 000 ЕД. ВОКРУГ УРАНА (СОСТОЯТ ИЗ ВОДЯНОГО ЛЬДА И КАМНЯ):
+      // =========================================================================
+      {
+        id: `planet-${sysId}-uranus`,
+        name: `X. УРАН (ЛЕДЯНОЙ ГИГАНТ · НАКЛОН ОСИ 90° · 5 СТАЦИОНАРНЫХ СПУТНИКОВ)`,
+        cleanName: 'Уран',
+        shortMarker: 'X. УРАН [70k · 90° НАКЛОН]',
+        specializationShort: '🌀 X ОРБИТА ГИГАНТА · УРАН (R=70 000 · НАКЛОН 90°) · 5 СПУТНИКОВ',
+        orbitOrder: 10,
+        orbitRadius: URANUS_SYSTEM_DEF.orbitRadiusFromSun, // 70 000 ед. от Звезды
+        orbitAngle: URANUS_SYSTEM_DEF.initialOrbitAngle,
+        orbitSpeed: URANUS_SYSTEM_DEF.orbitSpeedRadPerSec,
+        radius3D: URANUS_SYSTEM_DEF.radius3D, // 175 ед.
+        spinAngle: 0,
+        spinSpeed: URANUS_SYSTEM_DEF.spinSpeed,
+        color: URANUS_SYSTEM_DEF.primaryColor,
+        labelOffsetY: -28,
+        isUranus: true,
+        uranusMeta: URANUS_SYSTEM_DEF,
+        uranusMoons: URANUS_SYSTEM_DEF.moons.map((m) => ({
+          def: m,
+          orbitAngle: m.initialOrbitAngle,
+        })),
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-uranus`,
+          10,
+          'Уран',
+          URANUS_SYSTEM_DEF.groupTag,
+          URANUS_SYSTEM_DEF.specializationBadge,
+          URANUS_SYSTEM_DEF.specializationPurpose,
+          URANUS_SYSTEM_DEF.consortiumTitle,
+          URANUS_SYSTEM_DEF.consortiumDesc,
+          URANUS_SYSTEM_DEF.adverts
+        ),
+      },
+      // =========================================================================
+      // 11. НЕПТУН (R = 80 000 ЕД. ОТ ЗВЕЗДЫ · НАКЛОН ОСИ 30°)
+      // И 7 СТАЦИОНАРНЫХ СПУТНИКОВ (НАЯДА, ТАЛАССА, ДЕСПИНА, ГАЛАТЕЯ, ЛАРИССА, ПРОТЕЙ, ТРИТОН)
+      // НА ОРБИТАХ 2 000 .. 10 000 ЕД. ВОКРУГ НЕПТУНА:
+      // =========================================================================
+      {
+        id: `planet-${sysId}-neptune`,
+        name: `XI. НЕПТУН (САПФИРОВЫЙ ГИГАНТ · НАКЛОН ОСИ 30° · 7 СТАЦИОНАРНЫХ СПУТНИКОВ И ТРИТОН)`,
+        cleanName: 'Нептун',
+        shortMarker: 'XI. НЕПТУН [80k · 30° НАКЛОН]',
+        specializationShort: '🔱 XI ОРБИТА ГИГАНТА · НЕПТУН (R=80 000 · НАКЛОН 30°) · 7 СПУТНИКОВ',
+        orbitOrder: 11,
+        orbitRadius: NEPTUNE_SYSTEM_DEF.orbitRadiusFromSun, // 80 000 ед. от Звезды
+        orbitAngle: NEPTUNE_SYSTEM_DEF.initialOrbitAngle,
+        orbitSpeed: NEPTUNE_SYSTEM_DEF.orbitSpeedRadPerSec,
+        radius3D: NEPTUNE_SYSTEM_DEF.radius3D, // 170 ед.
+        spinAngle: 0,
+        spinSpeed: NEPTUNE_SYSTEM_DEF.spinSpeed,
+        color: NEPTUNE_SYSTEM_DEF.primaryColor,
+        labelOffsetY: -28,
+        isNeptune: true,
+        neptuneMeta: NEPTUNE_SYSTEM_DEF,
+        neptuneMoons: NEPTUNE_SYSTEM_DEF.moons.map((m) => ({
+          def: m,
+          orbitAngle: m.initialOrbitAngle,
+        })),
+        gobellObjects: buildPlanetGoBellObjects(
+          `planet-${sysId}-neptune`,
+          11,
+          'Нептун',
+          NEPTUNE_SYSTEM_DEF.groupTag,
+          NEPTUNE_SYSTEM_DEF.specializationBadge,
+          NEPTUNE_SYSTEM_DEF.specializationPurpose,
+          NEPTUNE_SYSTEM_DEF.consortiumTitle,
+          NEPTUNE_SYSTEM_DEF.consortiumDesc,
+          NEPTUNE_SYSTEM_DEF.adverts
+        ),
+      },
+      // =========================================================================
+      // 12..24. ПОЯС КОЙПЕРА (R = 90 000 .. 100 000 ЕД. НА САМОМ КРАЮ СИСТЕМЫ):
       // Карликовые планеты МАС (Плутон, Макемаке, Хаумеа), главные кандидаты
       // (Квавар, Орк «анти-Плутон», Гунгун, Салация) и малые планеты
       // (Варуна, Иксион, Варда, Аррокот «снеговик», Седна).
@@ -6601,11 +6865,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         const pId = `kuiper-${sysId}-${kb.orderIndex}`;
         return {
           id: pId,
-          name: `${kb.orderIndex + 7}. ${kb.officialName.toUpperCase()} [ПОЯС КОЙПЕРА · ${kb.classificationLabelRu.toUpperCase()}]`,
+          name: `${kb.orderIndex + 10}. ${kb.officialName.toUpperCase()} [ПОЯС КОЙПЕРА · ${kb.classificationLabelRu.toUpperCase()}]`,
           cleanName: `${kb.officialName} («${kb.folkName}»)`,
           shortMarker: `${kb.officialName.toUpperCase()} [${kb.diameterKm} км]`,
           specializationShort: `🪐 ПОЯС КОЙПЕРА · ${kb.classificationLabelRu} (${kb.diameterLabelRu})`,
-          orbitOrder: 7 + kb.orderIndex,
+          orbitOrder: 10 + kb.orderIndex,
           orbitRadius: kb.orbitRadius,
           orbitAngle: kb.initialOrbitAngle,
           orbitSpeed: PLANET_ORBIT_LINEAR_SPEED / (kb.orbitRadius * 60),
@@ -6678,7 +6942,15 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     // а если это СТАРАЯ ГАЛАКТИКА БЕЗ ЗАСЕЛЁННЫХ ПЛАНЕТ (sys.isOldGalaxy) — заселённых планет нет, кроме гигантских техно-объектов!
     if (sys.isOldGalaxy) {
       st.planets = st.planets.filter(
-        (p) => p.isDeathStar || p.isTorusShip || p.isStargate || p.isKuiperBelt
+        (p) =>
+          p.isDeathStar ||
+          p.isTorusShip ||
+          p.isStargate ||
+          p.isKuiperBelt ||
+          p.isJupiter ||
+          p.isSaturn ||
+          p.isUranus ||
+          p.isNeptune
       );
       st.starPos = {
         x: 0,
@@ -7435,6 +7707,556 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             ? `🚀 ПОЯС АСТЕРОИДОВ (${activeMinersCount}/4 В СТРОЮ): ${targetEnt.label} · СТРЕЛЯЕТ ПО АСТЕРОИДАМ И СОБИРАЕТ МЕТАЛЛЫ · БЕЗ КОНТАКТОВ · МОЖНО УНИЧТОЖИТЬ И ЗАБРАТЬ ГРУЗ!`
             : `📦 СБРОШЕННЫЙ ГРУЗ МЕТАЛЛОВ СБИТОГО «БУРАНА» В ПОЯСЕ АСТЕРОИДОВ: ${targetEnt.label} · НАЖМИТЕ СКМ / C, ЧТОБЫ ЗАБРАТЬ!`
         );
+      } else if (mode === 'KUIPER_BELT') {
+        const kuiperPlanets = st.planets.filter((p) => p.isKuiperBelt);
+        if (kuiperPlanets.length > 0) {
+          const nextIdx = kuiperCycleIndexRef.current % kuiperPlanets.length;
+          kuiperCycleIndexRef.current = nextIdx + 1;
+          const targetP = kuiperPlanets[nextIdx];
+          targetP.spinAngle = 0;
+          const cosA = Math.cos(targetP.orbitAngle);
+          const sinA = Math.sin(targetP.orbitAngle);
+          const offsetX = targetP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const offsetY = targetP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const offsetZ = targetP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+          const closeDist = Math.round(targetP.radius3D * 2.15);
+          st.starPos = {
+            x: -offsetX,
+            y: -offsetY,
+            z: closeDist - offsetZ,
+          };
+          st.targetSpeed = 0;
+          st.speed = 0;
+          setThrottleUi(0);
+          setHoveredPlanetObjUi(null);
+          hoveredPlanetObjRef.current = null;
+          setFlightMessage(
+            `🪐 ПОЯС КОЙПЕРА [${nextIdx + 1}/${kuiperPlanets.length}] · ${targetP.name} (R=${targetP.orbitRadius} ЕД.): НАЖМИТЕ [K] ДЛЯ СЛЕДУЮЩЕЙ ОРБИТЫ ИЛИ [I] ДЛЯ КАРТОЧКИ!`
+          );
+        }
+      } else if (typeof mode === 'string' && mode.startsWith('KUIPER_')) {
+        const targetOrder = parseInt(mode.replace('KUIPER_', ''), 10);
+        const targetP =
+          st.planets.find(
+            (p) => p.isKuiperBelt && p.kuiperMeta && p.kuiperMeta.orderIndex === targetOrder
+          ) || st.planets.find((p) => p.isKuiperBelt);
+        if (targetP) {
+          targetP.spinAngle = 0;
+          const cosA = Math.cos(targetP.orbitAngle);
+          const sinA = Math.sin(targetP.orbitAngle);
+          const offsetX = targetP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const offsetY = targetP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const offsetZ = targetP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+          const closeDist = Math.round(targetP.radius3D * 2.15);
+          st.starPos = {
+            x: -offsetX,
+            y: -offsetY,
+            z: closeDist - offsetZ,
+          };
+          st.targetSpeed = 0;
+          st.speed = 0;
+          setThrottleUi(0);
+          setHoveredPlanetObjUi(null);
+          hoveredPlanetObjRef.current = null;
+          setFlightMessage(
+            `🪐 ПОЯС КОЙПЕРА · ${targetP.name} (R=${targetP.orbitRadius} ЕД.): НАЖМИТЕ [I] ДЛЯ КАРТОЧКИ ИЛИ [K] ДЛЯ ЦИКЛА ПО ПОЯСУ!`
+          );
+        }
+      } else if (mode === 'JUPITER') {
+        const jupP = st.planets.find((p) => p.isJupiter);
+        if (jupP) {
+          const jupCycleTargets = [
+            {type: 'JUPITER', name: 'Юпитер', badge: 'Царь планет (Газовый гигант R=45 000)'},
+            {type: 'IO', name: 'Ио', badge: 'Вулканический ад (>400 вулканов, R=2 400 · СТАЦИОНАР)'},
+            {type: 'EUROPA', name: 'Европа', badge: 'Подлёдный океан жидкой воды (R=4 200 · СТАЦИОНАР)'},
+            {type: 'GANYMEDE', name: 'Ганимед', badge: 'Крупнейший спутник с магнитным полем (R=6 800 · СТАЦИОНАР)'},
+            {type: 'CALLISTO', name: 'Каллисто', badge: 'Древнейшая кратерная поверхность (R=9 500 · СТАЦИОНАР)'},
+          ];
+          const cIdx = jupiterCycleIndexRef.current % jupCycleTargets.length;
+          jupiterCycleIndexRef.current = cIdx + 1;
+          const targetItem = jupCycleTargets[cIdx];
+
+          const cosA = Math.cos(jupP.orbitAngle);
+          const sinA = Math.sin(jupP.orbitAngle);
+          const jupX = jupP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const jupY = jupP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const jupZ = jupP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (targetItem.type === 'JUPITER') {
+            jupP.spinAngle = 0;
+            const closeDist = Math.round(jupP.radius3D * 2.2);
+            st.starPos = {
+              x: -jupX,
+              y: -jupY,
+              z: closeDist - jupZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `⚡ ЮПИТЕР [1/5] (R=45 000 ЕД.): ЦАРЬ ПЛАНЕТ И 4 СТАЦИОНАРНЫХ ГАЛИЛЕЕВЫХ СПУТНИКА · [J] ОБХОД СПУТНИКОВ, [I] КАРТОЧКА, [X] ОРБИТА!`
+            );
+          } else {
+            const moonDef = jupP.galileanMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(targetItem.type.toLowerCase())
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromJupiter;
+              const mOffsetX = jupX + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+              const mOffsetY = jupY + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+              const mOffsetZ = jupZ + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🌙 ${moonDef.def.officialName.toUpperCase()} [${cIdx + 1}/5] (R=${rM} ЕД. · СТАЦИОНАР ЮПИТЕРА): ${moonDef.def.specialFeatureBadge} · [J] ДАЛЕЕ, [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (mode === 'SATURN') {
+        const satP = st.planets.find((p) => p.isSaturn);
+        if (satP) {
+          const satCycleTargets = [
+            {type: 'SATURN', name: 'Сатурн', badge: 'Властелин колец (Газовый гигант R=60 000)'},
+            {type: 'MIMAS', name: 'Мимас', badge: 'Кратер Гершель · «Звезда Смерти» (R=2 000 · СТАЦИОНАР)'},
+            {type: 'ENCELADUS', name: 'Энцелад', badge: 'Криовулканы и гейзеры H₂O в космос (R=2 800 · СТАЦИОНАР)'},
+            {type: 'TETHYS', name: 'Тефия', badge: 'Кратер Одиссей и каньон Итака (R=3 600 · СТАЦИОНАР)'},
+            {type: 'DIONE', name: 'Диона', badge: 'Ледяные обрывы и силикатные породы (R=4 500 · СТАЦИОНАР)'},
+            {type: 'RHEA', name: 'Рея', badge: 'Второй по величине спутник с атмосферой (R=5 500 · СТАЦИОНАР)'},
+            {type: 'TITAN', name: 'Титан', badge: 'Крупнейший спутник, моря метана и верфь (R=6 800 · СТАЦИОНАР)'},
+            {type: 'IAPETUS', name: 'Япет', badge: 'Двухцветный мир «Инь-Ян» и гребень (R=8 000 · СТАЦИОНАР)'},
+          ];
+          const cIdx = saturnCycleIndexRef.current % satCycleTargets.length;
+          saturnCycleIndexRef.current = cIdx + 1;
+          const targetItem = satCycleTargets[cIdx];
+
+          const cosA = Math.cos(satP.orbitAngle);
+          const sinA = Math.sin(satP.orbitAngle);
+          const satX = satP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const satY = satP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const satZ = satP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (targetItem.type === 'SATURN') {
+            satP.spinAngle = 0;
+            const closeDist = Math.round(satP.radius3D * 2.2);
+            st.starPos = {
+              x: -satX,
+              y: -satY,
+              z: closeDist - satZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🪐 САТУРН [1/8] (R=60 000 ЕД.): ВЛАСТЕЛИН КОЛЕЦ И 7 СТАЦИОНАРНЫХ СПУТНИКОВ · [I] КАРТОЧКА, [X] ОРБИТА!`
+            );
+          } else {
+            const moonDef = satP.saturnMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(targetItem.type.toLowerCase())
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromSaturn;
+              const mOffsetX = satX + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+              const mOffsetY = satY + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+              const mOffsetZ = satZ + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🪐 ${moonDef.def.officialName.toUpperCase()} [${cIdx + 1}/8] (R=${rM} ЕД. · СТАЦИОНАР САТУРНА): ${moonDef.def.specialFeatureBadge} · [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (typeof mode === 'string' && mode.startsWith('SATURN_')) {
+        const moonKey = mode.replace('SATURN_', '').toLowerCase();
+        const satP = st.planets.find((p) => p.isSaturn);
+        if (satP) {
+          const cosA = Math.cos(satP.orbitAngle);
+          const sinA = Math.sin(satP.orbitAngle);
+          const satX = satP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const satY = satP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const satZ = satP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (moonKey === 'DIRECT' || moonKey === 'MAIN') {
+            const closeDist = Math.round(satP.radius3D * 2.2);
+            st.starPos = {
+              x: -satX,
+              y: -satY,
+              z: closeDist - satZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🪐 САТУРН (R=60 000 ЕД.): ВЛАСТЕЛИН КОЛЕЦ И 7 СТАЦИОНАРНЫХ СПУТНИКОВ · НАЖМИТЕ [I] ДЛЯ КАРТОЧКИ!`
+            );
+          } else {
+            const moonDef = satP.saturnMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(moonKey)
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromSaturn;
+              const mOffsetX = satX + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+              const mOffsetY = satY + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+              const mOffsetZ = satZ + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🪐 СПУТНИК САТУРНА «${moonDef.def.officialName.toUpperCase()}» (R=${rM} ЕД. · СТАЦИОНАР): ${moonDef.def.specialFeatureBadge} · [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (typeof mode === 'string' && mode.startsWith('JUPITER_')) {
+        const moonKey = mode.replace('JUPITER_', '').toLowerCase();
+        const jupP = st.planets.find((p) => p.isJupiter);
+        if (jupP) {
+          const cosA = Math.cos(jupP.orbitAngle);
+          const sinA = Math.sin(jupP.orbitAngle);
+          const jupX = jupP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const jupY = jupP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const jupZ = jupP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (moonKey === 'DIRECT' || moonKey === 'MAIN') {
+            const closeDist = Math.round(jupP.radius3D * 2.2);
+            st.starPos = {
+              x: -jupX,
+              y: -jupY,
+              z: closeDist - jupZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `⚡ ЮПИТЕР (R=45 000 ЕД.): ЦАРЬ ПЛАНЕТ И 4 СТАЦИОНАРНЫХ ГАЛИЛЕЕВЫХ СПУТНИКА · НАЖМИТЕ [I] ДЛЯ КАРТОЧКИ ИЛИ [J] ДЛЯ ЦИКЛА ПО СПУТНИКАМ!`
+            );
+          } else {
+            const moonDef = jupP.galileanMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(moonKey)
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromJupiter;
+              const mOffsetX = jupX + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+              const mOffsetY = jupY + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+              const mOffsetZ = jupZ + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🌙 СПУТНИК ЮПИТЕРА «${moonDef.def.officialName.toUpperCase()}» (R=${rM} ЕД. · СТАЦИОНАР): ${moonDef.def.specialFeatureBadge} · [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (mode === 'URANUS') {
+        const uraP = st.planets.find((p) => p.isUranus);
+        if (uraP) {
+          const uraCycleTargets = [
+            {type: 'URANUS', name: 'Уран', badge: 'Ледяной гигант (R=70 000 · наклон оси 90°)'},
+            {type: 'MIRANDA', name: 'Миранда', badge: 'Уступ Верона 20 км · хаотичный рельеф (R=2 400 · СТАЦИОНАР)'},
+            {type: 'ARIEL', name: 'Ариэль', badge: 'Самый яркий спутник · рифтовые долины (R=4 200 · СТАЦИОНАР)'},
+            {type: 'UMBRIEL', name: 'Умбриэль', badge: 'Тёмный ледяной мир · светлое кольцо Ванда (R=6 000 · СТАЦИОНАР)'},
+            {type: 'TITANIA', name: 'Титания', badge: 'Крупнейший спутник · каньон Мессина 1500 км (R=7 800 · СТАЦИОНАР)'},
+            {type: 'OBERON', name: 'Оберон', badge: 'Второй по величине · пик 11 км (R=9 800 · СТАЦИОНАР)'},
+          ];
+          const cIdx = uranusCycleIndexRef.current % uraCycleTargets.length;
+          uranusCycleIndexRef.current = cIdx + 1;
+          const targetItem = uraCycleTargets[cIdx];
+
+          const cosA = Math.cos(uraP.orbitAngle);
+          const sinA = Math.sin(uraP.orbitAngle);
+          const uraX = uraP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const uraY = uraP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const uraZ = uraP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (targetItem.type === 'URANUS') {
+            uraP.spinAngle = 0;
+            const closeDist = Math.round(uraP.radius3D * 2.2);
+            st.starPos = {
+              x: -uraX,
+              y: -uraY,
+              z: closeDist - uraZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🌀 УРАН [1/6] (R=70 000 ЕД. · НАКЛОН 90°): ЛЕДЯНОЙ ГИГАНТ И 5 СТАЦИОНАРНЫХ СПУТНИКОВ · [U] ДАЛЕЕ, [I] КАРТОЧКА, [X] ОРБИТА!`
+            );
+          } else {
+            const moonDef = uraP.uranusMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(targetItem.type.toLowerCase())
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromUranus;
+              const mOffsetX = uraX + rM * (cosM * st.eclipticV.x + sinM * st.eclipticN.x);
+              const mOffsetY = uraY + rM * (cosM * st.eclipticV.y + sinM * st.eclipticN.y);
+              const mOffsetZ = uraZ + rM * (cosM * st.eclipticV.z + sinM * st.eclipticN.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🌀 ${moonDef.def.officialName.toUpperCase()} [${cIdx + 1}/6] (R=${rM} ЕД. · СТАЦИОНАР УРАНА): ${moonDef.def.specialFeatureBadge} · [U] ДАЛЕЕ, [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (typeof mode === 'string' && mode.startsWith('URANUS_')) {
+        const moonKey = mode.replace('URANUS_', '').toLowerCase();
+        const uraP = st.planets.find((p) => p.isUranus);
+        if (uraP) {
+          const cosA = Math.cos(uraP.orbitAngle);
+          const sinA = Math.sin(uraP.orbitAngle);
+          const uraX = uraP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const uraY = uraP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const uraZ = uraP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          if (moonKey === 'DIRECT' || moonKey === 'MAIN') {
+            const closeDist = Math.round(uraP.radius3D * 2.2);
+            st.starPos = {
+              x: -uraX,
+              y: -uraY,
+              z: closeDist - uraZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🌀 УРАН (R=70 000 ЕД. · НАКЛОН ОСИ 90°): 5 СТАЦИОНАРНЫХ СПУТНИКОВ · НАЖМИТЕ [I] ДЛЯ КАРТОЧКИ!`
+            );
+          } else {
+            const moonDef = uraP.uranusMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(moonKey)
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromUranus;
+              const mOffsetX = uraX + rM * (cosM * st.eclipticV.x + sinM * st.eclipticN.x);
+              const mOffsetY = uraY + rM * (cosM * st.eclipticV.y + sinM * st.eclipticN.y);
+              const mOffsetZ = uraZ + rM * (cosM * st.eclipticV.z + sinM * st.eclipticN.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🌀 СПУТНИК УРАНА «${moonDef.def.officialName.toUpperCase()}» (R=${rM} ЕД. · СТАЦИОНАР): ${moonDef.def.specialFeatureBadge} · [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (mode === 'NEPTUNE') {
+        // Циклическое переключение: Нептун -> Наяда -> Таласса -> Деспина -> Галатея -> Ларисса -> Протей -> Тритон
+        const neptuneCycle = [
+          {type: 'MAIN', name: 'Нептун'},
+          {type: 'NAIAD', name: 'Наяда'},
+          {type: 'THALASSA', name: 'Таласса'},
+          {type: 'DESPINA', name: 'Деспина'},
+          {type: 'GALATEA', name: 'Галатея'},
+          {type: 'LARISSA', name: 'Ларисса'},
+          {type: 'PROTEUS', name: 'Протей'},
+          {type: 'TRITON', name: 'Тритон'},
+        ];
+        const cIdx = neptuneCycleIndexRef.current % neptuneCycle.length;
+        const targetItem = neptuneCycle[cIdx];
+        neptuneCycleIndexRef.current = (cIdx + 1) % neptuneCycle.length;
+
+        const nepP = st.planets.find((p) => p.isNeptune);
+        if (nepP) {
+          const cosA = Math.cos(nepP.orbitAngle);
+          const sinA = Math.sin(nepP.orbitAngle);
+          const nepX = nepP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const nepY = nepP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const nepZ = nepP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          const tiltRad = (30 * Math.PI) / 180;
+          const cosT = Math.cos(tiltRad);
+          const sinT = Math.sin(tiltRad);
+          const nepU = st.eclipticU;
+          const nepV = {
+            x: cosT * st.eclipticV.x - sinT * st.eclipticN.x,
+            y: cosT * st.eclipticV.y - sinT * st.eclipticN.y,
+            z: cosT * st.eclipticV.z - sinT * st.eclipticN.z,
+          };
+
+          if (targetItem.type === 'MAIN') {
+            const closeDist = Math.round(nepP.radius3D * 2.2);
+            st.starPos = {
+              x: -nepX,
+              y: -nepY,
+              z: closeDist - nepZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🔱 НЕПТУН [1/8] (R=80 000 ЕД. · НАКЛОН 30°): САПФИРОВЫЙ ГИГАНТ И 7 СПУТНИКОВ · [N] ДАЛЕЕ, [I] КАРТОЧКА, [X] ОРБИТА!`
+            );
+          } else {
+            const moonDef = nepP.neptuneMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(targetItem.type.toLowerCase())
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromNeptune;
+              const mOffsetX = nepX + rM * (cosM * nepU.x + sinM * nepV.x);
+              const mOffsetY = nepY + rM * (cosM * nepU.y + sinM * nepV.y);
+              const mOffsetZ = nepZ + rM * (cosM * nepU.z + sinM * nepV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🔱 ${moonDef.def.officialName.toUpperCase()} [${cIdx + 1}/8] (R=${rM} ЕД. · СТАЦИОНАР НЕПТУНА): ${moonDef.def.specialFeatureBadge} · [N] ДАЛЕЕ, [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
+      } else if (typeof mode === 'string' && mode.startsWith('NEPTUNE_')) {
+        const moonKey = mode.replace('NEPTUNE_', '').toLowerCase();
+        const nepP = st.planets.find((p) => p.isNeptune);
+        if (nepP) {
+          const cosA = Math.cos(nepP.orbitAngle);
+          const sinA = Math.sin(nepP.orbitAngle);
+          const nepX = nepP.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
+          const nepY = nepP.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
+          const nepZ = nepP.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
+
+          const tiltRad = (30 * Math.PI) / 180;
+          const cosT = Math.cos(tiltRad);
+          const sinT = Math.sin(tiltRad);
+          const nepU = st.eclipticU;
+          const nepV = {
+            x: cosT * st.eclipticV.x - sinT * st.eclipticN.x,
+            y: cosT * st.eclipticV.y - sinT * st.eclipticN.y,
+            z: cosT * st.eclipticV.z - sinT * st.eclipticN.z,
+          };
+
+          if (moonKey === 'DIRECT' || moonKey === 'MAIN') {
+            const closeDist = Math.round(nepP.radius3D * 2.2);
+            st.starPos = {
+              x: -nepX,
+              y: -nepY,
+              z: closeDist - nepZ,
+            };
+            st.targetSpeed = 0;
+            st.speed = 0;
+            setThrottleUi(0);
+            setHoveredPlanetObjUi(null);
+            hoveredPlanetObjRef.current = null;
+            setFlightMessage(
+              `🔱 НЕПТУН (R=80 000 ЕД. · НАКЛОН ОСИ 30°): 7 СТАЦИОНАРНЫХ СПУТНИКОВ И ТРИТОН · НАЖМИТЕ [I] ДЛЯ КАРТОЧКИ!`
+            );
+          } else {
+            const moonDef = nepP.neptuneMoons?.find((m) =>
+              m.def.id.toLowerCase().includes(moonKey)
+            );
+            if (moonDef) {
+              const cosM = Math.cos(moonDef.orbitAngle);
+              const sinM = Math.sin(moonDef.orbitAngle);
+              const rM = moonDef.def.orbitRadiusFromNeptune;
+              const mOffsetX = nepX + rM * (cosM * nepU.x + sinM * nepV.x);
+              const mOffsetY = nepY + rM * (cosM * nepU.y + sinM * nepV.y);
+              const mOffsetZ = nepZ + rM * (cosM * nepU.z + sinM * nepV.z);
+              const closeDist = Math.round(moonDef.def.radius3D * 2.3);
+              st.starPos = {
+                x: -mOffsetX,
+                y: -mOffsetY,
+                z: closeDist - mOffsetZ,
+              };
+              st.targetSpeed = 0;
+              st.speed = 0;
+              setThrottleUi(0);
+              setHoveredPlanetObjUi(null);
+              hoveredPlanetObjRef.current = null;
+              setFlightMessage(
+                `🔱 СПУТНИК НЕПТУНА «${moonDef.def.officialName.toUpperCase()}» (R=${rM} ЕД. · СТАЦИОНАР): ${moonDef.def.specialFeatureBadge} · [I] КАРТОЧКА, [X] ОРБИТА!`
+              );
+            }
+          }
+        }
       } else {
         // Подлёт вплотную (на пол-экрана) к выбранной планете (I. Меркурий, II. Венера, III. Земля, IV. Марс)
         const pOrder =
@@ -9677,41 +10499,30 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     );
   }, [currentSystemId, onEarnKarmaAndBonus, playZxBeep, screenMode, totalShipMassTons]);
 
-  // ЗАКРЕПЛЕНИЕ / ОТКРЕПЛЕНИЕ НА СТАЦИОНАРНОЙ ОРБИТЕ ПЛАНЕТЫ (Клавиша X / Кнопка):
-  // При закреплении осевое вращение планеты относительно корабля прекращается,
-  // корабль двигается вокруг оси планеты вместе с планетой, а вся звёздная система вращается соответствующе!
-  // Повторное нажатие на X открепляет корабль от стационарной орбиты.
-  const handleToggleStationaryOrbit = useCallback(() => {
+  interface OrbitalCandidate {
+    id: string;
+    name: string;
+    cleanName: string;
+    kind: 'PLANET' | 'STATION' | 'PLANETOID' | 'MOON' | 'ASTEROID' | 'STARGATE';
+    color: string;
+    camPos: Vec3;
+    dist: number;
+    distSurface: number;
+    radius3D: number;
+    parentPlanetCleanName?: string;
+    moonsSummary?: string;
+    asteroidSummary?: string;
+    planetOrder?: number;
+  }
+
+  // Поиск ближайшего космического объекта для выхода на стационарную орбиту (планета, станция, планетоид, спутник)
+  const findNearestOrbitalCandidate = useCallback((): OrbitalCandidate | null => {
     const st = flightStateRef.current;
-    setScreenMode('FLIGHT');
+    if (!st.planets) return null;
 
-    // Повторное нажатие на X — открепляем корабль от стационарной орбиты
-    if (st.stationaryOrbitPlanetId) {
-      const prevPlanet = st.planets.find((p) => p.id === st.stationaryOrbitPlanetId);
-      st.stationaryOrbitPlanetId = null;
-      st.stationaryOrbitTurnRad = 0;
-      setStationaryOrbitInfo(null);
-      playZxBeep('DOCK');
-      setFlightMessage(
-        `🔓 КОРАБЛЬ ОТКРЕПЛЁН ОТ СТАЦИОНАРНОЙ ОРБИТЫ ${
-          prevPlanet ? `«${prevPlanet.cleanName.toUpperCase()}»` : 'ПЛАНЕТЫ'
-        } (X) · СВОБОДНЫЙ ПОЛЁТ И ОСЕВОЕ ВРАЩЕНИЕ ПЛАНЕТЫ ВОЗОБНОВЛЕНЫ`
-      );
-      return;
-    }
+    const candidates: OrbitalCandidate[] = [];
 
-    // Находим ближайшую планету системы для закрепления на стационарной орбите (доступно только на расстоянии < 400 ед.)
-    if (!st.planets || st.planets.length === 0) {
-      playZxBeep('HIT');
-      setFlightMessage(
-        '⚠️ ЗАКРЕПЛЕНИЕ НА ОРБИТЕ (X) НЕДОСТУПНО: В ДАННОЙ ЗВЁЗДНОЙ СИСТЕМЕ НЕТ ПЛАНЕТ'
-      );
-      return;
-    }
-    let nearestPlanet = st.planets[2] || st.planets[0];
-    let bestDist = Infinity;
-    let nearestCamPos: Vec3 = {x: 0, y: 0, z: 270};
-
+    // 1. Планеты системы (включая Боевой Планетоид Звезду Смерти, Станцию Бублик, Звёздные Врата и Газовые Гиганты)
     for (const p of st.planets) {
       const cosA = Math.cos(p.orbitAngle);
       const sinA = Math.sin(p.orbitAngle);
@@ -9719,73 +10530,472 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       const py = st.starPos.y + p.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
       const pz = st.starPos.z + p.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
       const d = Math.hypot(px, py, pz);
-      if (d < bestDist) {
-        bestDist = d;
-        nearestPlanet = p;
-        nearestCamPos = {x: px, y: py, z: pz};
+      const r = p.radius3D || 120;
+      const dSurf = Math.max(0, d - r);
+
+      let kind: OrbitalCandidate['kind'] = 'PLANET';
+      let parentCleanName: string | undefined = undefined;
+      let moonsSum: string | undefined = undefined;
+      let astSum: string | undefined = undefined;
+
+      if (p.isDeathStar) {
+        kind = 'PLANETOID';
+        astSum = 'Боевой планетоид V орбиты';
+      } else if (p.isTorusShip) {
+        kind = 'STATION';
+        parentCleanName = 'Орбита VI противофазы';
+      } else if (p.isStargate) {
+        kind = 'STARGATE';
+        parentCleanName = 'Мегаструктура Врат';
+      } else {
+        kind = 'PLANET';
+        if (p.isJupiter && p.galileanMoons) {
+          moonsSum = p.galileanMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (p.isSaturn && p.saturnMoons) {
+          moonsSum = p.saturnMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (p.isUranus && p.uranusMoons) {
+          moonsSum = p.uranusMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (p.isNeptune && p.neptuneMoons) {
+          moonsSum = p.neptuneMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (p.orbitOrder === 3) {
+          moonsSum = 'Луна';
+        } else if (p.orbitOrder === 4) {
+          moonsSum = 'Фобос, Деймос';
+        }
+      }
+
+      candidates.push({
+        id: p.id,
+        name: p.name,
+        cleanName: p.cleanName,
+        kind,
+        color: p.color || '#38bdf8',
+        camPos: {x: px, y: py, z: pz},
+        dist: d,
+        distSurface: dSurf,
+        radius3D: r,
+        parentPlanetCleanName: parentCleanName,
+        moonsSummary: moonsSum,
+        asteroidSummary: astSum,
+        planetOrder: p.orbitOrder,
+      });
+
+      // Спутники Юпитера (Галилеевы спутники)
+      if (p.isJupiter && p.galileanMoons) {
+        for (const gm of p.galileanMoons) {
+          const rM = gm.def.orbitRadiusFromJupiter;
+          const cM = Math.cos(gm.orbitAngle);
+          const sM = Math.sin(gm.orbitAngle);
+          const mx = px + rM * (cM * st.eclipticU.x + sM * st.eclipticV.x);
+          const my = py + rM * (cM * st.eclipticU.y + sM * st.eclipticV.y);
+          const mz = pz + rM * (cM * st.eclipticU.z + sM * st.eclipticV.z);
+          const md = Math.hypot(mx, my, mz);
+          const mr = gm.def.radius3D || 18;
+          candidates.push({
+            id: gm.def.id,
+            name: gm.def.officialName,
+            cleanName: gm.def.cleanName,
+            kind: 'MOON',
+            color: gm.def.color,
+            camPos: {x: mx, y: my, z: mz},
+            dist: md,
+            distSurface: Math.max(0, md - mr),
+            radius3D: mr,
+            parentPlanetCleanName: p.cleanName,
+            moonsSummary: gm.def.cleanName,
+          });
+        }
+      }
+
+      // Спутники Сатурна
+      if (p.isSaturn && p.saturnMoons) {
+        for (const sm of p.saturnMoons) {
+          const rM = sm.def.orbitRadiusFromSaturn;
+          const cM = Math.cos(sm.orbitAngle);
+          const sM = Math.sin(sm.orbitAngle);
+          const mx = px + rM * (cM * st.eclipticU.x + sM * st.eclipticV.x);
+          const my = py + rM * (cM * st.eclipticU.y + sM * st.eclipticV.y);
+          const mz = pz + rM * (cM * st.eclipticU.z + sM * st.eclipticV.z);
+          const md = Math.hypot(mx, my, mz);
+          const mr = sm.def.radius3D || 16;
+          candidates.push({
+            id: sm.def.id,
+            name: sm.def.officialName,
+            cleanName: sm.def.cleanName,
+            kind: 'MOON',
+            color: sm.def.color,
+            camPos: {x: mx, y: my, z: mz},
+            dist: md,
+            distSurface: Math.max(0, md - mr),
+            radius3D: mr,
+            parentPlanetCleanName: p.cleanName,
+            moonsSummary: sm.def.cleanName,
+          });
+        }
+      }
+
+      // Спутники Урана
+      if (p.isUranus && p.uranusMoons) {
+        for (const um of p.uranusMoons) {
+          const rM = um.def.orbitRadiusFromUranus;
+          const cM = Math.cos(um.orbitAngle);
+          const sM = Math.sin(um.orbitAngle);
+          const mx = px + rM * (cM * st.eclipticU.x + sM * st.eclipticV.x);
+          const my = py + rM * (cM * st.eclipticU.y + sM * st.eclipticV.y);
+          const mz = pz + rM * (cM * st.eclipticU.z + sM * st.eclipticV.z);
+          const md = Math.hypot(mx, my, mz);
+          const mr = um.def.radius3D || 15;
+          candidates.push({
+            id: um.def.id,
+            name: um.def.officialName,
+            cleanName: um.def.cleanName,
+            kind: 'MOON',
+            color: um.def.color,
+            camPos: {x: mx, y: my, z: mz},
+            dist: md,
+            distSurface: Math.max(0, md - mr),
+            radius3D: mr,
+            parentPlanetCleanName: p.cleanName,
+            moonsSummary: um.def.cleanName,
+          });
+        }
+      }
+
+      // Спутники Нептуна
+      if (p.isNeptune && p.neptuneMoons) {
+        for (const nm of p.neptuneMoons) {
+          const rM = nm.def.orbitRadiusFromNeptune;
+          const cM = Math.cos(nm.orbitAngle);
+          const sM = Math.sin(nm.orbitAngle);
+          const mx = px + rM * (cM * st.eclipticU.x + sM * st.eclipticV.x);
+          const my = py + rM * (cM * st.eclipticU.y + sM * st.eclipticV.y);
+          const mz = pz + rM * (cM * st.eclipticU.z + sM * st.eclipticV.z);
+          const md = Math.hypot(mx, my, mz);
+          const mr = nm.def.radius3D || 15;
+          candidates.push({
+            id: nm.def.id,
+            name: nm.def.officialName,
+            cleanName: nm.def.cleanName,
+            kind: 'MOON',
+            color: nm.def.color,
+            camPos: {x: mx, y: my, z: mz},
+            dist: md,
+            distSurface: Math.max(0, md - mr),
+            radius3D: mr,
+            parentPlanetCleanName: p.cleanName,
+            moonsSummary: nm.def.cleanName,
+          });
+        }
       }
     }
 
-    const MAX_STATIONARY_ORBIT_LOCK_DIST = 400;
-    const roundedBestDist = Math.round(bestDist);
-    if (bestDist >= MAX_STATIONARY_ORBIT_LOCK_DIST) {
-      playZxBeep('HIT');
+    // 2. Станции и базы в st.entities (Кориолис, Банк, Верфь)
+    for (const ent of st.entities) {
+      if (ent.kind === 'STATION' || ent.label?.includes('ВЕРФЬ') || ent.label?.includes('Кориолис')) {
+        const ed = Math.hypot(ent.pos.x, ent.pos.y, ent.pos.z);
+        const er = 25;
+        candidates.push({
+          id: ent.id,
+          name: ent.label || 'Станция Кориолис: Банк',
+          cleanName: ent.label?.includes('Кориолис') ? 'Станция Кориолис (Банк)' : ent.label || 'Орбитальная Станция',
+          kind: 'STATION',
+          color: ent.color || '#22d3ee',
+          camPos: {...ent.pos},
+          dist: ed,
+          distSurface: Math.max(0, ed - er),
+          radius3D: er,
+          parentPlanetCleanName: 'Орбита Земли',
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    // Приоритет цели под курсором мыши, если она в радиусе < 200 ед.
+    const hovered = hoveredScreenTargetRef.current;
+    if (hovered) {
+      const match = candidates.find((c) => c.id === hovered.id);
+      if (match && (match.dist < 200 || match.distSurface < 200)) {
+        return match;
+      }
+    }
+
+    // Сортировка по минимальной эффективной дистанции
+    candidates.sort((a, b) => {
+      const scoreA = Math.min(a.dist, a.distSurface);
+      const scoreB = Math.min(b.dist, b.distSurface);
+      return scoreA - scoreB;
+    });
+
+    return candidates[0] || null;
+  }, []);
+
+  // Генерация данных карточки лендинга для выбранного объекта
+  const buildLandingDataForTarget = useCallback(
+    (target: {
+      id: string;
+      name: string;
+      cleanName: string;
+      kind?: 'PLANET' | 'STATION' | 'PLANETOID' | 'MOON' | 'ASTEROID' | 'STARGATE';
+      color?: string;
+      parentPlanetCleanName?: string;
+      moonSummary?: string;
+      asteroidSummary?: string;
+    }): ObjectLandingData => {
+      const sysAssign = getStarSystemFullAssignment(activeSystemKeyRef.current || 'sys:0');
+      const constellation = sysAssign.constellationNameRu || 'Орион';
+      const star = sysAssign.starName || GALAXY_SYSTEMS[currentSystemId]?.name || 'Солнце';
+
+      const kind = target.kind || 'PLANET';
+      let planetName = target.cleanName;
+      let satelliteName = target.moonSummary || '—';
+      let asteroidName = target.asteroidSummary || '—';
+
+      if (kind === 'MOON') {
+        planetName = target.parentPlanetCleanName || 'Газовый Гигант';
+        satelliteName = target.cleanName;
+        asteroidName = 'Гравитационный захват гиганта';
+      } else if (kind === 'STATION') {
+        planetName = target.parentPlanetCleanName || 'Орбитальная платформа';
+        satelliteName = 'Стыковочный модуль';
+        asteroidName = 'Искусственная станция';
+      } else if (kind === 'PLANETOID') {
+        planetName = 'Боевой Планетоид V орбиты';
+        satelliteName = 'Эскадрилья дронов Диктатора';
+        asteroidName = target.cleanName;
+      } else if (kind === 'ASTEROID') {
+        planetName = 'Пояс Астероидов';
+        satelliteName = '—';
+        asteroidName = target.cleanName;
+      } else if (kind === 'PLANET') {
+        const st = flightStateRef.current;
+        const stPl = st.planets.find((p) => p.id === target.id);
+        if (stPl?.isJupiter && stPl.galileanMoons) {
+          satelliteName = stPl.galileanMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (stPl?.isSaturn && stPl.saturnMoons) {
+          satelliteName = stPl.saturnMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (stPl?.isUranus && stPl.uranusMoons) {
+          satelliteName = stPl.uranusMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (stPl?.isNeptune && stPl.neptuneMoons) {
+          satelliteName = stPl.neptuneMoons.map((m) => m.def.cleanName).join(', ');
+        } else if (stPl?.orbitOrder === 3) {
+          satelliteName = 'Луна (R=384 400 км)';
+        } else if (stPl?.orbitOrder === 4) {
+          satelliteName = 'Фобос, Деймос';
+        }
+      }
+
+      let ownerName = 'не занят';
+      const st = flightStateRef.current;
+      const stPl = st.planets.find((p) => p.id === target.id);
+      if (stPl && stPl.orbitOrder && stPl.orbitOrder >= 1 && stPl.orbitOrder <= 4) {
+        const dictPl = sysAssign.planets[(stPl.orbitOrder - 1) as 0 | 1 | 2 | 3];
+        if (dictPl) {
+          const cap = capturedPlanetsMapRef.current[dictPl.index];
+          if (cap?.isCaptured && cap.clanOrUnionName) {
+            ownerName = `${cap.clanIcon ? cap.clanIcon + ' ' : ''}${cap.clanOrUnionName}`;
+          }
+        }
+      }
+
+      return {
+        id: target.id,
+        name: target.name || target.cleanName,
+        cleanName: target.cleanName,
+        kind,
+        color: target.color || '#22d3ee',
+        constellationName: constellation,
+        starName: star,
+        planetName,
+        satelliteName,
+        asteroidName,
+        distanceUnits: 10,
+        ownerName,
+        credits,
+      };
+    },
+    [credits, currentSystemId]
+  );
+
+  // Запуск плавного перехода корабля на стационарную орбиту вокруг объекта на расстояние 10 ед.
+  const handleStartOrbitTransition = useCallback(
+    (cand: OrbitalCandidate) => {
+      const st = flightStateRef.current;
+      setScreenMode('FLIGHT');
+
+      if (autopilotTargetRef.current) {
+        autopilotTargetRef.current = null;
+        setAutopilotTargetUi(null);
+      }
+
+      // Дистанция стационарной орбиты: ровно 10 ед. от поверхности объекта
+      const targetStandoff = (cand.radius3D || 15) + 10;
+
+      st.orbitTransition = {
+        active: true,
+        startTime: performance.now(),
+        durationMs: 1200, // 1.2 с плавного выхода на орбиту
+        startStarPos: {...st.starPos},
+        startSpeed: st.speed,
+        targetPlanetId: cand.id,
+        targetStandoff,
+        targetName: cand.name,
+        targetCleanName: cand.cleanName,
+        targetKind: cand.kind,
+        targetColor: cand.color,
+        parentPlanetCleanName: cand.parentPlanetCleanName,
+        moonSummary: cand.moonsSummary,
+        asteroidSummary: cand.asteroidSummary,
+      };
+
+      playZxBeep('MISSION');
       setFlightMessage(
-        `⚠️ ЗАКРЕПИТЬСЯ НА ОРБИТЕ (X) МОЖНО ТОЛЬКО У ПЛАНЕТЫ НА РАССТОЯНИИ МЕНЕЕ ${MAX_STATIONARY_ORBIT_LOCK_DIST} ЕД. · ДО «${nearestPlanet.cleanName.toUpperCase()}» СЕЙЧАС ${roundedBestDist} ЕД.`
+        `🛰 ПЛАВНЫЙ ВЫХОД НА СТАЦИОНАРНУЮ ОРБИТУ «${cand.cleanName.toUpperCase()}» (ВЫСОТА 10 ЕД)...`
+      );
+    },
+    [playZxBeep]
+  );
+
+  // Переключение закрепления на стационарной орбите (универсальный метод для UI и горячих клавиш)
+  const handleToggleStationaryOrbit = useCallback(() => {
+    const st = flightStateRef.current;
+    setScreenMode('FLIGHT');
+
+    // Если уже на орбите (или в процессе перехода) — открепляем и переводим в ручной режим
+    if (st.stationaryOrbitPlanetId || stationaryOrbitInfo || st.orbitTransition?.active) {
+      const prevName = stationaryOrbitInfo?.cleanName || 'ОБЪЕКТА';
+      st.stationaryOrbitPlanetId = null;
+      st.stationaryOrbitTurnRad = 0;
+      st.orbitTransition = null;
+      setStationaryOrbitInfo(null);
+      setIsObjectLandingOpen(false);
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🔓 КОРАБЛЬ ОТКРЕПЛЁН ОТ СТАЦИОНАРНОЙ ОРБИТЫ «${prevName.toUpperCase()}» · ПЕРЕХОД В РУЧНОЙ РЕЖИМ УПРАВЛЕНИЯ`
       );
       return;
     }
 
-    if (autopilotTargetRef.current) {
-      autopilotTargetRef.current = null;
-      setAutopilotTargetUi(null);
+    // Ищем объект на расстоянии < 200 ед.
+    const cand = findNearestOrbitalCandidate();
+    if (!cand) {
+      playZxBeep('HIT');
+      setFlightMessage('⚠️ В СИСТЕМЕ НЕ НАЙДЕНО ОБЪЕКТОВ ДЛЯ ВЫХОДА НА ОРБИТУ');
+      return;
     }
 
-    // Если корабль уже в пределах 400 ед., но планета сбоку или за спиной — поворачиваем взгляд на планету с сохранением текущей дистанции (< 400 ед.)
-    const isPlanetVisibleInFront =
-      nearestCamPos.z >= nearestPlanet.radius3D * 1.15 &&
-      Math.hypot(nearestCamPos.x, nearestCamPos.y) <= nearestCamPos.z * 0.9;
+    const roundedDist = Math.round(cand.dist);
+    const roundedSurfaceDist = Math.round(cand.distSurface);
 
-    if (!isPlanetVisibleInFront) {
-      const cosA = Math.cos(nearestPlanet.orbitAngle);
-      const sinA = Math.sin(nearestPlanet.orbitAngle);
-      const offsetX =
-        nearestPlanet.orbitRadius * (cosA * st.eclipticU.x + sinA * st.eclipticV.x);
-      const offsetY =
-        nearestPlanet.orbitRadius * (cosA * st.eclipticU.y + sinA * st.eclipticV.y);
-      const offsetZ =
-        nearestPlanet.orbitRadius * (cosA * st.eclipticU.z + sinA * st.eclipticV.z);
-      const closeDist = Math.max(
-        Math.round(nearestPlanet.radius3D * 1.65),
-        Math.min(MAX_STATIONARY_ORBIT_LOCK_DIST - 5, roundedBestDist)
+    if (cand.dist >= 200 && cand.distSurface >= 200) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        `⚠️ ПЕРЕХОД НА ОРБИТУ ДОСТУПЕН НА РАССТОЯНИИ МЕНЕЕ 200 ЕД. · ДО «${cand.cleanName.toUpperCase()}» СЕЙЧАС ${roundedDist} ЕД.`
       );
-      st.starPos = {
-        x: -offsetX,
-        y: -offsetY,
-        z: closeDist - offsetZ,
-      };
+      return;
     }
 
-    st.stationaryOrbitPlanetId = nearestPlanet.id;
-    st.stationaryOrbitTurnRad = 0;
-    st.speed = 0;
-    st.targetSpeed = 0;
-    st.pitchRate = 0;
-    st.rollRate = 0;
-    st.pitchAxis = 0;
-    st.rollAxis = 0;
-    setThrottleUi(0);
-    setStationaryOrbitInfo({
-      planetId: nearestPlanet.id,
-      planetName: nearestPlanet.name,
-      cleanName: nearestPlanet.cleanName,
-      color: nearestPlanet.color,
-    });
-    playZxBeep('MISSION');
+    handleStartOrbitTransition(cand);
+  }, [findNearestOrbitalCandidate, handleStartOrbitTransition, playZxBeep, stationaryOrbitInfo]);
+
+  // Нажатие колёсика мыши (СКМ / Button 1):
+  // При расстоянии < 200 ед. плавный переход на стационарную орбиту (10 ед.);
+  // при повторном нажатии — открепление и переход в ручной режим управления!
+  const handleWheelOrbitClick = useCallback(() => {
+    const st = flightStateRef.current;
+
+    // 1. Повторное нажатие — снятие фиксации и ручной режим
+    if (st.stationaryOrbitPlanetId || stationaryOrbitInfo || st.orbitTransition?.active) {
+      const prevName = stationaryOrbitInfo?.cleanName || 'ОБЪЕКТА';
+      st.stationaryOrbitPlanetId = null;
+      st.stationaryOrbitTurnRad = 0;
+      st.orbitTransition = null;
+      setStationaryOrbitInfo(null);
+      setIsObjectLandingOpen(false);
+      playZxBeep('DOCK');
+      setFlightMessage(
+        `🔓 КОРАБЛЬ ОТКРЕПЛЁН ОТ ОРБИТЫ «${prevName.toUpperCase()}» · ПЕРЕХОД В РУЧНОЙ РЕЖИМ УПРАВЛЕНИЯ`
+      );
+      return;
+    }
+
+    // 2. Проверка расстояния до ближайшего объекта (< 200 ед.)
+    const cand = findNearestOrbitalCandidate();
+    if (!cand) {
+      playZxBeep('HIT');
+      setFlightMessage('⚠️ В СИСТЕМЕ НЕ НАЙДЕНО ОБЪЕКТОВ ДЛЯ ВЫХОДА НА ОРБИТУ');
+      return;
+    }
+
+    const roundedDist = Math.round(cand.dist);
+    if (cand.dist >= 200 && cand.distSurface >= 200) {
+      playZxBeep('HIT');
+      setFlightMessage(
+        `⚠️ ДИСТАНЦИЯ БОЛЕЕ 200 ЕД. (ДО «${cand.cleanName.toUpperCase()}»: ${roundedDist} ЕД.) · ПОДОЙДИТЕ БЛИЖЕ 200 ЕД. ДЛЯ ВЫХОДА НА ОРБИТУ (КОЛЕСИКО МЫШИ)`
+      );
+      handleTractorCapture();
+      return;
+    }
+
+    // 3. Дистанция < 200 ед. — плавный переход на стационарную орбиту вокруг объекта на расстоянии 10 ед.!
+    handleStartOrbitTransition(cand);
+  }, [
+    findNearestOrbitalCandidate,
+    handleStartOrbitTransition,
+    handleTractorCapture,
+    playZxBeep,
+    stationaryOrbitInfo,
+  ]);
+
+  // Нажатие клавиши ENTER: открытие/закрытие карточки лендинга объекта (верфь, торговая площадка, банк, атрибуты)
+  const handleToggleObjectLanding = useCallback(() => {
+    if (isObjectLandingOpen) {
+      setIsObjectLandingOpen(false);
+      return;
+    }
+
+    // Если корабль уже на орбите — открываем лендинг этого объекта
+    if (stationaryOrbitInfo) {
+      const lData = buildLandingDataForTarget({
+        id: stationaryOrbitInfo.planetId,
+        name: stationaryOrbitInfo.planetName,
+        cleanName: stationaryOrbitInfo.cleanName,
+        kind: stationaryOrbitInfo.kind,
+        color: stationaryOrbitInfo.color,
+        parentPlanetCleanName: stationaryOrbitInfo.parentPlanetCleanName,
+        moonSummary: stationaryOrbitInfo.moonSummary,
+        asteroidSummary: stationaryOrbitInfo.asteroidSummary,
+      });
+      setObjectLandingData(lData);
+      setIsObjectLandingOpen(true);
+      playZxBeep('DOCK');
+      return;
+    }
+
+    // Если ещё не на орбите, но рядом с объектом (< 200 ед.) — начинаем выход на орбиту и открываем лендинг
+    const cand = findNearestOrbitalCandidate();
+    if (cand && (cand.dist < 200 || cand.distSurface < 200)) {
+      handleStartOrbitTransition(cand);
+      const lData = buildLandingDataForTarget(cand);
+      setObjectLandingData(lData);
+      setIsObjectLandingOpen(true);
+      return;
+    }
+
+    playZxBeep('HIT');
     setFlightMessage(
-      `🛰 ЗАКРЕПЛЁН НА СТАЦИОНАРНОЙ ОРБИТЕ «${nearestPlanet.cleanName.toUpperCase()}» (ДИСТ: ${roundedBestDist} ЕД. < 400 ЕД.) [X]: КОРАБЛЬ ДВИЖЕТСЯ ВОКРУГ ОСИ И ПО ОРБИТЕ ВМЕСТЕ С ПЛАНЕТОЙ!`
+      cand
+        ? `⚠️ ЛЕНДИНГ ДОСТУПЕН НА ОРБИТЕ: ДО «${cand.cleanName.toUpperCase()}» ${Math.round(cand.dist)} ЕД. (НУЖНО < 200 ЕД. ДЛЯ ВЫХОДА НА ОРБИТУ СКМ)`
+        : '⚠️ ЛЕНДИНГ ДОСТУПЕН НА СТАЦИОНАРНОЙ ОРБИТЕ (НАЖМИТЕ КОЛЕСИКО МЫШИ НА ДИСТАНЦИИ < 200 ЕД.)'
     );
-  }, [playZxBeep]);
+  }, [
+    buildLandingDataForTarget,
+    findNearestOrbitalCandidate,
+    handleStartOrbitTransition,
+    isObjectLandingOpen,
+    playZxBeep,
+    stationaryOrbitInfo,
+  ]);
 
   // Показать карточку объекта рядом с ним ТОЛЬКО когда объект находится в зоне действия курсора мыши и нажата клавиша I
   const handleTriggerObjectProfileAtCursor = useCallback(() => {
@@ -10066,6 +11276,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     (profile: SpaceObjectProfileData) => {
       if (profile.kind === 'STAR') {
         handleNavigateSystemView('STAR_CLOSE');
+      } else if (profile.isKuiperBelt && profile.kuiperMeta) {
+        handleNavigateSystemView(`KUIPER_${profile.kuiperMeta.orderIndex}`);
       } else if (
         (profile.kind === 'PLANET' ||
           profile.kind === 'GROUP' ||
@@ -10299,14 +11511,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         e.preventDefault();
       }
 
-      if (code === 'KeyI' || key === 'i' || key === 'ш') {
+      if (code === 'Enter' || key === 'Enter') {
+        e.preventDefault();
+        if (e.repeat) return;
+        handleToggleObjectLanding();
+        return;
+      } else if (code === 'KeyI' || key === 'i' || key === 'ш') {
         e.preventDefault();
         isKeyIDownRef.current = true;
         handleTriggerObjectProfileAtCursor();
       } else if (code === 'KeyX' || key === 'x' || key === 'ч' || key === 'х') {
         e.preventDefault();
         if (e.repeat) return;
-        handleToggleStationaryOrbit();
+        // Функция клавиши X для закрепления на орбите отменена пользователем
+        setFlightMessage(
+          'ℹ️ ФУНКЦИЯ КЛАВИШИ X ОТМЕНЕНА: ДЛЯ ВЫХОДА НА ОРБИТУ НАЖМИТЕ КОЛЕСИКО МЫШИ (СКМ) ПРИ ДИСТАНЦИИ < 200 ЕД.'
+        );
       } else if (code === 'KeyF' || key === 'f' || key === 'а' || code === 'Space') {
         e.preventDefault();
         const activeSlot = flightStateRef.current.activeWeaponSlot;
@@ -10331,11 +11551,24 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
         handleFireHeavyGammaWeapon();
       } else if (code === 'KeyJ' || key === 'j' || key === 'о') {
         e.preventDefault();
-        setIsSentinelModalOpen((prev) => !prev);
+        if (e.shiftKey) {
+          handleNavigateSystemView('SATURN');
+        } else {
+          handleNavigateSystemView('JUPITER');
+        }
       } else if (code === 'KeyO' || key === 'o' || key === 'щ') {
         e.preventDefault();
         setObjectsGalleryTargetId(undefined);
         setIsObjectsGalleryOpen((prev) => !prev);
+      } else if (code === 'KeyK' || key === 'k' || key === 'л') {
+        e.preventDefault();
+        handleNavigateSystemView('KUIPER_BELT');
+      } else if (code === 'KeyU' || key === 'u' || key === 'г') {
+        e.preventDefault();
+        handleNavigateSystemView('URANUS');
+      } else if (code === 'KeyN' || key === 'n' || key === 'т') {
+        e.preventDefault();
+        handleNavigateSystemView('NEPTUNE');
       }
     };
 
@@ -10347,11 +11580,22 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       }
     };
 
+    const onAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        if (screenMode === 'FLIGHT') {
+          handleWheelOrbitClick();
+        }
+      }
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('auxclick', onAuxClick);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('auxclick', onAuxClick);
     };
   }, [
     handleCloseObjectPlacard,
@@ -10371,10 +11615,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
     handleCycleRadarEngineFilter,
     handleToggleShieldSpeedConverter,
     handleToggleStationaryOrbit,
+    handleToggleObjectLanding,
+    handleWheelOrbitClick,
     handleTriggerObjectProfileAtCursor,
     hasMilitaryLaser,
     isOpen,
     playZxBeep,
+    screenMode,
   ]);
 
   // Главный 60 FPS цикл рендеринга 3D Wireframe (в стиле ZX Spectrum 1984)
@@ -10623,12 +11870,93 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   minPdist = d;
                   nearP = p;
                 }
+                if (p.isJupiter && p.galileanMoons) {
+                  for (const gm of p.galileanMoons) {
+                    const cosM = Math.cos(gm.orbitAngle);
+                    const sinM = Math.sin(gm.orbitAngle);
+                    const rM = gm.def.orbitRadiusFromJupiter;
+                    const mx = px + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+                    const my = py + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+                    const mz = pz + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+                    const dM = Math.hypot(mx, my, mz);
+                    if (dM < minPdist) {
+                      minPdist = dM;
+                      nearP = {
+                        id: gm.def.id,
+                        cleanName: gm.def.officialName,
+                      } as any;
+                    }
+                  }
+                }
+                if (p.isSaturn && p.saturnMoons) {
+                  for (const sm of p.saturnMoons) {
+                    const cosM = Math.cos(sm.orbitAngle);
+                    const sinM = Math.sin(sm.orbitAngle);
+                    const rM = sm.def.orbitRadiusFromSaturn;
+                    const mx = px + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+                    const my = py + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+                    const mz = pz + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+                    const dM = Math.hypot(mx, my, mz);
+                    if (dM < minPdist) {
+                      minPdist = dM;
+                      nearP = {
+                        id: sm.def.id,
+                        cleanName: sm.def.officialName,
+                      } as any;
+                    }
+                  }
+                }
+                if (p.isUranus && p.uranusMoons) {
+                  for (const um of p.uranusMoons) {
+                    const cosM = Math.cos(um.orbitAngle);
+                    const sinM = Math.sin(um.orbitAngle);
+                    const rM = um.def.orbitRadiusFromUranus;
+                    const mx = px + rM * (cosM * st.eclipticV.x + sinM * st.eclipticN.x);
+                    const my = py + rM * (cosM * st.eclipticV.y + sinM * st.eclipticN.y);
+                    const mz = pz + rM * (cosM * st.eclipticV.z + sinM * st.eclipticN.z);
+                    const dM = Math.hypot(mx, my, mz);
+                    if (dM < minPdist) {
+                      minPdist = dM;
+                      nearP = {
+                        id: um.def.id,
+                        cleanName: um.def.officialName,
+                      } as any;
+                    }
+                  }
+                }
+                if (p.isNeptune && p.neptuneMoons) {
+                  const tiltRad = (30 * Math.PI) / 180;
+                  const cosT = Math.cos(tiltRad);
+                  const sinT = Math.sin(tiltRad);
+                  const nepU = st.eclipticU;
+                  const nepV = {
+                    x: cosT * st.eclipticV.x - sinT * st.eclipticN.x,
+                    y: cosT * st.eclipticV.y - sinT * st.eclipticN.y,
+                    z: cosT * st.eclipticV.z - sinT * st.eclipticN.z,
+                  };
+                  for (const nm of p.neptuneMoons) {
+                    const cosM = Math.cos(nm.orbitAngle);
+                    const sinM = Math.sin(nm.orbitAngle);
+                    const rM = nm.def.orbitRadiusFromNeptune;
+                    const mx = px + rM * (cosM * nepU.x + sinM * nepV.x);
+                    const my = py + rM * (cosM * nepU.y + sinM * nepV.y);
+                    const mz = pz + rM * (cosM * nepU.z + sinM * nepV.z);
+                    const dM = Math.hypot(mx, my, mz);
+                    if (dM < minPdist) {
+                      minPdist = dM;
+                      nearP = {
+                        id: nm.def.id,
+                        cleanName: nm.def.officialName,
+                      } as any;
+                    }
+                  }
+                }
               }
               setNearestPlanetOrbitUi({
                 planetId: nearP.id,
                 cleanName: nearP.cleanName,
                 distanceUnits: Math.round(minPdist),
-                canLock: minPdist < 400,
+                canLock: minPdist < 200,
               });
             } else {
               setNearestPlanetOrbitUi(null);
@@ -11327,7 +12655,77 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             }
 
             // =========================================================================
-            // РЕЖИМ СТАЦИОНАРНОЙ ОРБИТЫ (КЛАВИША X):
+            // ПЛАВНЫЙ ПЕРЕХОД НА СТАЦИОНАРНУЮ ОРБИТУ ВОКРУГ ОБЪЕКТА (НА ДИСТАНЦИЮ 10 ЕД.):
+            // =========================================================================
+            if (st.orbitTransition && st.orbitTransition.active) {
+              const trans = st.orbitTransition;
+              const elapsed = performance.now() - trans.startTime;
+              const rawT = Math.min(1, elapsed / trans.durationMs);
+              const ease = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+              const targetPlanet = st.planets.find((p) => p.id === trans.targetPlanetId);
+              if (targetPlanet) {
+                const curCosA = Math.cos(targetPlanet.orbitAngle);
+                const curSinA = Math.sin(targetPlanet.orbitAngle);
+                const curTargetStarPos = {
+                  x: -targetPlanet.orbitRadius * (curCosA * st.eclipticU.x + curSinA * st.eclipticV.x),
+                  y: -targetPlanet.orbitRadius * (curCosA * st.eclipticU.y + curSinA * st.eclipticV.y),
+                  z: trans.targetStandoff - targetPlanet.orbitRadius * (curCosA * st.eclipticU.z + curSinA * st.eclipticV.z),
+                };
+                st.starPos.x = trans.startStarPos.x + (curTargetStarPos.x - trans.startStarPos.x) * ease;
+                st.starPos.y = trans.startStarPos.y + (curTargetStarPos.y - trans.startStarPos.y) * ease;
+                st.starPos.z = trans.startStarPos.z + (curTargetStarPos.z - trans.startStarPos.z) * ease;
+              } else {
+                const targetEnt = st.entities.find((e) => e.id === trans.targetPlanetId);
+                if (targetEnt) {
+                  st.starPos.x = trans.startStarPos.x + (-targetEnt.pos.x) * ease;
+                  st.starPos.y = trans.startStarPos.y + (-targetEnt.pos.y) * ease;
+                  st.starPos.z = trans.startStarPos.z + (trans.targetStandoff - targetEnt.pos.z) * ease;
+                }
+              }
+
+              st.speed = trans.startSpeed * (1 - ease);
+              st.targetSpeed = 0;
+              st.pitchRate *= 0.85;
+              st.rollRate *= 0.85;
+
+              if (rawT >= 1) {
+                st.orbitTransition = null;
+                st.stationaryOrbitPlanetId = trans.targetPlanetId;
+                st.stationaryOrbitTurnRad = 0;
+                st.speed = 0;
+                st.targetSpeed = 0;
+                st.pitchRate = 0;
+                st.rollRate = 0;
+                setThrottleUi(0);
+
+                const infoObj = {
+                  planetId: trans.targetPlanetId,
+                  planetName: trans.targetName,
+                  cleanName: trans.targetCleanName,
+                  color: trans.targetColor,
+                  kind: trans.targetKind,
+                  parentPlanetCleanName: trans.parentPlanetCleanName,
+                  moonSummary: trans.moonSummary,
+                  asteroidSummary: trans.asteroidSummary,
+                  distanceUnits: 10,
+                };
+                setStationaryOrbitInfo(infoObj);
+                const lData = buildLandingDataForTarget({
+                  ...infoObj,
+                  id: infoObj.planetId,
+                  name: infoObj.planetName,
+                });
+                setObjectLandingData(lData);
+                playZxBeep('MISSION');
+                setFlightMessage(
+                  `🛰 ЗАКРЕПЛЁН НА СТАЦИОНАРНОЙ ОРБИТЕ «${trans.targetCleanName.toUpperCase()}» (ВЫСОТА 10 ЕД.) · [ENTER] — ЛЕНДИНГ ОБЪЕКТА · [СКМ] — РУЧНОЙ РЕЖИМ`
+                );
+              }
+            }
+
+            // =========================================================================
+            // РЕЖИМ СТАЦИОНАРНОЙ ОРБИТЫ (КОЛЕСИКО МЫШИ / СКМ):
             // 1) Осевое вращение выбранной планеты относительно корабля полностью прекращается!
             // 2) Корабль двигается вокруг оси планеты вместе с планетой (с её угловой скоростью),
             //    поэтому вся остальная звёздная система (Звезда, пунктирные орбиты, другие планеты,
@@ -11378,6 +12776,38 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 // и расстояние между планетами постоянно меняется!
                 const planetOrbitLinearSpd = MAX_SYSTEM_SPEED * 0.25;
                 planet.orbitAngle += (planetOrbitLinearSpd / planet.orbitRadius) * dtSec;
+                if (planet.isJupiter && planet.galileanMoons) {
+                  for (const gm of planet.galileanMoons) {
+                    // Спутники Юпитера закреплены абсолютно стационарно на своих орбитах (0 рад/с):
+                    if (gm.def.orbitSpeedRadPerSec > 0) {
+                      gm.orbitAngle += gm.def.orbitSpeedRadPerSec * dtSec;
+                    }
+                  }
+                }
+                if (planet.isSaturn && planet.saturnMoons) {
+                  for (const sm of planet.saturnMoons) {
+                    // Спутники Сатурна закреплены абсолютно стационарно на своих орбитах (0 рад/с):
+                    if (sm.def.orbitSpeedRadPerSec > 0) {
+                      sm.orbitAngle += sm.def.orbitSpeedRadPerSec * dtSec;
+                    }
+                  }
+                }
+                if (planet.isUranus && planet.uranusMoons) {
+                  for (const um of planet.uranusMoons) {
+                    // Спутники Урана закреплены абсолютно стационарно на своих орбитах (0 рад/с):
+                    if (um.def.orbitSpeedRadPerSec > 0) {
+                      um.orbitAngle += um.def.orbitSpeedRadPerSec * dtSec;
+                    }
+                  }
+                }
+                if (planet.isNeptune && planet.neptuneMoons) {
+                  for (const nm of planet.neptuneMoons) {
+                    // Спутники Нептуна закреплены абсолютно стационарно на своих орбитах (0 рад/с):
+                    if (nm.def.orbitSpeedRadPerSec > 0) {
+                      nm.orbitAngle += nm.def.orbitSpeedRadPerSec * dtSec;
+                    }
+                  }
+                }
               }
 
               if (lockedPlanet && planet.id === lockedPlanet.id) {
@@ -12033,14 +13463,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                         description: elMeta
                           ? `Источник минерального сырья в поясе астероидов (${elMeta.nameRu} ${elMeta.displaySymbol} · ${elMeta.sellPriceCr} CR/т).`
                           : 'Каменно-металлическая глыба внешнего пояса астероидов (R = 27 000 ед.). Огневой контакт лазером открывает химический состав породы.',
-                        groupsTitle: 'горнодобывающий сектор (Правительство Марса · #GO-MARS)',
-                        groupsDescription:
-                          'Контракты на разведку пояса астероидов, расчистку траекторий и поставку редких элементов периодической системы.',
-                        groupTag: 'GO-MARS',
-                        businessesTitle: 'сырьевая биржа ( скупка элементов по пропорциям Земли )',
-                        businessesDescription: elMeta
-                          ? `Приём руды ${elMeta.nameRu} (${elMeta.displaySymbol}) по котировке ${elMeta.sellPriceCr} CR за тонну.`
-                          : 'Оценка и приём ценных элементов периодической системы после лазерного спектрального контакта.',
+                        groupsTitle: '',
+                        groupsDescription: '',
+                        groupTag: undefined,
+                        businessesTitle: '',
+                        businessesDescription: '',
                         karmaPlus: 12,
                         karmaMinus: 0,
                         distanceUnits: Math.round(astDist),
@@ -12058,10 +13485,46 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               }
             }
 
-            // 4. Собираем небесные тела системы (Центральную Звезду + 4 Планеты) и сортируем по дальности Z
+            // 4. Собираем небесные тела системы (Центральную Звезду + 4 Планеты + Юпитер + 4 Галилеевых спутника) и сортируем по дальности Z
             type CelestialRenderItem =
               | {kind: 'STAR'; z: number; dist: number; pos: Vec3}
-              | {kind: 'PLANET'; z: number; dist: number; pos: Vec3; planet: SystemPlanet};
+              | {kind: 'PLANET'; z: number; dist: number; pos: Vec3; planet: SystemPlanet}
+              | {
+                  kind: 'GALILEAN_MOON';
+                  z: number;
+                  dist: number;
+                  pos: Vec3;
+                  moon: GalileanMoonDef;
+                  orbitAngle: number;
+                  parentPlanet: SystemPlanet;
+                }
+              | {
+                  kind: 'SATURN_MOON';
+                  z: number;
+                  dist: number;
+                  pos: Vec3;
+                  saturnMoon: SaturnMoonDef;
+                  orbitAngle: number;
+                  parentPlanet: SystemPlanet;
+                }
+              | {
+                  kind: 'URANUS_MOON';
+                  z: number;
+                  dist: number;
+                  pos: Vec3;
+                  uranusMoon: UranusMoonDef;
+                  orbitAngle: number;
+                  parentPlanet: SystemPlanet;
+                }
+              | {
+                  kind: 'NEPTUNE_MOON';
+                  z: number;
+                  dist: number;
+                  pos: Vec3;
+                  neptuneMoon: NeptuneMoonDef;
+                  orbitAngle: number;
+                  parentPlanet: SystemPlanet;
+                };
 
             const celestials: CelestialRenderItem[] = [];
             if (st.starPos.z > 25) {
@@ -12093,6 +13556,109 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   pos: {x: px, y: py, z: pz},
                   planet,
                 });
+              }
+
+              // Спутники Юпитера (Галилеевы спутники: Ио, Европа, Ганимед, Каллисто) на орбитах 2 400 .. 9 500 ед. вокруг Юпитера:
+              if (planet.isJupiter && planet.galileanMoons) {
+                for (const gm of planet.galileanMoons) {
+                  const cosM = Math.cos(gm.orbitAngle);
+                  const sinM = Math.sin(gm.orbitAngle);
+                  const rM = gm.def.orbitRadiusFromJupiter;
+                  const mx = px + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+                  const my = py + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+                  const mz = pz + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+                  if (mz > 25) {
+                    celestials.push({
+                      kind: 'GALILEAN_MOON',
+                      z: mz,
+                      dist: Math.hypot(mx, my, mz),
+                      pos: {x: mx, y: my, z: mz},
+                      moon: gm.def,
+                      orbitAngle: gm.orbitAngle,
+                      parentPlanet: planet,
+                    });
+                  }
+                }
+              }
+
+              // Спутники Сатурна (Мимас, Энцелад, Тефия, Диона, Рея, Титан, Япет) на орбитах 2 000 .. 8 000 ед. вокруг Сатурна:
+              if (planet.isSaturn && planet.saturnMoons) {
+                for (const sm of planet.saturnMoons) {
+                  const cosM = Math.cos(sm.orbitAngle);
+                  const sinM = Math.sin(sm.orbitAngle);
+                  const rM = sm.def.orbitRadiusFromSaturn;
+                  const mx = px + rM * (cosM * st.eclipticU.x + sinM * st.eclipticV.x);
+                  const my = py + rM * (cosM * st.eclipticU.y + sinM * st.eclipticV.y);
+                  const mz = pz + rM * (cosM * st.eclipticU.z + sinM * st.eclipticV.z);
+                  if (mz > 25) {
+                    celestials.push({
+                      kind: 'SATURN_MOON',
+                      z: mz,
+                      dist: Math.hypot(mx, my, mz),
+                      pos: {x: mx, y: my, z: mz},
+                      saturnMoon: sm.def,
+                      orbitAngle: sm.orbitAngle,
+                      parentPlanet: planet,
+                    });
+                  }
+                }
+              }
+
+              // Спутники Урана (Миранда, Ариэль, Умбриэль, Титания, Оберон) на орбитах 2 000 .. 10 000 ед. вокруг Урана:
+              // Уран обладает наклоном оси 90°: орбиты его спутников лежат в плоскости eclipticV x eclipticN (перпендикулярно эклиптике)!
+              if (planet.isUranus && planet.uranusMoons) {
+                for (const um of planet.uranusMoons) {
+                  const cosM = Math.cos(um.orbitAngle);
+                  const sinM = Math.sin(um.orbitAngle);
+                  const rM = um.def.orbitRadiusFromUranus;
+                  const mx = px + rM * (cosM * st.eclipticV.x + sinM * st.eclipticN.x);
+                  const my = py + rM * (cosM * st.eclipticV.y + sinM * st.eclipticN.y);
+                  const mz = pz + rM * (cosM * st.eclipticV.z + sinM * st.eclipticN.z);
+                  if (mz > 25) {
+                    celestials.push({
+                      kind: 'URANUS_MOON',
+                      z: mz,
+                      dist: Math.hypot(mx, my, mz),
+                      pos: {x: mx, y: my, z: mz},
+                      uranusMoon: um.def,
+                      orbitAngle: um.orbitAngle,
+                      parentPlanet: planet,
+                    });
+                  }
+                }
+              }
+
+              // Спутники Нептуна (Наяда, Таласса, Деспина, Галатея, Ларисса, Протей, Тритон) на орбитах 2 000 .. 10 000 ед. вокруг Нептуна:
+              // Нептун обладает наклоном оси 30°: орбиты его спутников лежат в плоскости nepU x nepV!
+              if (planet.isNeptune && planet.neptuneMoons) {
+                const tiltRad = (30 * Math.PI) / 180;
+                const cosT = Math.cos(tiltRad);
+                const sinT = Math.sin(tiltRad);
+                const nepU = st.eclipticU;
+                const nepV = {
+                  x: cosT * st.eclipticV.x - sinT * st.eclipticN.x,
+                  y: cosT * st.eclipticV.y - sinT * st.eclipticN.y,
+                  z: cosT * st.eclipticV.z - sinT * st.eclipticN.z,
+                };
+                for (const nm of planet.neptuneMoons) {
+                  const cosM = Math.cos(nm.orbitAngle);
+                  const sinM = Math.sin(nm.orbitAngle);
+                  const rM = nm.def.orbitRadiusFromNeptune;
+                  const mx = px + rM * (cosM * nepU.x + sinM * nepV.x);
+                  const my = py + rM * (cosM * nepU.y + sinM * nepV.y);
+                  const mz = pz + rM * (cosM * nepU.z + sinM * nepV.z);
+                  if (mz > 25) {
+                    celestials.push({
+                      kind: 'NEPTUNE_MOON',
+                      z: mz,
+                      dist: Math.hypot(mx, my, mz),
+                      pos: {x: mx, y: my, z: mz},
+                      neptuneMoon: nm.def,
+                      orbitAngle: nm.orbitAngle,
+                      parentPlanet: planet,
+                    });
+                  }
+                }
               }
             }
 
@@ -12212,6 +13778,1032 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       distanceUnits: Math.round(item.dist),
                       coordsLabel: 'Центр сферы R=0 ед.',
                       solarFluxPct: st.solarFluxPct,
+                    },
+                  });
+                }
+              } else if (item.kind === 'GALILEAN_MOON' || item.kind === 'SATURN_MOON' || item.kind === 'URANUS_MOON' || item.kind === 'NEPTUNE_MOON') {
+                // =========================================================================
+                // 4B-MOON. СПУТНИКИ ЮПИТЕРА, САТУРНА, УРАНА И НЕПТУНА НА СТАЦИОНАРНЫХ ОРБИТАХ (0 РАД/С)
+                // ПОЛНОЦЕННЫЕ 3D-СФЕРЫ С ПАРАЛЛЕЛЯМИ И МЕРИДИАНАМИ КАК У ПЛАНЕТ!
+                // =========================================================================
+                const isGalilean = item.kind === 'GALILEAN_MOON';
+                const isSaturn = item.kind === 'SATURN_MOON';
+                const isUranus = item.kind === 'URANUS_MOON';
+                const isNeptune = item.kind === 'NEPTUNE_MOON';
+                const gm = isGalilean
+                  ? (item as any).moon
+                  : isSaturn
+                  ? (item as any).saturnMoon
+                  : isUranus
+                  ? (item as any).uranusMoon
+                  : (item as any).neptuneMoon;
+                const moonOrbitDist = isGalilean
+                  ? (gm as GalileanMoonDef).orbitRadiusFromJupiter
+                  : isSaturn
+                  ? (gm as SaturnMoonDef).orbitRadiusFromSaturn
+                  : isUranus
+                  ? (gm as UranusMoonDef).orbitRadiusFromUranus
+                  : (gm as NeptuneMoonDef).orbitRadiusFromNeptune;
+                const parentPlanetCleanName = isGalilean ? 'Юпитер' : isSaturn ? 'Сатурн' : isUranus ? 'Уран' : 'Нептун';
+                const parentPlanetGenitive = isGalilean ? 'Юпитера' : isSaturn ? 'Сатурна' : isUranus ? 'Урана' : 'Нептуна';
+
+                const mz = Math.max(25, item.pos.z);
+                const msx = cx + (item.pos.x * 380) / mz;
+                const msy = cy - (item.pos.y * 380) / mz;
+                const rawMoonR = (gm.radius3D * 380) / mz;
+                const moonR = Math.max(3.2, Math.min(height * 0.45, rawMoonR));
+
+                if (
+                  msx + moonR * 1.5 >= -120 &&
+                  msx - moonR * 1.5 <= width + 120 &&
+                  msy + moonR * 1.5 >= -120 &&
+                  msy - moonR * 1.5 <= height + 120
+                ) {
+                  if (rawMoonR < 8.5) {
+                    // На дальней дистанции — чистая цветная точка и прицельное кольцо без текста
+                    ctx.fillStyle = gm.color;
+                    ctx.beginPath();
+                    ctx.arc(msx, msy, 3.8, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = gm.secondaryColor || gm.color;
+                    ctx.lineWidth = 1.1;
+                    ctx.beginPath();
+                    ctx.arc(msx, msy, 6.8, 0, Math.PI * 2);
+                    ctx.stroke();
+                  } else {
+                    // Полноценная 3D-сфера с вращением, параллелями и меридианами (как у планет)
+                    const moonGrad = ctx.createRadialGradient(
+                      msx - moonR * 0.28,
+                      msy - moonR * 0.28,
+                      moonR * 0.1,
+                      msx,
+                      msy,
+                      moonR
+                    );
+
+                    // 1. Цветовой градиент для каждого конкретного спутника
+                    if (gm.id.includes('io')) {
+                      // Ио: вулканический ад
+                      moonGrad.addColorStop(0, '#fef08a');
+                      moonGrad.addColorStop(0.35, '#eab308');
+                      moonGrad.addColorStop(0.75, '#b45309');
+                      moonGrad.addColorStop(1, '#451a03');
+                    } else if (gm.id.includes('europa')) {
+                      // Европа: гладкий лёд и подлёдный океан
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.4, '#e0f2fe');
+                      moonGrad.addColorStop(0.75, '#38bdf8');
+                      moonGrad.addColorStop(1, '#0369a1');
+                    } else if (gm.id.includes('ganymede')) {
+                      // Ганимед: великан с магнитным полем
+                      moonGrad.addColorStop(0, '#f1f5f9');
+                      moonGrad.addColorStop(0.35, '#94a3b8');
+                      moonGrad.addColorStop(0.7, '#475569');
+                      moonGrad.addColorStop(1, '#0f172a');
+                    } else if (gm.id.includes('callisto')) {
+                      // Каллисто: древнейшая кратерная кора
+                      moonGrad.addColorStop(0, '#cbd5e1');
+                      moonGrad.addColorStop(0.35, '#64748b');
+                      moonGrad.addColorStop(0.7, '#334155');
+                      moonGrad.addColorStop(1, '#020617');
+                    } else if (gm.id.includes('mimas')) {
+                      // Мимас: кратер Гершель «Звезда Смерти»
+                      moonGrad.addColorStop(0, '#f1f5f9');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#64748b');
+                      moonGrad.addColorStop(1, '#1e293b');
+                    } else if (gm.id.includes('enceladus')) {
+                      // Энцелад: ослепительный криовулканический снег
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.35, '#f0fdf4');
+                      moonGrad.addColorStop(0.75, '#38bdf8');
+                      moonGrad.addColorStop(1, '#0284c7');
+                    } else if (gm.id.includes('tethys')) {
+                      // Тефия: чистый лёд, кратер Одиссей
+                      moonGrad.addColorStop(0, '#f8fafc');
+                      moonGrad.addColorStop(0.35, '#e2e8f0');
+                      moonGrad.addColorStop(0.7, '#94a3b8');
+                      moonGrad.addColorStop(1, '#334155');
+                    } else if (gm.id.includes('dione')) {
+                      // Диона: ледяные обрывы и силикаты
+                      moonGrad.addColorStop(0, '#eff6ff');
+                      moonGrad.addColorStop(0.35, '#bfdbfe');
+                      moonGrad.addColorStop(0.75, '#60a5fa');
+                      moonGrad.addColorStop(1, '#1e3a8a');
+                    } else if (gm.id.includes('rhea')) {
+                      // Рея: ледяное тело с разреженной атмосферой
+                      moonGrad.addColorStop(0, '#f8fafc');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#64748b');
+                      moonGrad.addColorStop(1, '#0f172a');
+                    } else if (gm.id.includes('titan')) {
+                      // Титан: плотная золотисто-оранжевая атмосфера и озёра
+                      moonGrad.addColorStop(0, '#fef3c7');
+                      moonGrad.addColorStop(0.35, '#f59e0b');
+                      moonGrad.addColorStop(0.75, '#c2410c');
+                      moonGrad.addColorStop(1, '#451a03');
+                    } else if (gm.id.includes('iapetus')) {
+                      // Япет: двухцветный «Инь и Ян»
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.4, '#e2e8f0');
+                      moonGrad.addColorStop(0.75, '#334155');
+                      moonGrad.addColorStop(1, '#090d16');
+                    } else if (gm.id.includes('miranda')) {
+                      // Миранда: хаотичный ледяной мир, уступ Верона
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#64748b');
+                      moonGrad.addColorStop(1, '#1e293b');
+                    } else if (gm.id.includes('ariel')) {
+                      // Ариэль: самый яркий из спутников Урана, высокое альбедо
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.35, '#e0f2fe');
+                      moonGrad.addColorStop(0.75, '#7dd3fc');
+                      moonGrad.addColorStop(1, '#0369a1');
+                    } else if (gm.id.includes('umbriel')) {
+                      // Умбриэль: самый тёмный ледяной спутник
+                      moonGrad.addColorStop(0, '#94a3b8');
+                      moonGrad.addColorStop(0.35, '#475569');
+                      moonGrad.addColorStop(0.7, '#1e293b');
+                      moonGrad.addColorStop(1, '#020617');
+                    } else if (gm.id.includes('titania')) {
+                      // Титания: самый большой спутник Урана
+                      moonGrad.addColorStop(0, '#f8fafc');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#38bdf8');
+                      moonGrad.addColorStop(1, '#0f172a');
+                    } else if (gm.id.includes('oberon')) {
+                      // Оберон: второй по величине, древняя кратерная кора
+                      moonGrad.addColorStop(0, '#e2e8f0');
+                      moonGrad.addColorStop(0.35, '#94a3b8');
+                      moonGrad.addColorStop(0.7, '#475569');
+                      moonGrad.addColorStop(1, '#090d16');
+                    } else if (gm.id.includes('triton')) {
+                      // Тритон: крупнейший спутник Нептуна, азотные льды и криогейзеры N₂
+                      moonGrad.addColorStop(0, '#ffffff');
+                      moonGrad.addColorStop(0.35, '#fce7f3'); // Розовато-азотный иней
+                      moonGrad.addColorStop(0.75, '#38bdf8');
+                      moonGrad.addColorStop(1, '#0c4a6e');
+                    } else if (gm.id.includes('proteus')) {
+                      // Протей: тёмный колосс, кратер Фарос 250 км
+                      moonGrad.addColorStop(0, '#94a3b8');
+                      moonGrad.addColorStop(0.35, '#475569');
+                      moonGrad.addColorStop(0.75, '#1e293b');
+                      moonGrad.addColorStop(1, '#020617');
+                    } else if (gm.id.includes('larissa')) {
+                      // Ларисса: древний кратерный монолит
+                      moonGrad.addColorStop(0, '#cbd5e1');
+                      moonGrad.addColorStop(0.35, '#64748b');
+                      moonGrad.addColorStop(0.7, '#334155');
+                      moonGrad.addColorStop(1, '#0f172a');
+                    } else if (gm.id.includes('galatea')) {
+                      // Галатея: творец дуг Адамса
+                      moonGrad.addColorStop(0, '#f8fafc');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#60a5fa');
+                      moonGrad.addColorStop(1, '#1e3a8a');
+                    } else if (gm.id.includes('despina')) {
+                      // Деспина: пастух кольца Леверье
+                      moonGrad.addColorStop(0, '#e2e8f0');
+                      moonGrad.addColorStop(0.35, '#94a3b8');
+                      moonGrad.addColorStop(0.7, '#475569');
+                      moonGrad.addColorStop(1, '#090d16');
+                    } else if (gm.id.includes('thalassa')) {
+                      // Таласса: дисковидный спутник
+                      moonGrad.addColorStop(0, '#f1f5f9');
+                      moonGrad.addColorStop(0.35, '#cbd5e1');
+                      moonGrad.addColorStop(0.7, '#64748b');
+                      moonGrad.addColorStop(1, '#1e293b');
+                    } else if (gm.id.includes('naiad')) {
+                      // Наяда: ближайший резонансный танцор
+                      moonGrad.addColorStop(0, '#cbd5e1');
+                      moonGrad.addColorStop(0.35, '#94a3b8');
+                      moonGrad.addColorStop(0.7, '#475569');
+                      moonGrad.addColorStop(1, '#0f172a');
+                    } else {
+                      moonGrad.addColorStop(0, '#f1f5f9');
+                      moonGrad.addColorStop(0.5, gm.color);
+                      moonGrad.addColorStop(1, '#090d16');
+                    }
+
+                    ctx.fillStyle = moonGrad;
+                    ctx.beginPath();
+                    ctx.arc(msx, msy, moonR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const cosMSpin = Math.cos(item.orbitAngle);
+                    const sinMSpin = Math.sin(item.orbitAngle);
+
+                    // Координатные оси для спутников Нептуна с наклоном оси 30°
+                    const nepTiltRad = (30 * Math.PI) / 180;
+                    const cosNepT = Math.cos(nepTiltRad);
+                    const sinNepT = Math.sin(nepTiltRad);
+                    const nepAxisU = st.eclipticU;
+                    const nepAxisV: Vec3 = {
+                      x: cosNepT * st.eclipticV.x - sinNepT * st.eclipticN.x,
+                      y: cosNepT * st.eclipticV.y - sinNepT * st.eclipticN.y,
+                      z: cosNepT * st.eclipticV.z - sinNepT * st.eclipticN.z,
+                    };
+                    const nepAxisN: Vec3 = {
+                      x: sinNepT * st.eclipticV.x + cosNepT * st.eclipticN.x,
+                      y: sinNepT * st.eclipticV.y + cosNepT * st.eclipticN.y,
+                      z: sinNepT * st.eclipticV.z + cosNepT * st.eclipticN.z,
+                    };
+
+                    const mU: Vec3 = isUranus
+                      ? {
+                          x: cosMSpin * st.eclipticV.x + sinMSpin * st.eclipticN.x,
+                          y: cosMSpin * st.eclipticV.y + sinMSpin * st.eclipticN.y,
+                          z: cosMSpin * st.eclipticV.z + sinMSpin * st.eclipticN.z,
+                        }
+                      : isNeptune
+                      ? {
+                          x: cosMSpin * nepAxisU.x + sinMSpin * nepAxisV.x,
+                          y: cosMSpin * nepAxisU.y + sinMSpin * nepAxisV.y,
+                          z: cosMSpin * nepAxisU.z + sinMSpin * nepAxisV.z,
+                        }
+                      : {
+                          x: cosMSpin * st.eclipticU.x + sinMSpin * st.eclipticV.x,
+                          y: cosMSpin * st.eclipticU.y + sinMSpin * st.eclipticV.y,
+                          z: cosMSpin * st.eclipticU.z + sinMSpin * st.eclipticV.z,
+                        };
+                    const mV: Vec3 = isUranus
+                      ? {
+                          x: -sinMSpin * st.eclipticV.x + cosMSpin * st.eclipticN.x,
+                          y: -sinMSpin * st.eclipticV.y + cosMSpin * st.eclipticN.y,
+                          z: -sinMSpin * st.eclipticV.z + cosMSpin * st.eclipticN.z,
+                        }
+                      : isNeptune
+                      ? {
+                          x: -sinMSpin * nepAxisU.x + cosMSpin * nepAxisV.x,
+                          y: -sinMSpin * nepAxisU.y + cosMSpin * nepAxisV.y,
+                          z: -sinMSpin * nepAxisU.z + cosMSpin * nepAxisV.z,
+                        }
+                      : {
+                          x: -sinMSpin * st.eclipticU.x + cosMSpin * st.eclipticV.x,
+                          y: -sinMSpin * st.eclipticU.y + cosMSpin * st.eclipticV.y,
+                          z: -sinMSpin * st.eclipticU.z + cosMSpin * st.eclipticV.z,
+                        };
+                    const mN = isUranus ? st.eclipticU : isNeptune ? nepAxisN : st.eclipticN;
+
+                    const projectMoonNormal = (nx: number, ny: number, nz: number) => ({
+                      x: msx + nx * moonR,
+                      y: msy - ny * moonR,
+                      front: nz <= 0.05,
+                    });
+
+                    // 2) ПАРАЛЛЕЛИ СПУТНИКА (КАК НА ПЛАНЕТАХ)
+                    const moonLatsDeg = moonR > 18 ? [-60, -30, 0, 30, 60] : [-35, 0, 35];
+                    const latSteps = moonR > 25 ? 24 : 16;
+                    for (const mLat of moonLatsDeg) {
+                      const latRad = (mLat * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+                      const isEquator = mLat === 0;
+
+                      for (let s = 0; s < latSteps; s++) {
+                        const lon1 = (s / latSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / latSteps) * Math.PI * 2;
+                        const n1x = cosLat * (Math.cos(lon1) * mU.x + Math.sin(lon1) * mV.x) + sinLat * mN.x;
+                        const n1y = cosLat * (Math.cos(lon1) * mU.y + Math.sin(lon1) * mV.y) + sinLat * mN.y;
+                        const n1z = cosLat * (Math.cos(lon1) * mU.z + Math.sin(lon1) * mV.z) + sinLat * mN.z;
+                        const n2x = cosLat * (Math.cos(lon2) * mU.x + Math.sin(lon2) * mV.x) + sinLat * mN.x;
+                        const n2y = cosLat * (Math.cos(lon2) * mU.y + Math.sin(lon2) * mV.y) + sinLat * mN.y;
+                        const n2z = cosLat * (Math.cos(lon2) * mU.z + Math.sin(lon2) * mV.z) + sinLat * mN.z;
+                        const pt1 = projectMoonNormal(n1x, n1y, n1z);
+                        const pt2 = projectMoonNormal(n2x, n2y, n2z);
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = isEquator ? '#fef08a' : gm.color;
+                          ctx.globalAlpha = isEquator ? 0.85 : 0.45;
+                          ctx.lineWidth = isEquator ? 1.4 : 0.85;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 2B) МЕРИДИАНЫ СПУТНИКА (КАК НА ПЛАНЕТАХ)
+                    const numMeridians = moonR > 20 ? 8 : 4;
+                    const merSteps = moonR > 25 ? 18 : 12;
+                    for (let m = 0; m < numMeridians; m++) {
+                      const lonRad = (m / numMeridians) * Math.PI * 2;
+                      const cosLon = Math.cos(lonRad);
+                      const sinLon = Math.sin(lonRad);
+                      for (let s = 0; s < merSteps; s++) {
+                        const lat1 = -Math.PI / 2 + (s / merSteps) * Math.PI;
+                        const lat2 = -Math.PI / 2 + ((s + 1) / merSteps) * Math.PI;
+                        const n1x = Math.cos(lat1) * (cosLon * mU.x + sinLon * mV.x) + Math.sin(lat1) * mN.x;
+                        const n1y = Math.cos(lat1) * (cosLon * mU.y + sinLon * mV.y) + Math.sin(lat1) * mN.y;
+                        const n1z = Math.cos(lat1) * (cosLon * mU.z + sinLon * mV.z) + Math.sin(lat1) * mN.z;
+                        const n2x = Math.cos(lat2) * (cosLon * mU.x + sinLon * mV.x) + Math.sin(lat2) * mN.x;
+                        const n2y = Math.cos(lat2) * (cosLon * mU.y + sinLon * mV.y) + Math.sin(lat2) * mN.y;
+                        const n2z = Math.cos(lat2) * (cosLon * mU.z + sinLon * mV.z) + Math.sin(lat2) * mN.z;
+                        const pt1 = projectMoonNormal(n1x, n1y, n1z);
+                        const pt2 = projectMoonNormal(n2x, n2y, n2z);
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = gm.color;
+                          ctx.globalAlpha = 0.40;
+                          ctx.lineWidth = 0.8;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 3) УНИКАЛЬНЫЕ НАУЧНЫЕ И ГЕОФИЗИЧЕСКИЕ ДЕТАЛИ:
+                    if (gm.id.includes('io')) {
+                      // ИО: Действующие вулканы (Локи, Пеле, Прометей) и раскалённые лавовые озёра
+                      const volcanoes = [
+                        {lat: 13, lon: 305, name: 'Локи', r: 3.5},
+                        {lat: -20, lon: 255, name: 'Пеле', r: 4.0},
+                        {lat: -2, lon: 154, name: 'Прометей', r: 2.8},
+                        {lat: -40, lon: 270, name: 'Баббар', r: 2.5},
+                        {lat: 62, lon: 123, name: 'Тваштар', r: 3.0},
+                      ];
+                      for (const v of volcanoes) {
+                        const vLatRad = (v.lat * Math.PI) / 180;
+                        const vLonRad = (v.lon * Math.PI) / 180;
+                        const cLat = Math.cos(vLatRad);
+                        const sLat = Math.sin(vLatRad);
+                        const vx = cLat * (Math.cos(vLonRad) * mU.x + Math.sin(vLonRad) * mV.x) + sLat * mN.x;
+                        const vy = cLat * (Math.cos(vLonRad) * mU.y + Math.sin(vLonRad) * mV.y) + sLat * mN.y;
+                        const vz = cLat * (Math.cos(vLonRad) * mU.z + Math.sin(vLonRad) * mV.z) + sLat * mN.z;
+                        const vPt = projectMoonNormal(vx, vy, vz);
+                        if (vPt.front) {
+                          const pulse = Math.sin(st.frameCounter * 0.15 + v.lat) * 1.0;
+                          ctx.fillStyle = '#ef4444';
+                          ctx.globalAlpha = 0.95;
+                          ctx.beginPath();
+                          ctx.arc(vPt.x, vPt.y, Math.max(2, v.r * 0.35 + pulse * 0.3), 0, Math.PI * 2);
+                          ctx.fill();
+
+                          ctx.strokeStyle = '#fde047';
+                          ctx.lineWidth = 1.0;
+                          ctx.beginPath();
+                          ctx.arc(vPt.x, vPt.y, Math.max(3, v.r * 0.6 + pulse * 0.4), 0, Math.PI * 2);
+                          ctx.stroke();
+
+                          if (moonR > 18) {
+                            ctx.strokeStyle = 'rgba(254, 240, 138, 0.6)';
+                            ctx.lineWidth = 1.2;
+                            ctx.beginPath();
+                            ctx.arc(vPt.x, vPt.y - 4, 3.5, Math.PI * 0.2, Math.PI * 0.8, true);
+                            ctx.stroke();
+                          }
+                        }
+                      }
+                    } else if (gm.id.includes('europa')) {
+                      // ЕВРОПА: Тектонические трещины-линеи надо льдом глобального океана
+                      if (moonR > 14) {
+                        ctx.save();
+                        ctx.strokeStyle = '#b45309';
+                        ctx.globalAlpha = 0.65;
+                        ctx.lineWidth = 1.1;
+                        for (let crack = -2; crack <= 2; crack++) {
+                          ctx.beginPath();
+                          const offsetLon = crack * 0.55;
+                          for (let s = 0; s <= 12; s++) {
+                            const cLat = -0.7 + (s / 12) * 1.4;
+                            const cosL = Math.cos(cLat);
+                            const sinL = Math.sin(cLat);
+                            const cx1 = cosL * (Math.cos(offsetLon + cLat * 0.4) * mU.x + Math.sin(offsetLon + cLat * 0.4) * mV.x) + sinL * mN.x;
+                            const cy1 = cosL * (Math.cos(offsetLon + cLat * 0.4) * mU.y + Math.sin(offsetLon + cLat * 0.4) * mV.y) + sinL * mN.y;
+                            const cz1 = cosL * (Math.cos(offsetLon + cLat * 0.4) * mU.z + Math.sin(offsetLon + cLat * 0.4) * mV.z) + sinL * mN.z;
+                            const pt = projectMoonNormal(cx1, cy1, cz1);
+                            if (pt.front) {
+                              if (s === 0) ctx.moveTo(pt.x, pt.y);
+                              else ctx.lineTo(pt.x, pt.y);
+                            }
+                          }
+                          ctx.stroke();
+                        }
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+                        ctx.lineWidth = 0.8;
+                        ctx.stroke();
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('ganymede')) {
+                      // ГАНИМЕД: Собственная дипольная магнитосфера
+                      if (moonR > 16) {
+                        ctx.save();
+                        ctx.strokeStyle = '#60a5fa';
+                        ctx.globalAlpha = 0.45;
+                        ctx.lineWidth = 1.2;
+                        ctx.setLineDash([3, 4]);
+                        for (let loop = -1; loop <= 1; loop += 2) {
+                          ctx.beginPath();
+                          ctx.ellipse(
+                            msx,
+                            msy,
+                            moonR * 1.35,
+                            moonR * 0.75,
+                            (loop * Math.PI) / 8,
+                            0,
+                            Math.PI * 2
+                          );
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('callisto')) {
+                      // КАЛЛИСТО: Гигантский ударный бассейн Вальхалла
+                      if (moonR > 14) {
+                        const valLatRad = (18 * Math.PI) / 180;
+                        const valLonRad = (55 * Math.PI) / 180;
+                        const cVal = Math.cos(valLatRad);
+                        const sVal = Math.sin(valLatRad);
+                        const valX = cVal * (Math.cos(valLonRad) * mU.x + Math.sin(valLonRad) * mV.x) + sVal * mN.x;
+                        const valY = cVal * (Math.cos(valLonRad) * mU.y + Math.sin(valLonRad) * mV.y) + sVal * mN.y;
+                        const valZ = cVal * (Math.cos(valLonRad) * mU.z + Math.sin(valLonRad) * mV.z) + sVal * mN.z;
+                        const valPt = projectMoonNormal(valX, valY, valZ);
+                        if (valPt.front) {
+                          ctx.save();
+                          ctx.strokeStyle = '#cbd5e1';
+                          ctx.globalAlpha = 0.65;
+                          ctx.lineWidth = 1.0;
+                          for (let r = 1; r <= 4; r++) {
+                            ctx.beginPath();
+                            ctx.arc(valPt.x, valPt.y, r * (moonR * 0.12), 0, Math.PI * 2);
+                            ctx.stroke();
+                          }
+                          ctx.restore();
+                        }
+                      }
+                    } else if (gm.id.includes('mimas')) {
+                      // МИМАС: Гигантский ударный кратер Гершель (выглядит как «Звезда Смерти»)
+                      const hLatRad = (5 * Math.PI) / 180;
+                      const hLonRad = (110 * Math.PI) / 180;
+                      const cH = Math.cos(hLatRad);
+                      const sH = Math.sin(hLatRad);
+                      const hx = cH * (Math.cos(hLonRad) * mU.x + Math.sin(hLonRad) * mV.x) + sH * mN.x;
+                      const hy = cH * (Math.cos(hLonRad) * mU.y + Math.sin(hLonRad) * mV.y) + sH * mN.y;
+                      const hz = cH * (Math.cos(hLonRad) * mU.z + Math.sin(hLonRad) * mV.z) + sH * mN.z;
+                      const hPt = projectMoonNormal(hx, hy, hz);
+                      if (hPt.front) {
+                        ctx.save();
+                        // Тёмное дно кратера Гершель
+                        ctx.fillStyle = '#0f172a';
+                        ctx.strokeStyle = '#e2e8f0';
+                        ctx.lineWidth = 1.3;
+                        ctx.beginPath();
+                        ctx.arc(hPt.x, hPt.y, moonR * 0.35, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        // Центральная гора-пик кратера высотой 6 км
+                        ctx.fillStyle = '#cbd5e1';
+                        ctx.beginPath();
+                        ctx.arc(hPt.x, hPt.y, Math.max(1.5, moonR * 0.08), 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('enceladus')) {
+                      // ЭНЦЕЛАД: «Тигровые полосы» и криогейзеры воды H₂O в космос на южном полюсе
+                      if (moonR > 12) {
+                        ctx.save();
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 1.0;
+                        ctx.globalAlpha = 0.85;
+                        // 4 тигровые полосы в районе южного полюса
+                        for (let stIdx = -2; stIdx <= 2; stIdx++) {
+                          const sLatRad = ((-78 + stIdx * 4) * Math.PI) / 180;
+                          const sCos = Math.cos(sLatRad);
+                          const sSin = Math.sin(sLatRad);
+                          const sLon = (stIdx * 35 * Math.PI) / 180;
+                          const sx1 = sCos * (Math.cos(sLon) * mU.x + Math.sin(sLon) * mV.x) + sSin * mN.x;
+                          const sy1 = sCos * (Math.cos(sLon) * mU.y + Math.sin(sLon) * mV.y) + sSin * mN.y;
+                          const sz1 = sCos * (Math.cos(sLon) * mU.z + Math.sin(sLon) * mV.z) + sSin * mN.z;
+                          const sPt = projectMoonNormal(sx1, sy1, sz1);
+                          if (sPt.front) {
+                            ctx.beginPath();
+                            ctx.arc(sPt.x, sPt.y, Math.max(2, moonR * 0.12), 0, Math.PI * 2);
+                            ctx.stroke();
+                          }
+                        }
+                        // Плюмы водяного пара, бьющие в космос
+                        const southPolePt = projectMoonNormal(-mN.x, -mN.y, -mN.z);
+                        if (southPolePt.front) {
+                          ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+                          ctx.lineWidth = 1.4;
+                          for (let pIdx = -1; pIdx <= 1; pIdx++) {
+                            ctx.beginPath();
+                            ctx.moveTo(southPolePt.x, southPolePt.y);
+                            ctx.lineTo(
+                              southPolePt.x + (pIdx * 6) - mN.x * (moonR * 0.35),
+                              southPolePt.y + mN.y * (moonR * 0.35)
+                            );
+                            ctx.stroke();
+                          }
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('tethys')) {
+                      // ТЕФИЯ: Кратер Одиссей и гигантский каньон Итака
+                      if (moonR > 14) {
+                        ctx.save();
+                        // Кратер Одиссей
+                        const odLatRad = (30 * Math.PI) / 180;
+                        const odLonRad = (130 * Math.PI) / 180;
+                        const cOd = Math.cos(odLatRad);
+                        const sOd = Math.sin(odLatRad);
+                        const odX = cOd * (Math.cos(odLonRad) * mU.x + Math.sin(odLonRad) * mV.x) + sOd * mN.x;
+                        const odY = cOd * (Math.cos(odLonRad) * mU.y + Math.sin(odLonRad) * mV.y) + sOd * mN.y;
+                        const odZ = cOd * (Math.cos(odLonRad) * mU.z + Math.sin(odLonRad) * mV.z) + sOd * mN.z;
+                        const odPt = projectMoonNormal(odX, odY, odZ);
+                        if (odPt.front) {
+                          ctx.strokeStyle = '#94a3b8';
+                          ctx.lineWidth = 1.2;
+                          ctx.beginPath();
+                          ctx.arc(odPt.x, odPt.y, moonR * 0.28, 0, Math.PI * 2);
+                          ctx.stroke();
+                        }
+                        // Каньон Итака
+                        ctx.strokeStyle = '#64748b';
+                        ctx.lineWidth = 1.1;
+                        ctx.beginPath();
+                        for (let s = 0; s <= 10; s++) {
+                          const iLat = -0.6 + (s / 10) * 1.2;
+                          const cI = Math.cos(iLat);
+                          const sI = Math.sin(iLat);
+                          const iLon = (s * 0.3);
+                          const ix1 = cI * (Math.cos(iLon) * mU.x + Math.sin(iLon) * mV.x) + sI * mN.x;
+                          const iy1 = cI * (Math.cos(iLon) * mU.y + Math.sin(iLon) * mV.y) + sI * mN.y;
+                          const iz1 = cI * (Math.cos(iLon) * mU.z + Math.sin(iLon) * mV.z) + sI * mN.z;
+                          const ipt = projectMoonNormal(ix1, iy1, iz1);
+                          if (ipt.front) {
+                            if (s === 0) ctx.moveTo(ipt.x, ipt.y);
+                            else ctx.lineTo(ipt.x, ipt.y);
+                          }
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('dione')) {
+                      // ДИОНА: Ледяные обрывы и каньоны Хазмата
+                      if (moonR > 14) {
+                        ctx.save();
+                        ctx.strokeStyle = '#bfdbfe';
+                        ctx.lineWidth = 1.1;
+                        ctx.globalAlpha = 0.75;
+                        for (let c = -1; c <= 2; c++) {
+                          ctx.beginPath();
+                          const chLon = c * 0.8;
+                          for (let s = 0; s <= 8; s++) {
+                            const cLat = -0.5 + (s / 8) * 1.0;
+                            const cosL = Math.cos(cLat);
+                            const sinL = Math.sin(cLat);
+                            const cx1 = cosL * (Math.cos(chLon + cLat * 0.3) * mU.x + Math.sin(chLon + cLat * 0.3) * mV.x) + sinL * mN.x;
+                            const cy1 = cosL * (Math.cos(chLon + cLat * 0.3) * mU.y + Math.sin(chLon + cLat * 0.3) * mV.y) + sinL * mN.y;
+                            const cz1 = cosL * (Math.cos(chLon + cLat * 0.3) * mU.z + Math.sin(chLon + cLat * 0.3) * mV.z) + sinL * mN.z;
+                            const pt = projectMoonNormal(cx1, cy1, cz1);
+                            if (pt.front) {
+                              if (s === 0) ctx.moveTo(pt.x, pt.y);
+                              else ctx.lineTo(pt.x, pt.y);
+                            }
+                          }
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('rhea')) {
+                      // РЕЯ: Древние кратеры с лучевыми системами
+                      if (moonR > 14) {
+                        ctx.save();
+                        ctx.strokeStyle = '#e2e8f0';
+                        ctx.lineWidth = 0.9;
+                        ctx.globalAlpha = 0.65;
+                        for (let r = 1; r <= 3; r++) {
+                          const rLatRad = (r * 25 * Math.PI) / 180;
+                          const rLonRad = (r * 80 * Math.PI) / 180;
+                          const cR = Math.cos(rLatRad);
+                          const sR = Math.sin(rLatRad);
+                          const rx1 = cR * (Math.cos(rLonRad) * mU.x + Math.sin(rLonRad) * mV.x) + sR * mN.x;
+                          const ry1 = cR * (Math.cos(rLonRad) * mU.y + Math.sin(rLonRad) * mV.y) + sR * mN.y;
+                          const rz1 = cR * (Math.cos(rLonRad) * mU.z + Math.sin(rLonRad) * mV.z) + sR * mN.z;
+                          const rpt = projectMoonNormal(rx1, ry1, rz1);
+                          if (rpt.front) {
+                            ctx.beginPath();
+                            ctx.arc(rpt.x, rpt.y, moonR * 0.1, 0, Math.PI * 2);
+                            ctx.stroke();
+                          }
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('titan')) {
+                      // ТИТАН: Углеводородные моря (Море Кракена) и маяк Орбитальной суперверфи
+                      if (moonR > 14) {
+                        ctx.save();
+                        // Тёмные контуры метанового моря Кракена
+                        const krakenLatRad = (68 * Math.PI) / 180;
+                        const krakenLonRad = (310 * Math.PI) / 180;
+                        const cK = Math.cos(krakenLatRad);
+                        const sK = Math.sin(krakenLatRad);
+                        const kx = cK * (Math.cos(krakenLonRad) * mU.x + Math.sin(krakenLonRad) * mV.x) + sK * mN.x;
+                        const ky = cK * (Math.cos(krakenLonRad) * mU.y + Math.sin(krakenLonRad) * mV.y) + sK * mN.y;
+                        const kz = cK * (Math.cos(krakenLonRad) * mU.z + Math.sin(krakenLonRad) * mV.z) + sK * mN.z;
+                        const kPt = projectMoonNormal(kx, ky, kz);
+                        if (kPt.front) {
+                          ctx.fillStyle = '#1e1b4b';
+                          ctx.strokeStyle = '#38bdf8';
+                          ctx.lineWidth = 1.0;
+                          ctx.beginPath();
+                          ctx.ellipse(kPt.x, kPt.y, moonR * 0.28, moonR * 0.18, 0.35, 0, Math.PI * 2);
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                        // Маяк Орбитальной суперверфи
+                        const dockLatRad = (0 * Math.PI) / 180;
+                        const dockLonRad = (180 * Math.PI) / 180;
+                        const dKx = Math.cos(dockLonRad) * mU.x + Math.sin(dockLonRad) * mV.x;
+                        const dKy = Math.cos(dockLonRad) * mU.y + Math.sin(dockLonRad) * mV.y;
+                        const dKz = Math.cos(dockLonRad) * mU.z + Math.sin(dockLonRad) * mV.z;
+                        const dPt = projectMoonNormal(dKx, dKy, dKz);
+                        if (dPt.front) {
+                          ctx.strokeStyle = '#38bdf8';
+                          ctx.fillStyle = '#38bdf8';
+                          ctx.lineWidth = 1.2;
+                          ctx.beginPath();
+                          ctx.arc(dPt.x, dPt.y, 2.8, 0, Math.PI * 2);
+                          ctx.fill();
+                          ctx.beginPath();
+                          ctx.arc(dPt.x, dPt.y, 5.5, 0, Math.PI * 2);
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('iapetus')) {
+                      // ЯПЕТ: Двухцветная поверхность (область Кассини) и экваториальный горный гребень 20 км
+                      if (moonR > 14) {
+                        ctx.save();
+                        // Тёмное полушарие Кассини
+                        ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+                        ctx.beginPath();
+                        ctx.arc(msx - moonR * 0.3, msy, moonR * 0.7, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // Экваториальный горный гребень (стена вдоль экватора)
+                        ctx.strokeStyle = '#f8fafc';
+                        ctx.lineWidth = 1.5;
+                        ctx.beginPath();
+                        for (let s = 0; s <= 20; s++) {
+                          const lon = (s / 20) * Math.PI * 2;
+                          const gx = Math.cos(lon) * mU.x + Math.sin(lon) * mV.x;
+                          const gy = Math.cos(lon) * mU.y + Math.sin(lon) * mV.y;
+                          const gz = Math.cos(lon) * mU.z + Math.sin(lon) * mV.z;
+                          const gpt = projectMoonNormal(gx, gy, gz);
+                          if (gpt.front) {
+                            if (s === 0) ctx.moveTo(gpt.x, gpt.y);
+                            else ctx.lineTo(gpt.x, gpt.y);
+                          }
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('miranda')) {
+                      // МИРАНДА: Колоссальный 20-километровый уступ Верона (Verona Chasma) и корона Инвернесс
+                      if (moonR > 12) {
+                        ctx.save();
+                        // Уступ Верона: отвесный ледяной сброс
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 1.6;
+                        ctx.beginPath();
+                        for (let s = -4; s <= 4; s++) {
+                          const vLat = (s * 8 * Math.PI) / 180;
+                          const vLon = (-30 * Math.PI) / 180;
+                          const cv = Math.cos(vLat);
+                          const sv = Math.sin(vLat);
+                          const vx = cv * (Math.cos(vLon) * mU.x + Math.sin(vLon) * mV.x) + sv * mN.x;
+                          const vy = cv * (Math.cos(vLon) * mU.y + Math.sin(vLon) * mV.y) + sv * mN.y;
+                          const vz = cv * (Math.cos(vLon) * mU.z + Math.sin(vLon) * mV.z) + sv * mN.z;
+                          const pt = projectMoonNormal(vx, vy, vz);
+                          if (pt.front) {
+                            if (s === -4) ctx.moveTo(pt.x, pt.y);
+                            else ctx.lineTo(pt.x, pt.y);
+                          }
+                        }
+                        ctx.stroke();
+
+                        // Корона Инвернесс (яйцевидная форма складчатости)
+                        ctx.strokeStyle = '#94a3b8';
+                        ctx.lineWidth = 1.0;
+                        const cLat = (-45 * Math.PI) / 180;
+                        const cLon = (20 * Math.PI) / 180;
+                        const cc = Math.cos(cLat);
+                        const sc = Math.sin(cLat);
+                        const cx1 = cc * (Math.cos(cLon) * mU.x + Math.sin(cLon) * mV.x) + sc * mN.x;
+                        const cy1 = cc * (Math.cos(cLon) * mU.y + Math.sin(cLon) * mV.y) + sc * mN.y;
+                        const cz1 = cc * (Math.cos(cLon) * mU.z + Math.sin(cLon) * mV.z) + sc * mN.z;
+                        const cPt = projectMoonNormal(cx1, cy1, cz1);
+                        if (cPt.front) {
+                          ctx.beginPath();
+                          ctx.ellipse(cPt.x, cPt.y, moonR * 0.25, moonR * 0.16, 0.4, 0, Math.PI * 2);
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('ariel')) {
+                      // АРИЭЛЬ: Сияющие рифтовые долины Качина (Kachina Chasma) и гладкая криолава
+                      if (moonR > 13) {
+                        ctx.save();
+                        ctx.strokeStyle = '#7dd3fc';
+                        ctx.lineWidth = 1.2;
+                        ctx.globalAlpha = 0.85;
+                        for (let rIdx = -1; rIdx <= 1; rIdx++) {
+                          ctx.beginPath();
+                          const rOffset = rIdx * 0.4;
+                          for (let s = 0; s <= 10; s++) {
+                            const aLat = -0.5 + (s / 10) * 1.0;
+                            const ca = Math.cos(aLat);
+                            const sa = Math.sin(aLat);
+                            const aLon = rOffset + aLat * 0.5;
+                            const ax = ca * (Math.cos(aLon) * mU.x + Math.sin(aLon) * mV.x) + sa * mN.x;
+                            const ay = ca * (Math.cos(aLon) * mU.y + Math.sin(aLon) * mV.y) + sa * mN.y;
+                            const az = ca * (Math.cos(aLon) * mU.z + Math.sin(aLon) * mV.z) + sa * mN.z;
+                            const aPt = projectMoonNormal(ax, ay, az);
+                            if (aPt.front) {
+                              if (s === 0) ctx.moveTo(aPt.x, aPt.y);
+                              else ctx.lineTo(aPt.x, aPt.y);
+                            }
+                          }
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('umbriel')) {
+                      // УМБРИЭЛЬ: Яркое светлое кольцо кратера Ванда (Wunda) на тёмном теле
+                      if (moonR > 13) {
+                        ctx.save();
+                        const wLat = (-7 * Math.PI) / 180;
+                        const wLon = (105 * Math.PI) / 180;
+                        const cw = Math.cos(wLat);
+                        const sw = Math.sin(wLat);
+                        const wx = cw * (Math.cos(wLon) * mU.x + Math.sin(wLon) * mV.x) + sw * mN.x;
+                        const wy = cw * (Math.cos(wLon) * mU.y + Math.sin(wLon) * mV.y) + sw * mN.y;
+                        const wz = cw * (Math.cos(wLon) * mU.z + Math.sin(wLon) * mV.z) + sw * mN.z;
+                        const wPt = projectMoonNormal(wx, wy, wz);
+                        if (wPt.front) {
+                          ctx.strokeStyle = '#f8fafc';
+                          ctx.fillStyle = '#f8fafc';
+                          ctx.lineWidth = 1.3;
+                          ctx.beginPath();
+                          ctx.arc(wPt.x, wPt.y, Math.max(2, moonR * 0.16), 0, Math.PI * 2);
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('titania')) {
+                      // ТИТАНИЯ: Колоссальная каньонная система Мессина (Messina Chasma) протяжённостью 1500 км
+                      if (moonR > 14) {
+                        ctx.save();
+                        ctx.strokeStyle = '#38bdf8';
+                        ctx.lineWidth = 1.4;
+                        ctx.beginPath();
+                        for (let s = 0; s <= 14; s++) {
+                          const tLat = -0.7 + (s / 14) * 1.3;
+                          const ct = Math.cos(tLat);
+                          const st1 = Math.sin(tLat);
+                          const tLon = 0.2 + tLat * 0.6;
+                          const tx = ct * (Math.cos(tLon) * mU.x + Math.sin(tLon) * mV.x) + st1 * mN.x;
+                          const ty = ct * (Math.cos(tLon) * mU.y + Math.sin(tLon) * mV.y) + st1 * mN.y;
+                          const tz = ct * (Math.cos(tLon) * mU.z + Math.sin(tLon) * mV.z) + st1 * mN.z;
+                          const tPt = projectMoonNormal(tx, ty, tz);
+                          if (tPt.front) {
+                            if (s === 0) ctx.moveTo(tPt.x, tPt.y);
+                            else ctx.lineTo(tPt.x, tPt.y);
+                          }
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('oberon')) {
+                      // ОБЕРОН: Кратеры Гамлет и Макбет с тёмными пятнами и горный пик 11 км
+                      if (moonR > 14) {
+                        ctx.save();
+                        // Кратер Гамлет
+                        const gLat = (-46 * Math.PI) / 180;
+                        const gLon = (44 * Math.PI) / 180;
+                        const cg = Math.cos(gLat);
+                        const sg = Math.sin(gLat);
+                        const gx1 = cg * (Math.cos(gLon) * mU.x + Math.sin(gLon) * mV.x) + sg * mN.x;
+                        const gy1 = cg * (Math.cos(gLon) * mU.y + Math.sin(gLon) * mV.y) + sg * mN.y;
+                        const gz1 = cg * (Math.cos(gLon) * mU.z + Math.sin(gLon) * mV.z) + sg * mN.z;
+                        const gPt = projectMoonNormal(gx1, gy1, gz1);
+                        if (gPt.front) {
+                          ctx.fillStyle = '#0f172a';
+                          ctx.strokeStyle = '#e2e8f0';
+                          ctx.lineWidth = 1.0;
+                          ctx.beginPath();
+                          ctx.arc(gPt.x, gPt.y, moonR * 0.2, 0, Math.PI * 2);
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                        // Пик высотой 11 км на юго-восточном лимбе
+                        const pLat = (-30 * Math.PI) / 180;
+                        const pLon = (160 * Math.PI) / 180;
+                        const cp = Math.cos(pLat);
+                        const sp = Math.sin(pLat);
+                        const px1 = cp * (Math.cos(pLon) * mU.x + Math.sin(pLon) * mV.x) + sp * mN.x;
+                        const py1 = cp * (Math.cos(pLon) * mU.y + Math.sin(pLon) * mV.y) + sp * mN.y;
+                        const pz1 = cp * (Math.cos(pLon) * mU.z + Math.sin(pLon) * mV.z) + sp * mN.z;
+                        const peakPt = projectMoonNormal(px1, py1, pz1);
+                        if (peakPt.front) {
+                          ctx.strokeStyle = '#38bdf8';
+                          ctx.lineWidth = 1.4;
+                          ctx.beginPath();
+                          ctx.moveTo(peakPt.x - 3, peakPt.y + 2);
+                          ctx.lineTo(peakPt.x, peakPt.y - 4);
+                          ctx.lineTo(peakPt.x + 3, peakPt.y + 2);
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('triton')) {
+                      // ТРИТОН: Активные криогейзеры жидкого азота на южном полюсе высотой 8 км и рельеф «дынная корка»
+                      if (moonR > 14) {
+                        ctx.save();
+                        const geysers = [
+                          {lat: -55, lon: 40},
+                          {lat: -65, lon: 110},
+                          {lat: -48, lon: 200},
+                        ];
+                        for (const g of geysers) {
+                          const gLat = (g.lat * Math.PI) / 180;
+                          const gLon = (g.lon * Math.PI) / 180;
+                          const cg = Math.cos(gLat);
+                          const sg = Math.sin(gLat);
+                          const gx = cg * (Math.cos(gLon) * mU.x + Math.sin(gLon) * mV.x) + sg * mN.x;
+                          const gy = cg * (Math.cos(gLon) * mU.y + Math.sin(gLon) * mV.y) + sg * mN.y;
+                          const gz = cg * (Math.cos(gLon) * mU.z + Math.sin(gLon) * mV.z) + sg * mN.z;
+                          const gPt = projectMoonNormal(gx, gy, gz);
+                          if (gPt.front) {
+                            const plumePulse = Math.sin(st.frameCounter * 0.2 + g.lon) * 1.5;
+                            ctx.strokeStyle = '#38bdf8';
+                            ctx.lineWidth = 1.3;
+                            ctx.beginPath();
+                            ctx.moveTo(gPt.x, gPt.y);
+                            ctx.lineTo(gPt.x + 3, gPt.y - (moonR * 0.25 + plumePulse));
+                            ctx.stroke();
+
+                            ctx.fillStyle = '#fce7f3';
+                            ctx.beginPath();
+                            ctx.arc(gPt.x + 3, gPt.y - (moonR * 0.25 + plumePulse), 2.2, 0, Math.PI * 2);
+                            ctx.fill();
+                          }
+                        }
+
+                        // Рельеф типа «дынная корка» (волнистые ячеистые хребты)
+                        ctx.strokeStyle = 'rgba(56, 189, 248, 0.45)';
+                        ctx.lineWidth = 0.9;
+                        for (let ring = 1; ring <= 3; ring++) {
+                          const rLat = (ring * 15 * Math.PI) / 180;
+                          const rLon = (ring * 75 * Math.PI) / 180;
+                          const cr = Math.cos(rLat);
+                          const sr = Math.sin(rLat);
+                          const rx = cr * (Math.cos(rLon) * mU.x + Math.sin(rLon) * mV.x) + sr * mN.x;
+                          const ry = cr * (Math.cos(rLon) * mU.y + Math.sin(rLon) * mV.y) + sr * mN.y;
+                          const rz = cr * (Math.cos(rLon) * mU.z + Math.sin(rLon) * mV.z) + sr * mN.z;
+                          const rPt = projectMoonNormal(rx, ry, rz);
+                          if (rPt.front) {
+                            ctx.beginPath();
+                            ctx.arc(rPt.x, rPt.y, moonR * 0.18, 0, Math.PI * 2);
+                            ctx.stroke();
+                          }
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('proteus')) {
+                      // ПРОТЕЙ: Колоссальный кратер Фарос (Pharos) диаметром 250 км
+                      if (moonR > 13) {
+                        ctx.save();
+                        const fLat = (12 * Math.PI) / 180;
+                        const fLon = (85 * Math.PI) / 180;
+                        const cf = Math.cos(fLat);
+                        const sf = Math.sin(fLat);
+                        const fx = cf * (Math.cos(fLon) * mU.x + Math.sin(fLon) * mV.x) + sf * mN.x;
+                        const fy = cf * (Math.cos(fLon) * mU.y + Math.sin(fLon) * mV.y) + sf * mN.y;
+                        const fz = cf * (Math.cos(fLon) * mU.z + Math.sin(fLon) * mV.z) + sf * mN.z;
+                        const fPt = projectMoonNormal(fx, fy, fz);
+                        if (fPt.front) {
+                          ctx.fillStyle = '#0f172a';
+                          ctx.strokeStyle = '#94a3b8';
+                          ctx.lineWidth = 1.4;
+                          ctx.beginPath();
+                          ctx.arc(fPt.x, fPt.y, moonR * 0.38, 0, Math.PI * 2);
+                          ctx.fill();
+                          ctx.stroke();
+                        }
+                        ctx.restore();
+                      }
+                    } else if (gm.id.includes('galatea')) {
+                      // ГАЛАТЕЯ: Пастух кольца Адамса, гравитационные дуги
+                      if (moonR > 12) {
+                        ctx.save();
+                        ctx.strokeStyle = '#60a5fa';
+                        ctx.lineWidth = 1.2;
+                        ctx.setLineDash([2, 3]);
+                        ctx.beginPath();
+                        ctx.arc(msx, msy, moonR * 1.3, -0.4, 0.4);
+                        ctx.stroke();
+                        ctx.restore();
+                      }
+                    }
+
+                  // 4) Внешний контур и шпили полюсов спутника
+                  ctx.strokeStyle = gm.color;
+                  ctx.globalAlpha = 1.0;
+                  ctx.lineWidth = moonR > 25 ? 1.8 : 1.2;
+                  ctx.beginPath();
+                  ctx.arc(msx, msy, moonR, 0, Math.PI * 2);
+                  ctx.stroke();
+
+                  // Шпили полюсов спутника
+                  const nPolePt = projectMoonNormal(mN.x, mN.y, mN.z);
+                  const sPolePt = projectMoonNormal(-mN.x, -mN.y, -mN.z);
+                  const mSpike = Math.max(3, Math.min(10, moonR * 0.12));
+                  ctx.strokeStyle = '#00ffff';
+                  ctx.lineWidth = 1.2;
+                  ctx.beginPath();
+                  ctx.moveTo(nPolePt.x, nPolePt.y);
+                  ctx.lineTo(msx + mN.x * (moonR + mSpike), msy - mN.y * (moonR + mSpike));
+                  ctx.moveTo(sPolePt.x, sPolePt.y);
+                  ctx.lineTo(msx - mN.x * (moonR + mSpike), msy + mN.y * (moonR + mSpike));
+                  ctx.stroke();
+
+                  }
+                  if (st.stationaryOrbitPlanetId === gm.id) {
+                    ctx.save();
+                    ctx.setLineDash([6, 5]);
+                    ctx.strokeStyle = '#34d399';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.arc(msx, msy, moonR + 8, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                  }
+
+                // 5) Регистрируем спутник в списке интерактивных целей экрана
+                frameScreenTargets.push({
+                  id: gm.id,
+                  canvasX: msx,
+                  canvasY: msy,
+                  hitRadius: Math.max(18, moonR + 8),
+                  priority: 65,
+                  camPos: {x: item.pos.x, y: item.pos.y, z: item.pos.z},
+                  standoffDist: Math.round(gm.radius3D * 2.3),
+                  targetMassTons: gm.massTons,
+                  targetMassLabel: gm.massLabelRu,
+                  moonParentName: parentPlanetCleanName,
+                  moonParentGenitive: parentPlanetGenitive,
+                  profile: {
+                    id: gm.id,
+                    kind: 'PLANET',
+                    systemTag: gm.groupTag,
+                    name: gm.officialName,
+                    planetCleanName: gm.cleanName,
+                    nickname: gm.folkName,
+                    color: gm.color,
+                    description: gm.summaryRu,
+                    ...(isGalilean
+                      ? {
+                          galileanMoonMeta: gm,
+                          jupiterMeta: JUPITER_SYSTEM_DEF,
+                        }
+                      : isSaturn
+                      ? {
+                          saturnMoonMeta: gm,
+                          saturnMeta: SATURN_SYSTEM_DEF,
+                        }
+                      : isUranus
+                      ? {
+                          uranusMoonMeta: gm,
+                          uranusMeta: URANUS_SYSTEM_DEF,
+                        }
+                      : {
+                          neptuneMoonMeta: gm,
+                          neptuneMeta: NEPTUNE_SYSTEM_DEF,
+                        }),
+                      groupTag: gm.groupTag,
+                      groupsTitle: `СПУТНИК «${gm.cleanName.toUpperCase()}» (${gm.specialFeatureBadge})`,
+                      groupsDescription: `${gm.summaryRu} Стационарная орбита: ${moonOrbitDist} ед. от ${parentPlanetCleanName} (0 рад/с). ${gm.orbitLoreRu}`,
+                      businessesTitle: `КОНСОРЦИУМ «${gm.cleanName.toUpperCase()}» · РЕСУРСЫ`,
+                      businessesDescription: `${gm.surfaceCompositionRu} Океан/Атмосфера: ${gm.atmosphereOrOceanRu}.`,
+                      adverts: gm.adverts.map((adv: string, aIdx: number) => ({
+                        slotId: aIdx + 1,
+                        title: adv.split(':')[0] || `База ${gm.cleanName} #${aIdx + 1}`,
+                        description: adv,
+                        authorName: `Экспедиция ${gm.cleanName}`,
+                        karmaPlus: 25,
+                        karmaMinus: 0,
+                      })),
+                      karmaPlus: 50,
+                      karmaMinus: 0,
+                      distanceUnits: Math.round(item.dist),
+                      coordsLabel: `Стационарная орбита R=${moonOrbitDist} ед. вокруг ${parentPlanetCleanName} (0 рад/с)`,
+                      initialTab: 'PROFILE',
                     },
                   });
                 }
@@ -13708,6 +16300,998 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       ctx.stroke();
                       ctx.restore();
                     }
+                  } else if (p.isJupiter) {
+                    // =========================================================================
+                    // 8. ЮПИТЕР (ЦАРЬ ПЛАНЕТ · ГАЗОВЫЙ ГИГАНТ · R = 45 000 ЕД. ОТ ЗВЕЗДЫ)
+                    // БЕЗ КОЛЕЦ САТУРНА, С 4 СТАЦИОНАРНЫМИ ГАЛИЛЕЕВЫМИ СПУТНИКАМИ:
+                    // • Траектории стационарных орбит 4 спутников (Ио, Европа, Ганимед, Каллисто)
+                    // • Атмосферные пояса облаков (NEB, SEB, NTB, STB, Экваториальная зона)
+                    // • Большое Красное Пятно (Great Red Spot) с вращением и вихрем
+                    // • Полярные авроральные сияния и шпили оси
+                    // =========================================================================
+
+                    // 1. Траектории стационарных орбит 4 галилеевых спутников вокруг Юпитера в 3D (R = 2400 .. 9500 ед.)
+                    if (p.galileanMoons && p.galileanMoons.length > 0) {
+                      ctx.save();
+                      for (const gm of p.galileanMoons) {
+                        const rMoonOrb = gm.def.orbitRadiusFromJupiter;
+                        ctx.strokeStyle = gm.def.color;
+                        ctx.globalAlpha = 0.35;
+                        ctx.lineWidth = 1.1;
+                        ctx.setLineDash([4, 6]);
+                        ctx.beginPath();
+                        let firstMoonPt = true;
+                        for (let s = 0; s <= 36; s++) {
+                          const theta = (s / 36) * Math.PI * 2;
+                          const oPx = item.pos.x + rMoonOrb * (Math.cos(theta) * st.eclipticU.x + Math.sin(theta) * st.eclipticV.x);
+                          const oPy = item.pos.y + rMoonOrb * (Math.cos(theta) * st.eclipticU.y + Math.sin(theta) * st.eclipticV.y);
+                          const oPz = item.pos.z + rMoonOrb * (Math.cos(theta) * st.eclipticU.z + Math.sin(theta) * st.eclipticV.z);
+                          if (oPz > 25) {
+                            const osx = cx + (oPx * 380) / oPz;
+                            const osy = cy - (oPy * 380) / oPz;
+                            if (firstMoonPt) {
+                              ctx.moveTo(osx, osy);
+                              firstMoonPt = false;
+                            } else {
+                              ctx.lineTo(osx, osy);
+                            }
+                          }
+                        }
+                        ctx.stroke();
+                      }
+                      ctx.restore();
+                    }
+
+                    // 2. 3D-сфера газового гиганта Юпитера с радиальным градиентом
+                    const jupGrad = ctx.createRadialGradient(
+                      psx - planetR * 0.28,
+                      psy - planetR * 0.28,
+                      planetR * 0.1,
+                      psx,
+                      psy,
+                      planetR
+                    );
+                    jupGrad.addColorStop(0, '#fef3c7');
+                    jupGrad.addColorStop(0.3, '#f59e0b');
+                    jupGrad.addColorStop(0.65, '#b45309');
+                    jupGrad.addColorStop(1, '#451a03');
+                    ctx.fillStyle = jupGrad;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const cosSpin = Math.cos(p.spinAngle);
+                    const sinSpin = Math.sin(p.spinAngle);
+                    const pU: Vec3 = {
+                      x: cosSpin * st.eclipticU.x + sinSpin * st.eclipticV.x,
+                      y: cosSpin * st.eclipticU.y + sinSpin * st.eclipticV.y,
+                      z: cosSpin * st.eclipticU.z + sinSpin * st.eclipticV.z,
+                    };
+                    const pV: Vec3 = {
+                      x: -sinSpin * st.eclipticU.x + cosSpin * st.eclipticV.x,
+                      y: -sinSpin * st.eclipticU.y + cosSpin * st.eclipticV.y,
+                      z: -sinSpin * st.eclipticU.z + cosSpin * st.eclipticV.z,
+                    };
+                    const pN = st.eclipticN;
+
+                    const projectSphereNormal = (nx: number, ny: number, nz: number) => ({
+                      x: psx + nx * planetR,
+                      y: psy - ny * planetR,
+                      front: nz <= 0.05,
+                    });
+
+                    // 3. Атмосферные пояса облаков Юпитера (NEB, SEB, NTB, STB, Экваториальная зона)
+                    const jupBelts = [
+                      {lat: -65, color: '#b45309', w: 1.2},
+                      {lat: -52, color: '#fde68a', w: 1.4},
+                      {lat: -40, color: '#d97706', w: 1.6},
+                      {lat: -28, color: '#78350f', w: 1.8},
+                      {lat: -16, color: '#b45309', w: 2.2}, // Южный экваториальный пояс (SEB)
+                      {lat: -4, color: '#fef08a', w: 1.5},  // Экваториальная зона (EZ)
+                      {lat: 8, color: '#b45309', w: 2.2},   // Северный экваториальный пояс (NEB)
+                      {lat: 22, color: '#d97706', w: 1.8},
+                      {lat: 36, color: '#fde68a', w: 1.5},
+                      {lat: 50, color: '#78350f', w: 1.3},
+                      {lat: 64, color: '#b45309', w: 1.1},
+                    ];
+                    const beltSteps = planetR > 40 ? 40 : 22;
+                    for (const belt of jupBelts) {
+                      const latRad = (belt.lat * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+                      for (let s = 0; s < beltSteps; s++) {
+                        const lon1 = (s / beltSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / beltSteps) * Math.PI * 2;
+                        const wave1 = Math.sin(lon1 * 5 + st.frameCounter * 0.03) * 0.02;
+                        const wave2 = Math.sin(lon2 * 5 + st.frameCounter * 0.03) * 0.02;
+
+                        const n1x = (cosLat + wave1) * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) + sinLat * pN.x;
+                        const n1y = (cosLat + wave1) * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) + sinLat * pN.y;
+                        const n1z = (cosLat + wave1) * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) + sinLat * pN.z;
+
+                        const n2x = (cosLat + wave2) * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) + sinLat * pN.x;
+                        const n2y = (cosLat + wave2) * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) + sinLat * pN.y;
+                        const n2z = (cosLat + wave2) * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) + sinLat * pN.z;
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = belt.color;
+                          ctx.globalAlpha = 0.85;
+                          ctx.lineWidth = belt.w;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 4. БОЛЬШОЕ КРАСНОЕ ПЯТНО (Great Red Spot): южная широта -22°
+                    const grsLat = (-22 * Math.PI) / 180;
+                    const grsLon = -Math.PI / 2 + 0.35;
+                    const cGrs = Math.cos(grsLat);
+                    const sGrs = Math.sin(grsLat);
+                    const grsNx = cGrs * (Math.cos(grsLon) * pU.x + Math.sin(grsLon) * pV.x) + sGrs * pN.x;
+                    const grsNy = cGrs * (Math.cos(grsLon) * pU.y + Math.sin(grsLon) * pV.y) + sGrs * pN.y;
+                    const grsNz = cGrs * (Math.cos(grsLon) * pU.z + Math.sin(grsLon) * pV.z) + sGrs * pN.z;
+                    const grsPt = projectSphereNormal(grsNx, grsNy, grsNz);
+                    if (grsPt.front) {
+                      const grsRx = Math.max(3, planetR * 0.16);
+                      const grsRy = Math.max(2, planetR * 0.095);
+                      ctx.save();
+                      ctx.fillStyle = '#dc2626';
+                      ctx.globalAlpha = 0.92;
+                      ctx.beginPath();
+                      ctx.ellipse(grsPt.x, grsPt.y, grsRx, grsRy, 0.08, 0, Math.PI * 2);
+                      ctx.fill();
+                      ctx.strokeStyle = '#fef08a';
+                      ctx.lineWidth = 1.1;
+                      ctx.stroke();
+                      ctx.fillStyle = '#f87171';
+                      ctx.beginPath();
+                      ctx.ellipse(grsPt.x, grsPt.y, grsRx * 0.5, grsRy * 0.45, 0.08, 0, Math.PI * 2);
+                      ctx.fill();
+                      ctx.restore();
+                    }
+
+                    // 5. Полярные сияния и шпили полюсов Юпитера
+                    const northPolePt = projectSphereNormal(pN.x, pN.y, pN.z);
+                    const southPolePt = projectSphereNormal(-pN.x, -pN.y, -pN.z);
+                    if (northPolePt.front) {
+                      ctx.save();
+                      ctx.strokeStyle = '#c084fc';
+                      ctx.globalAlpha = 0.55;
+                      ctx.lineWidth = 1.5;
+                      ctx.beginPath();
+                      ctx.arc(northPolePt.x, northPolePt.y, Math.max(3, planetR * 0.18), 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.globalAlpha = 1.0;
+                    ctx.lineWidth = planetR > 35 ? 2.5 : 1.6;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const axisSpike = Math.max(4, Math.min(18, planetR * 0.14));
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(northPolePt.x, northPolePt.y);
+                    ctx.lineTo(psx + pN.x * (planetR + axisSpike), psy - pN.y * (planetR + axisSpike));
+                    ctx.moveTo(southPolePt.x, southPolePt.y);
+                    ctx.lineTo(psx - pN.x * (planetR + axisSpike), psy + pN.y * (planetR + axisSpike));
+                    ctx.stroke();
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isSaturn) {
+                    // =========================================================================
+                    // 9. САТУРН (ВЛАСТЕЛИН КОЛЕЦ · R = 60 000 ЕД. ОТ ЗВЕЗДЫ)
+                    // РОСКОШНЫЕ 3D-КОЛЬЦА САТУРНА И 7 СТАЦИОНАРНЫХ СПУТНИКОВ (2 000 .. 8 000 ЕД.):
+                    // • Траектории стационарных орбит 7 спутников (Мимас, Энцелад, Тефия, Диона, Рея, Титан, Япет)
+                    // • Задняя дуга 3D-колец Сатурна (A, B, C с щелью Кассини)
+                    // • 3D-сфера Сатурна с тёплым золотистым градиентом
+                    // • Северный полярный гексагон (шестиугольный вихрь)
+                    // • Передняя дуга 3D-колец Сатурна
+                    // • Полярные сияния и шпили оси
+                    // =========================================================================
+
+                    // 1. Траектории стационарных орбит 7 спутников вокруг Сатурна в 3D (R = 2000 .. 8000 ед.)
+                    if (p.saturnMoons && p.saturnMoons.length > 0) {
+                      ctx.save();
+                      for (const sm of p.saturnMoons) {
+                        const rMoonOrb = sm.def.orbitRadiusFromSaturn;
+                        ctx.strokeStyle = sm.def.color;
+                        ctx.globalAlpha = 0.35;
+                        ctx.lineWidth = 1.1;
+                        ctx.setLineDash([4, 6]);
+                        ctx.beginPath();
+                        let firstMoonPt = true;
+                        for (let s = 0; s <= 36; s++) {
+                          const theta = (s / 36) * Math.PI * 2;
+                          const oPx = item.pos.x + rMoonOrb * (Math.cos(theta) * st.eclipticU.x + Math.sin(theta) * st.eclipticV.x);
+                          const oPy = item.pos.y + rMoonOrb * (Math.cos(theta) * st.eclipticU.y + Math.sin(theta) * st.eclipticV.y);
+                          const oPz = item.pos.z + rMoonOrb * (Math.cos(theta) * st.eclipticU.z + Math.sin(theta) * st.eclipticV.z);
+                          if (oPz > 25) {
+                            const osx = cx + (oPx * 380) / oPz;
+                            const osy = cy - (oPy * 380) / oPz;
+                            if (firstMoonPt) {
+                              ctx.moveTo(osx, osy);
+                              firstMoonPt = false;
+                            } else {
+                              ctx.lineTo(osx, osy);
+                            }
+                          }
+                        }
+                        ctx.stroke();
+                      }
+                      ctx.restore();
+                    }
+
+                    // 1B. Задняя дуга 3D-колец Сатурна (расположена за телом планеты)
+                    const saturnRingTracks = SATURN_RING_TRACKS;
+                    const ringSteps = planetR > 35 ? 48 : 32;
+                    ctx.save();
+                    for (const tr of saturnRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha * 0.75;
+                      ctx.lineWidth = Math.max(1.0, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= ringSteps; s++) {
+                        const th = (s / ringSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * st.eclipticU.x + sTh * st.eclipticV.x);
+                        const rPy = item.pos.y + rRing * (cTh * st.eclipticU.y + sTh * st.eclipticV.y);
+                        const rPz = item.pos.z + rRing * (cTh * st.eclipticU.z + sTh * st.eclipticV.z);
+                        if (rPz > item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // 2. 3D-сфера Сатурна с тёплым золотисто-сливочным градиентом
+                    const satGrad = ctx.createRadialGradient(
+                      psx - planetR * 0.28,
+                      psy - planetR * 0.28,
+                      planetR * 0.1,
+                      psx,
+                      psy,
+                      planetR
+                    );
+                    satGrad.addColorStop(0, '#fefce8');
+                    satGrad.addColorStop(0.3, '#fef08a');
+                    satGrad.addColorStop(0.65, '#f59e0b');
+                    satGrad.addColorStop(1, '#78350f');
+                    ctx.fillStyle = satGrad;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const cosSpin = Math.cos(p.spinAngle);
+                    const sinSpin = Math.sin(p.spinAngle);
+                    const pU: Vec3 = {
+                      x: cosSpin * st.eclipticU.x + sinSpin * st.eclipticV.x,
+                      y: cosSpin * st.eclipticU.y + sinSpin * st.eclipticV.y,
+                      z: cosSpin * st.eclipticU.z + sinSpin * st.eclipticV.z,
+                    };
+                    const pV: Vec3 = {
+                      x: -sinSpin * st.eclipticU.x + cosSpin * st.eclipticV.x,
+                      y: -sinSpin * st.eclipticU.y + cosSpin * st.eclipticV.y,
+                      z: -sinSpin * st.eclipticU.z + cosSpin * st.eclipticV.z,
+                    };
+                    const pN = st.eclipticN;
+
+                    const projectSphereNormal = (nx: number, ny: number, nz: number) => ({
+                      x: psx + nx * planetR,
+                      y: psy - ny * planetR,
+                      front: nz <= 0.05,
+                    });
+
+                    // 3. Золотистые струйные пояса атмосферы Сатурна
+                    const satBelts = [
+                      {lat: -60, color: '#ca8a04', w: 1.1},
+                      {lat: -45, color: '#fef08a', w: 1.3},
+                      {lat: -30, color: '#eab308', w: 1.5},
+                      {lat: -15, color: '#b45309', w: 1.7},
+                      {lat: 0, color: '#fef9c3', w: 2.0},  // Экваториальный пояс
+                      {lat: 15, color: '#eab308', w: 1.7},
+                      {lat: 30, color: '#ca8a04', w: 1.5},
+                      {lat: 45, color: '#fef08a', w: 1.3},
+                      {lat: 60, color: '#b45309', w: 1.1},
+                    ];
+                    const beltSteps = planetR > 40 ? 36 : 20;
+                    for (const belt of satBelts) {
+                      const latRad = (belt.lat * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+                      for (let s = 0; s < beltSteps; s++) {
+                        const lon1 = (s / beltSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / beltSteps) * Math.PI * 2;
+                        const wave1 = Math.sin(lon1 * 4 + st.frameCounter * 0.02) * 0.015;
+                        const wave2 = Math.sin(lon2 * 4 + st.frameCounter * 0.02) * 0.015;
+
+                        const n1x = (cosLat + wave1) * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) + sinLat * pN.x;
+                        const n1y = (cosLat + wave1) * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) + sinLat * pN.y;
+                        const n1z = (cosLat + wave1) * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) + sinLat * pN.z;
+
+                        const n2x = (cosLat + wave2) * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) + sinLat * pN.x;
+                        const n2y = (cosLat + wave2) * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) + sinLat * pN.y;
+                        const n2z = (cosLat + wave2) * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) + sinLat * pN.z;
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = belt.color;
+                          ctx.globalAlpha = 0.75;
+                          ctx.lineWidth = belt.w;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 4. СЕВЕРНЫЙ ПОЛЯРНЫЙ ГЕКСАГОН САТУРНА (шестиугольный вихрь на широте 78° с.ш.)
+                    const hexLatRad = (78 * Math.PI) / 180;
+                    const cHex = Math.cos(hexLatRad);
+                    const sHex = Math.sin(hexLatRad);
+                    ctx.save();
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.lineWidth = 1.4;
+                    ctx.globalAlpha = 0.85;
+                    ctx.beginPath();
+                    for (let h = 0; h <= 6; h++) {
+                      const hLon = (h / 6) * Math.PI * 2 + st.frameCounter * 0.01;
+                      const hnx = cHex * (Math.cos(hLon) * pU.x + Math.sin(hLon) * pV.x) + sHex * pN.x;
+                      const hny = cHex * (Math.cos(hLon) * pU.y + Math.sin(hLon) * pV.y) + sHex * pN.y;
+                      const hnz = cHex * (Math.cos(hLon) * pU.z + Math.sin(hLon) * pV.z) + sHex * pN.z;
+                      const hpt = projectSphereNormal(hnx, hny, hnz);
+                      if (hpt.front) {
+                        if (h === 0) ctx.moveTo(hpt.x, hpt.y);
+                        else ctx.lineTo(hpt.x, hpt.y);
+                      }
+                    }
+                    ctx.stroke();
+                    ctx.restore();
+
+                    // 4B. Передняя дуга 3D-колец Сатурна (перед телом планеты)
+                    ctx.save();
+                    for (const tr of saturnRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha;
+                      ctx.lineWidth = Math.max(1.1, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= ringSteps; s++) {
+                        const th = (s / ringSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * st.eclipticU.x + sTh * st.eclipticV.x);
+                        const rPy = item.pos.y + rRing * (cTh * st.eclipticU.y + sTh * st.eclipticV.y);
+                        const rPz = item.pos.z + rRing * (cTh * st.eclipticU.z + sTh * st.eclipticV.z);
+                        if (rPz <= item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // 5. Полярные сияния и шпили полюсов Сатурна
+                    const northPolePt = projectSphereNormal(pN.x, pN.y, pN.z);
+                    const southPolePt = projectSphereNormal(-pN.x, -pN.y, -pN.z);
+                    if (northPolePt.front) {
+                      ctx.save();
+                      ctx.strokeStyle = '#fef08a';
+                      ctx.globalAlpha = 0.55;
+                      ctx.lineWidth = 1.5;
+                      ctx.beginPath();
+                      ctx.arc(northPolePt.x, northPolePt.y, Math.max(3, planetR * 0.16), 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+
+                    ctx.strokeStyle = '#fbbf24';
+                    ctx.globalAlpha = 1.0;
+                    ctx.lineWidth = planetR > 35 ? 2.5 : 1.6;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const axisSpike = Math.max(4, Math.min(18, planetR * 0.14));
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(northPolePt.x, northPolePt.y);
+                    ctx.lineTo(psx + pN.x * (planetR + axisSpike), psy - pN.y * (planetR + axisSpike));
+                    ctx.moveTo(southPolePt.x, southPolePt.y);
+                    ctx.lineTo(psx - pN.x * (planetR + axisSpike), psy + pN.y * (planetR + axisSpike));
+                    ctx.stroke();
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isUranus) {
+                    // =========================================================================
+                    // 10. УРАН (ЛЕДЯНОЙ ГИГАНТ · НАКЛОН ОСИ 90° · R = 70 000 ЕД. ОТ ЗВЕЗДЫ)
+                    // ПЛАНЕТА ЛЕЖИТ НА БОКУ! ТОНКИЕ КОЛЬЦА И 5 СТАЦИОНАРНЫХ СПУТНИКОВ (2000..10000 ЕД.):
+                    // • Траектории стационарных орбит 5 спутников (Миранда, Ариэль, Умбриэль, Титания, Оберон)
+                    //   в плоскости eclipticV x eclipticN (перпендикулярно эклиптике!)
+                    // • Задняя дуга тонких колец Урана (перпендикулярно эклиптике)
+                    // • 3D-сфера Урана с аквамариново-бирюзовым градиентом
+                    // • Метановые атмосферные пояса, ориентированные по 90° оси
+                    // • Передняя дуга колец Урана
+                    // • Горизонтальные полярные сияния и шпили оси (наклон 90°)
+                    // =========================================================================
+
+                    // 1. Траектории стационарных орбит 5 спутников вокруг Урана в 3D (R = 2000 .. 10 000 ед.)
+                    // Так как наклон оси Урана 90°, орбитальная плоскость спутников перпендикулярна эклиптике:
+                    if (p.uranusMoons && p.uranusMoons.length > 0) {
+                      ctx.save();
+                      for (const um of p.uranusMoons) {
+                        const rMoonOrb = um.def.orbitRadiusFromUranus;
+                        ctx.strokeStyle = um.def.color;
+                        ctx.globalAlpha = 0.35;
+                        ctx.lineWidth = 1.1;
+                        ctx.setLineDash([4, 6]);
+                        ctx.beginPath();
+                        let firstMoonPt = true;
+                        for (let s = 0; s <= 36; s++) {
+                          const theta = (s / 36) * Math.PI * 2;
+                          const oPx = item.pos.x + rMoonOrb * (Math.cos(theta) * st.eclipticV.x + Math.sin(theta) * st.eclipticN.x);
+                          const oPy = item.pos.y + rMoonOrb * (Math.cos(theta) * st.eclipticV.y + Math.sin(theta) * st.eclipticN.y);
+                          const oPz = item.pos.z + rMoonOrb * (Math.cos(theta) * st.eclipticV.z + Math.sin(theta) * st.eclipticN.z);
+                          if (oPz > 25) {
+                            const osx = cx + (oPx * 380) / oPz;
+                            const osy = cy - (oPy * 380) / oPz;
+                            if (firstMoonPt) {
+                              ctx.moveTo(osx, osy);
+                              firstMoonPt = false;
+                            } else {
+                              ctx.lineTo(osx, osy);
+                            }
+                          }
+                        }
+                        ctx.stroke();
+                      }
+                      ctx.restore();
+                    }
+
+                    // 1B. Задняя дуга тонких колец Урана (перпендикулярно эклиптике, за телом планеты)
+                    const uranusRingTracks = URANUS_RING_TRACKS;
+                    const ringSteps = planetR > 35 ? 48 : 32;
+                    ctx.save();
+                    for (const tr of uranusRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha * 0.70;
+                      ctx.lineWidth = Math.max(1.0, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= ringSteps; s++) {
+                        const th = (s / ringSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * st.eclipticV.x + sTh * st.eclipticN.x);
+                        const rPy = item.pos.y + rRing * (cTh * st.eclipticV.y + sTh * st.eclipticN.y);
+                        const rPz = item.pos.z + rRing * (cTh * st.eclipticV.z + sTh * st.eclipticN.z);
+                        if (rPz > item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // 2. 3D-сфера Урана с аквамариново-бирюзовым градиентом
+                    const uraGrad = ctx.createRadialGradient(
+                      psx - planetR * 0.28,
+                      psy - planetR * 0.28,
+                      planetR * 0.1,
+                      psx,
+                      psy,
+                      planetR
+                    );
+                    uraGrad.addColorStop(0, '#e0f2fe');
+                    uraGrad.addColorStop(0.3, '#7dd3fc');
+                    uraGrad.addColorStop(0.65, '#0284c7');
+                    uraGrad.addColorStop(1, '#082f49');
+                    ctx.fillStyle = uraGrad;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 90° наклон оси Урана: нормаль оси pN направлена вдоль eclipticU (лежит в плоскости орбиты!)
+                    const cosSpin = Math.cos(p.spinAngle);
+                    const sinSpin = Math.sin(p.spinAngle);
+                    const pN = st.eclipticU; // Ось вращения Урана лежит на боку
+                    const pU: Vec3 = {
+                      x: cosSpin * st.eclipticV.x + sinSpin * st.eclipticN.x,
+                      y: cosSpin * st.eclipticV.y + sinSpin * st.eclipticN.y,
+                      z: cosSpin * st.eclipticV.z + sinSpin * st.eclipticN.z,
+                    };
+                    const pV: Vec3 = {
+                      x: -sinSpin * st.eclipticV.x + cosSpin * st.eclipticN.x,
+                      y: -sinSpin * st.eclipticV.y + cosSpin * st.eclipticN.y,
+                      z: -sinSpin * st.eclipticV.z + cosSpin * st.eclipticN.z,
+                    };
+
+                    const projectSphereNormal = (nx: number, ny: number, nz: number) => ({
+                      x: psx + nx * planetR,
+                      y: psy - ny * planetR,
+                      front: nz <= 0.05,
+                    });
+
+                    // 3. Метановые пояса атмосферы Урана (аквамариновые параллели, ориентированные с наклоном 90°)
+                    const uraBelts = [
+                      {lat: -60, color: '#38bdf8', w: 1.1},
+                      {lat: -40, color: '#7dd3fc', w: 1.3},
+                      {lat: -20, color: '#bae6fd', w: 1.5},
+                      {lat: 0, color: '#e0f2fe', w: 1.8}, // Наклонённый экватор Урана
+                      {lat: 20, color: '#bae6fd', w: 1.5},
+                      {lat: 40, color: '#7dd3fc', w: 1.3},
+                      {lat: 60, color: '#38bdf8', w: 1.1},
+                    ];
+                    const beltSteps = planetR > 40 ? 36 : 20;
+                    for (const belt of uraBelts) {
+                      const latRad = (belt.lat * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+                      for (let s = 0; s < beltSteps; s++) {
+                        const lon1 = (s / beltSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / beltSteps) * Math.PI * 2;
+                        const wave1 = Math.sin(lon1 * 4 + st.frameCounter * 0.02) * 0.012;
+                        const wave2 = Math.sin(lon2 * 4 + st.frameCounter * 0.02) * 0.012;
+
+                        const n1x = (cosLat + wave1) * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) + sinLat * pN.x;
+                        const n1y = (cosLat + wave1) * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) + sinLat * pN.y;
+                        const n1z = (cosLat + wave1) * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) + sinLat * pN.z;
+
+                        const n2x = (cosLat + wave2) * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) + sinLat * pN.x;
+                        const n2y = (cosLat + wave2) * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) + sinLat * pN.y;
+                        const n2z = (cosLat + wave2) * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) + sinLat * pN.z;
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = belt.color;
+                          ctx.globalAlpha = 0.75;
+                          ctx.lineWidth = belt.w;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 4. Передняя дуга колец Урана (проходит перед телом планеты)
+                    ctx.save();
+                    for (const tr of uranusRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha;
+                      ctx.lineWidth = Math.max(1.1, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= ringSteps; s++) {
+                        const th = (s / ringSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * st.eclipticV.x + sTh * st.eclipticN.x);
+                        const rPy = item.pos.y + rRing * (cTh * st.eclipticV.y + sTh * st.eclipticN.y);
+                        const rPz = item.pos.z + rRing * (cTh * st.eclipticV.z + sTh * st.eclipticN.z);
+                        if (rPz <= item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // 5. Полярные сияния и горизонтальные шпили полюсов Урана (показывающие наклон 90°)
+                    const northPolePt = projectSphereNormal(pN.x, pN.y, pN.z);
+                    const southPolePt = projectSphereNormal(-pN.x, -pN.y, -pN.z);
+                    if (northPolePt.front) {
+                      ctx.save();
+                      ctx.strokeStyle = '#67e8f9';
+                      ctx.globalAlpha = 0.55;
+                      ctx.lineWidth = 1.5;
+                      ctx.beginPath();
+                      ctx.arc(northPolePt.x, northPolePt.y, Math.max(3, planetR * 0.16), 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+
+                    ctx.strokeStyle = '#38bdf8';
+                    ctx.globalAlpha = 1.0;
+                    ctx.lineWidth = planetR > 35 ? 2.5 : 1.6;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const axisSpike = Math.max(4, Math.min(18, planetR * 0.14));
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(northPolePt.x, northPolePt.y);
+                    ctx.lineTo(psx + pN.x * (planetR + axisSpike), psy - pN.y * (planetR + axisSpike));
+                    ctx.moveTo(southPolePt.x, southPolePt.y);
+                    ctx.lineTo(psx - pN.x * (planetR + axisSpike), psy + pN.y * (planetR + axisSpike));
+                    ctx.stroke();
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+                  } else if (p.isNeptune) {
+                    // =========================================================================
+                    // 11. НЕПТУН (САПФИРОВЫЙ ГИГАНТ · НАКЛОН ОСИ 30° · R = 80 000 ЕД. ОТ ЗВЕЗДЫ)
+                    // СВЕРХБЫСТРЫЕ ВЕТРЫ (2 100 КМ/Ч) · БОЛЬШОЕ ТЁМНОЕ ПЯТНО · ОБЛАКА «СКУТЕР»
+                    // ТОНКИЕ КОЛЬЦА АДАМСА (С ДУГАМИ) И 7 СТАЦИОНАРНЫХ СПУТНИКОВ (2000..10000 ЕД.):
+                    // =========================================================================
+
+                    const nepTiltRad = (30 * Math.PI) / 180;
+                    const cosNepT = Math.cos(nepTiltRad);
+                    const sinNepT = Math.sin(nepTiltRad);
+                    const nepAxisU = st.eclipticU;
+                    const nepAxisV: Vec3 = {
+                      x: cosNepT * st.eclipticV.x - sinNepT * st.eclipticN.x,
+                      y: cosNepT * st.eclipticV.y - sinNepT * st.eclipticN.y,
+                      z: cosNepT * st.eclipticV.z - sinNepT * st.eclipticN.z,
+                    };
+                    const nepAxisN: Vec3 = {
+                      x: sinNepT * st.eclipticV.x + cosNepT * st.eclipticN.x,
+                      y: sinNepT * st.eclipticV.y + cosNepT * st.eclipticN.y,
+                      z: sinNepT * st.eclipticV.z + cosNepT * st.eclipticN.z,
+                    };
+
+                    // 1. Траектории стационарных орбит 7 спутников Нептуна в 3D (R = 2 000 .. 10 000 ед.)
+                    if (p.neptuneMoons && p.neptuneMoons.length > 0) {
+                      ctx.save();
+                      for (const nm of p.neptuneMoons) {
+                        const rMoonOrb = nm.def.orbitRadiusFromNeptune;
+                        ctx.strokeStyle = nm.def.color;
+                        ctx.globalAlpha = 0.32;
+                        ctx.lineWidth = 1.0;
+                        ctx.setLineDash([4, 6]);
+                        ctx.beginPath();
+                        let firstMoonPt = true;
+                        for (let s = 0; s <= 36; s++) {
+                          const theta = (s / 36) * Math.PI * 2;
+                          const oPx = item.pos.x + rMoonOrb * (Math.cos(theta) * nepAxisU.x + Math.sin(theta) * nepAxisV.x);
+                          const oPy = item.pos.y + rMoonOrb * (Math.cos(theta) * nepAxisU.y + Math.sin(theta) * nepAxisV.y);
+                          const oPz = item.pos.z + rMoonOrb * (Math.cos(theta) * nepAxisU.z + Math.sin(theta) * nepAxisV.z);
+                          if (oPz > 25) {
+                            const osx = cx + (oPx * 380) / oPz;
+                            const osy = cy - (oPy * 380) / oPz;
+                            if (firstMoonPt) {
+                              ctx.moveTo(osx, osy);
+                              firstMoonPt = false;
+                            } else {
+                              ctx.lineTo(osx, osy);
+                            }
+                          }
+                        }
+                        ctx.stroke();
+                      }
+                      ctx.restore();
+                    }
+
+                    // 2. Задняя дуга тонких колец Нептуна (кольца Галле, Леверье, Адамса)
+                    const neptuneRingTracks = NEPTUNE_RING_TRACKS;
+                    const nepRingSteps = planetR > 35 ? 48 : 32;
+                    ctx.save();
+                    for (const tr of neptuneRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha * 0.65;
+                      ctx.lineWidth = Math.max(1.0, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= nepRingSteps; s++) {
+                        const th = (s / nepRingSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * nepAxisU.x + sTh * nepAxisV.x);
+                        const rPy = item.pos.y + rRing * (cTh * nepAxisU.y + sTh * nepAxisV.y);
+                        const rPz = item.pos.z + rRing * (cTh * nepAxisU.z + sTh * nepAxisV.z);
+                        if (rPz > item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+                    }
+                    ctx.restore();
+
+                    // 3. 3D-сфера Нептуна с насыщенным сапфирово-лазурным радиальным градиентом
+                    const nepGrad = ctx.createRadialGradient(
+                      psx - planetR * 0.28,
+                      psy - planetR * 0.28,
+                      planetR * 0.08,
+                      psx,
+                      psy,
+                      planetR
+                    );
+                    nepGrad.addColorStop(0, '#93c5fd');
+                    nepGrad.addColorStop(0.25, '#3b82f6');
+                    nepGrad.addColorStop(0.65, '#1d4ed8');
+                    nepGrad.addColorStop(1, '#0f172a');
+                    ctx.fillStyle = nepGrad;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Осевое вращение Нептуна (с наклоном 30°)
+                    const cosSpin = Math.cos(p.spinAngle);
+                    const sinSpin = Math.sin(p.spinAngle);
+                    const pU: Vec3 = {
+                      x: cosSpin * nepAxisU.x + sinSpin * nepAxisV.x,
+                      y: cosSpin * nepAxisU.y + sinSpin * nepAxisV.y,
+                      z: cosSpin * nepAxisU.z + sinSpin * nepAxisV.z,
+                    };
+                    const pV: Vec3 = {
+                      x: -sinSpin * nepAxisU.x + cosSpin * nepAxisV.x,
+                      y: -sinSpin * nepAxisU.y + cosSpin * nepAxisV.y,
+                      z: -sinSpin * nepAxisU.z + cosSpin * nepAxisV.z,
+                    };
+                    const pN = nepAxisN;
+
+                    const projectSphereNormal = (nx: number, ny: number, nz: number) => ({
+                      x: psx + nx * planetR,
+                      y: psy - ny * planetR,
+                      front: nz <= 0.05,
+                    });
+
+                    // 4. Атмосферные пояса штормов Нептуна (сверхбыстрые ветры 2100 км/ч)
+                    const nepBelts = [
+                      {lat: -65, color: '#1e40af', w: 1.0},
+                      {lat: -45, color: '#2563eb', w: 1.3},
+                      {lat: -22, color: '#38bdf8', w: 1.6}, // Зона Большого Тёмного Пятна
+                      {lat: 0, color: '#60a5fa', w: 1.8},   // Экваториальный быстрый штормовой пояс
+                      {lat: 25, color: '#38bdf8', w: 1.5},
+                      {lat: 50, color: '#2563eb', w: 1.2},
+                      {lat: 70, color: '#1e40af', w: 1.0},
+                    ];
+                    const beltSteps = planetR > 40 ? 36 : 20;
+                    for (const belt of nepBelts) {
+                      const latRad = (belt.lat * Math.PI) / 180;
+                      const cosLat = Math.cos(latRad);
+                      const sinLat = Math.sin(latRad);
+                      for (let s = 0; s < beltSteps; s++) {
+                        const lon1 = (s / beltSteps) * Math.PI * 2;
+                        const lon2 = ((s + 1) / beltSteps) * Math.PI * 2;
+                        const wave1 = Math.sin(lon1 * 5 + st.frameCounter * 0.04) * 0.015;
+                        const wave2 = Math.sin(lon2 * 5 + st.frameCounter * 0.04) * 0.015;
+
+                        const n1x = (cosLat + wave1) * (Math.cos(lon1) * pU.x + Math.sin(lon1) * pV.x) + sinLat * pN.x;
+                        const n1y = (cosLat + wave1) * (Math.cos(lon1) * pU.y + Math.sin(lon1) * pV.y) + sinLat * pN.y;
+                        const n1z = (cosLat + wave1) * (Math.cos(lon1) * pU.z + Math.sin(lon1) * pV.z) + sinLat * pN.z;
+
+                        const n2x = (cosLat + wave2) * (Math.cos(lon2) * pU.x + Math.sin(lon2) * pV.x) + sinLat * pN.x;
+                        const n2y = (cosLat + wave2) * (Math.cos(lon2) * pU.y + Math.sin(lon2) * pV.y) + sinLat * pN.y;
+                        const n2z = (cosLat + wave2) * (Math.cos(lon2) * pU.z + Math.sin(lon2) * pV.z) + sinLat * pN.z;
+
+                        const pt1 = projectSphereNormal(n1x, n1y, n1z);
+                        const pt2 = projectSphereNormal(n2x, n2y, n2z);
+
+                        if (pt1.front || pt2.front) {
+                          ctx.strokeStyle = belt.color;
+                          ctx.globalAlpha = 0.70;
+                          ctx.lineWidth = belt.w;
+                          ctx.beginPath();
+                          ctx.moveTo(pt1.x, pt1.y);
+                          ctx.lineTo(pt2.x, pt2.y);
+                          ctx.stroke();
+                        }
+                      }
+                    }
+
+                    // 5. БОЛЬШОЕ ТЁМНОЕ ПЯТНО НЕПТУНА (Great Dark Spot) и белое метановое облако «Скутер» (Scooter)
+                    const gdsLat = (-22 * Math.PI) / 180;
+                    const gdsLon = (140 * Math.PI) / 180;
+                    const cgds = Math.cos(gdsLat);
+                    const sgds = Math.sin(gdsLat);
+                    const gdsNx = cgds * (Math.cos(gdsLon) * pU.x + Math.sin(gdsLon) * pV.x) + sgds * pN.x;
+                    const gdsNy = cgds * (Math.cos(gdsLon) * pU.y + Math.sin(gdsLon) * pV.y) + sgds * pN.y;
+                    const gdsNz = cgds * (Math.cos(gdsLon) * pU.z + Math.sin(gdsLon) * pV.z) + sgds * pN.z;
+                    const gdsPt = projectSphereNormal(gdsNx, gdsNy, gdsNz);
+                    if (gdsPt.front && planetR > 14) {
+                      ctx.save();
+                      // Тёмное ядро антициклона
+                      ctx.fillStyle = '#0f172a';
+                      ctx.strokeStyle = '#1e3a8a';
+                      ctx.lineWidth = 1.3;
+                      ctx.beginPath();
+                      ctx.ellipse(gdsPt.x, gdsPt.y, planetR * 0.18, planetR * 0.11, 0.25, 0, Math.PI * 2);
+                      ctx.fill();
+                      ctx.stroke();
+
+                      // Белые метановые перистые облака «Скутер» на южной кромке
+                      ctx.fillStyle = '#ffffff';
+                      ctx.globalAlpha = 0.90;
+                      ctx.beginPath();
+                      ctx.ellipse(gdsPt.x + planetR * 0.08, gdsPt.y + planetR * 0.06, planetR * 0.08, planetR * 0.035, -0.2, 0, Math.PI * 2);
+                      ctx.fill();
+                      ctx.restore();
+                    }
+
+                    // 6. Передняя дуга колец Нептуна (проходит перед телом планеты) с дугами кольца Адамса
+                    ctx.save();
+                    for (const tr of neptuneRingTracks) {
+                      const rRing = p.radius3D * tr.rRatio;
+                      ctx.strokeStyle = tr.color;
+                      ctx.globalAlpha = tr.alpha;
+                      ctx.lineWidth = Math.max(1.1, (tr.w * 380) / pz);
+                      ctx.beginPath();
+                      let drawing = false;
+                      for (let s = 0; s <= nepRingSteps; s++) {
+                        const th = (s / nepRingSteps) * Math.PI * 2;
+                        const cTh = Math.cos(th);
+                        const sTh = Math.sin(th);
+                        const rPx = item.pos.x + rRing * (cTh * nepAxisU.x + sTh * nepAxisV.x);
+                        const rPy = item.pos.y + rRing * (cTh * nepAxisU.y + sTh * nepAxisV.y);
+                        const rPz = item.pos.z + rRing * (cTh * nepAxisU.z + sTh * nepAxisV.z);
+                        if (rPz <= item.pos.z && rPz > 25) {
+                          const rsx = cx + (rPx * 380) / rPz;
+                          const rsy = cy - (rPy * 380) / rPz;
+                          if (!drawing) {
+                            ctx.moveTo(rsx, rsy);
+                            drawing = true;
+                          } else {
+                            ctx.lineTo(rsx, rsy);
+                          }
+                        } else {
+                          drawing = false;
+                        }
+                      }
+                      ctx.stroke();
+
+                      // Яркие пылевые сгустки-дуги (Либерте, Эгалите, Фратерните) на внешнем кольце Адамса
+                      if (tr.hasArcs && planetR > 18) {
+                        ctx.strokeStyle = '#93c5fd';
+                        ctx.lineWidth = Math.max(1.8, (tr.w * 1.6 * 380) / pz);
+                        const arcPositions = [0.2, 0.45, 0.72];
+                        for (const arcPos of arcPositions) {
+                          const th = arcPos * Math.PI * 2 + st.frameCounter * 0.01;
+                          const cTh = Math.cos(th);
+                          const sTh = Math.sin(th);
+                          const rPx = item.pos.x + rRing * (cTh * nepAxisU.x + sTh * nepAxisV.x);
+                          const rPy = item.pos.y + rRing * (cTh * nepAxisU.y + sTh * nepAxisV.y);
+                          const rPz = item.pos.z + rRing * (cTh * nepAxisU.z + sTh * nepAxisV.z);
+                          if (rPz <= item.pos.z && rPz > 25) {
+                            const rsx = cx + (rPx * 380) / rPz;
+                            const rsy = cy - (rPy * 380) / rPz;
+                            ctx.beginPath();
+                            ctx.arc(rsx, rsy, 2.5, 0, Math.PI * 2);
+                            ctx.stroke();
+                          }
+                        }
+                      }
+                    }
+                    ctx.restore();
+
+                    // 7. Полярные сияния и шпили оси Нептуна (наклон 30°)
+                    const northPolePt = projectSphereNormal(pN.x, pN.y, pN.z);
+                    const southPolePt = projectSphereNormal(-pN.x, -pN.y, -pN.z);
+                    if (northPolePt.front) {
+                      ctx.save();
+                      ctx.strokeStyle = '#60a5fa';
+                      ctx.globalAlpha = 0.60;
+                      ctx.lineWidth = 1.4;
+                      ctx.beginPath();
+                      ctx.arc(northPolePt.x, northPolePt.y, Math.max(3, planetR * 0.15), 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
+
+                    ctx.strokeStyle = '#2563eb';
+                    ctx.globalAlpha = 1.0;
+                    ctx.lineWidth = planetR > 35 ? 2.4 : 1.6;
+                    ctx.beginPath();
+                    ctx.arc(psx, psy, planetR, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    const axisSpike = Math.max(4, Math.min(18, planetR * 0.14));
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 1.6;
+                    ctx.beginPath();
+                    ctx.moveTo(northPolePt.x, northPolePt.y);
+                    ctx.lineTo(psx + pN.x * (planetR + axisSpike), psy - pN.y * (planetR + axisSpike));
+                    ctx.moveTo(southPolePt.x, southPolePt.y);
+                    ctx.lineTo(psx - pN.x * (planetR + axisSpike), psy + pN.y * (planetR + axisSpike));
+                    ctx.stroke();
+
+                    if (st.stationaryOrbitPlanetId === p.id) {
+                      ctx.save();
+                      ctx.setLineDash([8, 6]);
+                      ctx.strokeStyle = '#34d399';
+                      ctx.lineWidth = 1.6;
+                      ctx.beginPath();
+                      ctx.arc(psx, psy, planetR + 10, 0, Math.PI * 2);
+                      ctx.stroke();
+                      ctx.restore();
+                    }
                   } else {
                     // Полноценная 3D-сфера с меридианами, широтами (параллелями) и полюсами без текстовых надписей
                     ctx.fillStyle = '#020710';
@@ -13881,365 +17465,12 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     }
                   }
 
-                  // =========================================================================
-                  // 4C. ОБЪЕКТЫ ЭКОСИСТЕМЫ GOBELL НА ПОВЕРХНОСТИ 3D-СФЕРЫ ПЛАНЕТЫ ИЛИ КОРАБЛЯ-БУБЛИКА (БЕЗ ТЕКСТА):
-                  // Чистые геометрические значки (Группы, Бизнеса и Объявлений).
-                  // При наведении курсора мыши никаких всплывающих окон и текстов нет —
-                  // карточка открывается ТОЛЬКО при наведении курсора мыши и нажатой клавише I!
-                  // =========================================================================
-                  if (
-                    rawPlanetR >= 8.5 &&
-                    planetR >= 18 &&
-                    p.gobellObjects &&
-                    p.gobellObjects.length > 0
-                  ) {
-                    const projectedMap = new Map<
-                      string,
-                      {
-                        obj: PlanetGoBellObject;
-                        ox: number;
-                        oy: number;
-                        nx: number;
-                        ny: number;
-                        nz: number;
-                      }
-                    >();
-
-                    for (const gbObj of p.gobellObjects) {
-                      let nx = 0;
-                      let ny = 0;
-                      let nz = 0;
-
-                      if (p.isTorusShip) {
-                        // На Корабле-Бублике размещаем маркеры Группы, Бизнеса и 4 Объявлений прямо вдоль кольца центробежной силы (R_maj = 0.74),
-                        // чтобы центральное окно бублика и схождение 4 лучей-переходов в центре оставались полностью открытыми!
-                        const torusAngle =
-                          gbObj.kind === 'GROUP'
-                            ? Math.PI * 0.25
-                            : gbObj.kind === 'BUSINESS'
-                            ? Math.PI * 1.25
-                            : (((gbObj.slotId || 1) - 1) * Math.PI) / 2;
-                        const cT = Math.cos(torusAngle);
-                        const sT = Math.sin(torusAngle);
-                        const R_maj = 0.74;
-                        nx = R_maj * (cT * tU.x + sT * tV.x);
-                        ny = R_maj * (cT * tU.y + sT * tV.y);
-                        nz = R_maj * (cT * tU.z + sT * tV.z);
-                      } else if (p.isStargate) {
-                        // На невращающихся Звёздных Вратах размещаем маркеры Группы, Бизнеса и 4 Объявлений строго на внешнем кольце Врат (R = 0.85),
-                        // чтобы центральный Горизонт Событий и верхний Мастер-Шеврон (90°) оставались полностью открытыми!
-                        const gateAngle =
-                          gbObj.kind === 'GROUP'
-                            ? Math.PI / 2 - (Math.PI * 2) / 9 // Правый верхний шеврон (50°)
-                            : gbObj.kind === 'BUSINESS'
-                            ? Math.PI / 2 + (Math.PI * 2) / 9 // Левый верхний шеврон (130°)
-                            : gbObj.slotId === 1
-                            ? Math.PI / 2 - (2 * Math.PI * 2) / 9 // 10°
-                            : gbObj.slotId === 2
-                            ? Math.PI / 2 + (2 * Math.PI * 2) / 9 // 170°
-                            : gbObj.slotId === 3
-                            ? Math.PI / 2 - (3 * Math.PI * 2) / 9 // -30°
-                            : Math.PI / 2 + (3 * Math.PI * 2) / 9; // 210°
-                        const cG = Math.cos(gateAngle);
-                        const sG = Math.sin(gateAngle);
-                        const R_gateMarker = 0.85;
-                        nx = R_gateMarker * (cG * gU.x + sG * gV.x);
-                        ny = R_gateMarker * (cG * gU.y + sG * gV.y);
-                        nz = R_gateMarker * (cG * gU.z + sG * gV.z);
-                      } else if (p.isBuranShuttle) {
-                        // Размещаем маркеры Группы, Бизнеса и 4 Объявлений на узлах конструкции ракетоплана «Буран / Шаттл»:
-                        // Кабина, Грузовой отсек, Левое и Правое дельта-крыло, Вертикальный киль и Кормовой блок двигателей
-                        let lx = 0;
-                        let ly = 0.22;
-                        let lz = 0.48;
-                        if (gbObj.kind === 'GROUP') {
-                          lx = 0;
-                          ly = 0.22;
-                          lz = 0.52; // Носовая кабина / шлюз
-                        } else if (gbObj.kind === 'BUSINESS') {
-                          lx = 0;
-                          ly = 0.24;
-                          lz = -0.06; // Центральный грузовой отсек
-                        } else if (gbObj.slotId === 1) {
-                          lx = -0.68;
-                          ly = -0.06;
-                          lz = -0.46; // Левое дельта-крыло
-                        } else if (gbObj.slotId === 2) {
-                          lx = 0.68;
-                          ly = -0.06;
-                          lz = -0.46; // Правое дельта-крыло
-                        } else if (gbObj.slotId === 3) {
-                          lx = 0;
-                          ly = 0.56;
-                          lz = -0.68; // Высокий вертикальный киль
-                        } else {
-                          lx = 0;
-                          ly = -0.04;
-                          lz = -0.82; // Блок из 3 маршевых сопел ЖРД
-                        }
-                        nx = lx * bRight.x + ly * bUp.x + lz * bForward.x;
-                        ny = lx * bRight.y + ly * bUp.y + lz * bForward.y;
-                        nz = lx * bRight.z + ly * bUp.z + lz * bForward.z;
-                      } else {
-                        const latRad = (gbObj.latDeg * Math.PI) / 180;
-                        const lonRad = (gbObj.lonOffsetDeg * Math.PI) / 180;
-                        const cosLat = Math.cos(latRad);
-                        const sinLat = Math.sin(latRad);
-                        const sinLon = Math.sin(lonRad);
-                        const cosLon = Math.cos(lonRad);
-
-                        const eqX = sinLon * pU.x - cosLon * pV.x;
-                        const eqY = sinLon * pU.y - cosLon * pV.y;
-                        const eqZ = sinLon * pU.z - cosLon * pV.z;
-
-                        nx = cosLat * eqX + sinLat * pN.x;
-                        ny = cosLat * eqY + sinLat * pN.y;
-                        nz = cosLat * eqZ + sinLat * pN.z;
-                      }
-
-                      const ox = psx + nx * planetR;
-                      const oy = psy - ny * planetR;
-
-                      projectedMap.set(gbObj.id, {obj: gbObj, ox, oy, nx, ny, nz});
-                      frameProjectedPlanetObjects.push({
-                        obj: gbObj,
-                        planetName: p.name,
-                        canvasX: ox,
-                        canvasY: oy,
-                        hitRadius: Math.max(15, Math.min(28, planetR * 0.13)),
-                      });
-                    }
-
-                      const businessProj = Array.from(projectedMap.values()).find(
-                        (entry) => entry.obj.kind === 'BUSINESS'
-                      );
-                      if (businessProj) {
-                        ctx.save();
-                        ctx.setLineDash([3, 4]);
-                        ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
-                        ctx.lineWidth = 1.2;
-                        for (const entry of projectedMap.values()) {
-                          if (entry.obj.kind === 'ADVERT') {
-                            ctx.beginPath();
-                            ctx.moveTo(businessProj.ox, businessProj.oy);
-                            ctx.lineTo(entry.ox, entry.oy);
-                            ctx.stroke();
-                          }
-                        }
-                        ctx.restore();
-                      }
-
-                      const pGroupObj = p.gobellObjects.find((o) => o.kind === 'GROUP');
-                      const pBizObj = p.gobellObjects.find((o) => o.kind === 'BUSINESS');
-                      const pAdvertsList = p.gobellObjects
-                        .filter((o) => o.kind === 'ADVERT')
-                        .map((o) => ({
-                          slotId: o.slotId || 1,
-                          title: o.title,
-                          description: o.description,
-                          authorName: o.authorName,
-                          karmaPlus: o.karmaPlus,
-                          karmaMinus: o.karmaMinus,
-                        }));
-
-                      for (const {obj: gbObj, ox, oy, nx, ny, nz} of projectedMap.values()) {
-                        const isHovered = hoveredScreenTargetRef.current?.id === gbObj.id;
-                        const baseR = Math.max(
-                          6,
-                          Math.min(
-                            gbObj.kind === 'ADVERT' ? 13 : 16,
-                            planetR * (gbObj.kind === 'ADVERT' ? 0.075 : 0.09)
-                          )
-                        );
-                        const drawR = isHovered ? baseR * 1.25 : baseR;
-                        const pulseR =
-                          drawR + 4 + Math.sin(st.frameCounter * 0.08 + (gbObj.slotId || 0)) * 2.5;
-
-                        ctx.save();
-                        if (gbObj.kind === 'GROUP') {
-                          // 1. МАРКЕР ГРУППЫ ПЛАНЕТЫ (чистая геометрия без текста)
-                          ctx.strokeStyle = isHovered
-                            ? '#ffffff'
-                            : 'rgba(16, 185, 129, 0.75)';
-                          ctx.lineWidth = isHovered ? 2.2 : 1.3;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, pulseR, 0, Math.PI * 2);
-                          ctx.stroke();
-
-                          ctx.fillStyle = isHovered ? '#059669' : '#10b981';
-                          ctx.strokeStyle = '#ffffff';
-                          ctx.lineWidth = 2;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, drawR, 0, Math.PI * 2);
-                          ctx.fill();
-                          ctx.stroke();
-
-                          ctx.fillStyle = '#ffffff';
-                          ctx.beginPath();
-                          ctx.arc(ox, oy - drawR * 0.22, drawR * 0.28, 0, Math.PI * 2);
-                          ctx.fill();
-                          ctx.beginPath();
-                          ctx.arc(
-                            ox,
-                            oy + drawR * 0.45,
-                            drawR * 0.48,
-                            Math.PI * 1.1,
-                            Math.PI * 1.9
-                          );
-                          ctx.fill();
-                        } else if (gbObj.kind === 'BUSINESS') {
-                          // 2. МАРКЕР БИЗНЕСА ПЛАНЕТЫ (чистая геометрия золотого кристалла без текста)
-                          ctx.strokeStyle = isHovered
-                            ? '#ffffff'
-                            : 'rgba(251, 191, 36, 0.8)';
-                          ctx.lineWidth = isHovered ? 2.4 : 1.4;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, pulseR, 0, Math.PI * 2);
-                          ctx.stroke();
-
-                          ctx.fillStyle = isHovered ? '#d97706' : '#f59e0b';
-                          ctx.strokeStyle = '#fef08a';
-                          ctx.lineWidth = 2;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, drawR, 0, Math.PI * 2);
-                          ctx.fill();
-                          ctx.stroke();
-
-                          // Внутренний геометрический ромб бизнеса (без текстового символа $)
-                          const dIn = drawR * 0.52;
-                          ctx.fillStyle = '#020617';
-                          ctx.beginPath();
-                          ctx.moveTo(ox, oy - dIn);
-                          ctx.lineTo(ox + dIn, oy);
-                          ctx.lineTo(ox, oy + dIn);
-                          ctx.lineTo(ox - dIn, oy);
-                          ctx.closePath();
-                          ctx.fill();
-                        } else {
-                          // 3. МАРКЕР ОБЪЯВЛЕНИЯ БИЗНЕСА (чистая геометрия без текста)
-                          ctx.strokeStyle = isHovered
-                            ? '#ffffff'
-                            : 'rgba(52, 211, 153, 0.8)';
-                          ctx.lineWidth = isHovered ? 2.2 : 1.2;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, pulseR, 0, Math.PI * 2);
-                          ctx.stroke();
-
-                          ctx.fillStyle = isHovered ? '#10b981' : '#059669';
-                          ctx.strokeStyle = '#ffffff';
-                          ctx.lineWidth = 1.8;
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, drawR, 0, Math.PI * 2);
-                          ctx.fill();
-                          ctx.stroke();
-
-                          // Внутренний золотой кружок слота объявления (без текста $1 / AD #1)
-                          ctx.fillStyle = '#fef08a';
-                          ctx.beginPath();
-                          ctx.arc(ox, oy, Math.max(2.2, drawR * 0.36), 0, Math.PI * 2);
-                          ctx.fill();
-                        }
-                        ctx.restore();
-
-                        // Регистрируем Группу, Бизнес и каждое Объявление для показа его карточки по курсору + клавише I
-                        const pOrderNum =
-                          gbObj.planetOrder ||
-                          (p.cleanName === 'Меркурий'
-                            ? 1
-                            : p.cleanName === 'Венера'
-                            ? 2
-                            : p.cleanName === 'Земля'
-                            ? 3
-                            : 4);
-
-                        const gbCamPos: Vec3 = {
-                          x: item.pos.x + nx * p.radius3D * 0.85,
-                          y: item.pos.y + ny * p.radius3D * 0.85,
-                          z: Math.max(45, item.pos.z - Math.abs(nz) * p.radius3D * 0.35),
-                        };
-                        const gbMassTons =
-                          gbObj.kind === 'GROUP' ? 500 : gbObj.kind === 'BUSINESS' ? 250 : 50;
-
-                        frameScreenTargets.push({
-                          id: gbObj.id,
-                          canvasX: ox,
-                          canvasY: oy,
-                          hitRadius: Math.max(16, drawR + 8),
-                          priority: 95,
-                          camPos: gbCamPos,
-                          standoffDist: Math.round(p.radius3D * 1.85),
-                          targetMassTons: gbMassTons,
-                          targetMassLabel:
-                            gbObj.kind === 'GROUP'
-                              ? `500 т (Узел Правительства ${p.cleanName})`
-                              : gbObj.kind === 'BUSINESS'
-                              ? `250 т (Терминал Бизнеса ${p.cleanName})`
-                              : `50 т (Маяк Объявления #${gbObj.slotId || 1})`,
-                          profile: {
-                            id: gbObj.id,
-                            kind:
-                              gbObj.kind === 'GROUP'
-                                ? 'GROUP'
-                                : gbObj.kind === 'BUSINESS'
-                                ? 'BUSINESS'
-                                : 'ADVERT',
-                            systemTag:
-                              gbObj.kind === 'GROUP'
-                                ? gbObj.groupTag || `GO-${p.cleanName.toUpperCase()}`
-                                : gbObj.kind === 'BUSINESS'
-                                ? `BIZ-${pOrderNum}`
-                                : `AD-${pOrderNum}-${gbObj.slotId || 1}`,
-                            color:
-                              gbObj.kind === 'GROUP'
-                                ? '#10b981'
-                                : gbObj.kind === 'BUSINESS'
-                                ? '#f59e0b'
-                                : '#34d399',
-                            name:
-                              gbObj.kind === 'GROUP'
-                                ? gbObj.title
-                                : gbObj.kind === 'BUSINESS'
-                                ? gbObj.title
-                                : `Объявление #${gbObj.slotId || 1} (${p.cleanName})`,
-                            nickname:
-                              gbObj.kind === 'GROUP'
-                                ? `группа (${p.cleanName.toLowerCase()})`
-                                : gbObj.kind === 'BUSINESS'
-                                ? `бизнес (${p.cleanName.toLowerCase()})`
-                                : `объявление бизнеса (${p.cleanName.toLowerCase()})`,
-                            description: gbObj.description,
-                            groupsTitle: `правительство (${p.cleanName} · #${
-                              pGroupObj?.groupTag || 'GO-EARTH'
-                            })`,
-                            groupsDescription:
-                              pGroupObj?.description ||
-                              `Друзья планеты ${p.cleanName} · государственное снабжение и контракты.`,
-                            groupTag: pGroupObj?.groupTag,
-                            businessesTitle: `торговля (${
-                              pBizObj?.title || `Бизнес планеты ${p.cleanName}`
-                            })`,
-                            businessesDescription:
-                              pBizObj?.description ||
-                              `Официальный торговый узел и экспорт ресурсов планеты ${p.cleanName}.`,
-                            adverts: pAdvertsList,
-                            karmaPlus: gbObj.karmaPlus,
-                            karmaMinus: gbObj.karmaMinus,
-                            distanceUnits: Math.round(item.dist),
-                            coordsLabel: `Сфера ${p.cleanName}`,
-                            planetOrder: pOrderNum,
-                            planetCleanName: p.cleanName,
-                            initialTab: 'PROFILE',
-                          },
-                        });
-                      }
-                    }
-
                   // Регистрируем саму Планету в списке объектов для вызова её карточки по клавише I
-                  const planetGroupObj = p.gobellObjects?.find((o) => o.kind === 'GROUP');
-                  const planetBusinessObj = p.gobellObjects?.find((o) => o.kind === 'BUSINESS');
+                  const planetGroupObj = p.gobellObjects?.find((o: any) => o.kind === 'GROUP');
+                  const planetBusinessObj = p.gobellObjects?.find((o: any) => o.kind === 'BUSINESS');
                   const planetAdvertObjs = (p.gobellObjects || [])
-                    .filter((o) => o.kind === 'ADVERT')
-                    .map((o) => ({
+                    .filter((o: any) => o.kind === 'ADVERT')
+                    .map((o: any) => ({
                       slotId: o.slotId || 1,
                       title: o.title,
                       description: o.description,
@@ -14303,50 +17534,105 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     ? capturedPlanetsMapRef.current[dictatorPlanetForCard.index]
                     : undefined;
 
+                  const isJupTarget = Boolean(p.isJupiter);
+                  const isSatTarget = Boolean(p.isSaturn);
+                  const isUraTarget = Boolean(p.isUranus);
+                  const isNepTarget = Boolean(p.isNeptune);
+                  const jupMetaDef = p.jupiterMeta || JUPITER_SYSTEM_DEF;
+                  const satMetaDef = p.saturnMeta || SATURN_SYSTEM_DEF;
+                  const uraMetaDef = p.uranusMeta || URANUS_SYSTEM_DEF;
+                  const nepMetaDef = p.neptuneMeta || NEPTUNE_SYSTEM_DEF;
+
                   frameScreenTargets.push({
                     id: p.id,
                     canvasX: psx,
                     canvasY: psy,
                     hitRadius: Math.max(20, planetR + 10),
-                    priority: 55,
+                    priority: isJupTarget || isSatTarget || isUraTarget || isNepTarget ? 60 : 55,
                     camPos: {x: item.pos.x, y: item.pos.y, z: item.pos.z},
                     standoffDist: Math.round(p.radius3D * 2.05),
-                    targetMassTons: planetMassTonsByOrder[pOrder] || 1000000,
-                    targetMassLabel:
-                      planetMassLabelByOrder[pOrder] || `1.0×10²¹ т (${p.cleanName})`,
+                    targetMassTons: isJupTarget
+                      ? jupMetaDef.massTons
+                      : isSatTarget
+                      ? satMetaDef.massTons
+                      : isUraTarget
+                      ? uraMetaDef.massTons
+                      : isNepTarget
+                      ? nepMetaDef.massTons
+                      : planetMassTonsByOrder[pOrder] || 1000000,
+                    targetMassLabel: isJupTarget
+                      ? jupMetaDef.massLabelRu
+                      : isSatTarget
+                      ? satMetaDef.massLabelRu
+                      : isUraTarget
+                      ? uraMetaDef.massLabelRu
+                      : isNepTarget
+                      ? nepMetaDef.massLabelRu
+                      : planetMassLabelByOrder[pOrder] || `1.0×10²¹ т (${p.cleanName})`,
                     profile: {
                       id: p.id,
                       kind: 'PLANET',
-                      systemTag: `PLANET-${pOrder}`,
+                      systemTag: isJupTarget
+                        ? 'GO-JUPITER'
+                        : isSatTarget
+                        ? 'GO-SATURN'
+                        : isUraTarget
+                        ? 'GO-URANUS'
+                        : isNepTarget
+                        ? 'GO-NEPTUNE'
+                        : `PLANET-${pOrder}`,
+                      isJupiter: isJupTarget,
+                      jupiterMeta: isJupTarget ? jupMetaDef : undefined,
+                      isSaturn: isSatTarget,
+                      saturnMeta: isSatTarget ? satMetaDef : undefined,
+                      isUranus: isUraTarget,
+                      uranusMeta: isUraTarget ? uraMetaDef : undefined,
+                      isNeptune: isNepTarget,
+                      neptuneMeta: isNepTarget ? nepMetaDef : undefined,
                       color: capturedRecForCard?.isCaptured
                         ? capturedRecForCard.clanColor || p.color
                         : p.color,
-                      name: capturedRecForCard?.isCaptured
+                      name: isJupTarget
+                        ? 'Юпитер'
+                        : isSatTarget
+                        ? 'Сатурн'
+                        : isUraTarget
+                        ? 'Уран'
+                        : isNepTarget
+                        ? 'Нептун'
+                        : capturedRecForCard?.isCaptured
                         ? `${capturedRecForCard.customName} - бывший ${capturedRecForCard.formerName}`
                         : p.cleanName,
-                      nickname: capturedRecForCard?.isCaptured
+                      nickname: isJupTarget
+                        ? jupMetaDef.folkName
+                        : isSatTarget
+                        ? satMetaDef.folkName
+                        : isUraTarget
+                        ? uraMetaDef.folkName
+                        : isNepTarget
+                        ? nepMetaDef.folkName
+                        : capturedRecForCard?.isCaptured
                         ? `${capturedRecForCard.clanIcon} ${capturedRecForCard.clanOrUnionName}`
                         : dictatorPlanetForCard?.factionBadge || 'планета',
-                      description:
-                        planetDescriptionByOrder[pOrder] || 'Источник ресурсов в звёздной системе.',
-                      groupsTitle: `правительство (${p.cleanName} · #${
-                        planetGroupObj?.groupTag || 'GO-EARTH'
-                      })`,
-                      groupsDescription:
-                        planetGroupObj?.description ||
-                        `Друзья планеты ${p.cleanName} · государственное управление, скидка на профильный ресурс с 5 CR до 1 CR и приём межпланетных контрактов по 10 CR.`,
-                      groupTag: planetGroupObj?.groupTag,
-                      businessesTitle: `торговля (${
-                        planetBusinessObj?.title || `Торговая палата планеты ${p.cleanName}`
-                      })`,
-                      businessesDescription:
-                        planetBusinessObj?.description ||
-                        `Официальная торговля профильным ресурсом планеты ${p.cleanName} и 4 слота коммерческих объявлений.`,
-                      adverts: planetAdvertObjs,
-                      karmaPlus: planetGroupObj?.karmaPlus ?? 30,
-                      karmaMinus: planetGroupObj?.karmaMinus ?? 0,
+                      description: isJupTarget
+                        ? jupMetaDef.summaryRu
+                        : isSatTarget
+                        ? satMetaDef.summaryRu
+                        : isUraTarget
+                        ? uraMetaDef.summaryRu
+                        : isNepTarget
+                        ? nepMetaDef.summaryRu
+                        : planetDescriptionByOrder[pOrder] || 'Источник ресурсов в звёздной системе.',
+                      groupsTitle: '',
+                      groupsDescription: '',
+                      groupTag: undefined,
+                      businessesTitle: '',
+                      businessesDescription: '',
+                      adverts: [],
+                      karmaPlus: 0,
+                      karmaMinus: 0,
                       distanceUnits: Math.round(item.dist),
-                      coordsLabel: `Орбита R=${p.orbitRadius} ед.`,
+                      coordsLabel: `Орбита R=${p.orbitRadius} ед. (Наклон оси: ${isUraTarget ? '90°' : isNepTarget ? '30°' : 'нормальный'})`,
                       planetOrder: pOrder,
                       planetCleanName: p.cleanName,
                       dictatorPlanetIndex: dictatorPlanetForCard?.index,
@@ -14441,14 +17727,11 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                   name: 'канал фиксации',
                   nickname: `аукцион слота #${sSlot.slotId} (${sSlot.fixedPointLabel})`,
                   description: sSlot.text,
-                  groupsTitle: 'подпространственная сеть G. Bell (#SUBSPACE-NET)',
-                  groupsDescription:
-                    'Фиксация информационных маяков в любой точке звёздной системы и распределение доходов пула аукциона.',
-                  businessesTitle: sSlot.inAuctionPool
-                    ? `пул аукциона Monetize (доля ${myAuctionPoolSharePct}%)`
-                    : `точка фиксации: ${sSlot.fixedPointLabel}`,
-                  businessesDescription:
-                    'Аналог аукциона слота объявления G. Bell в открытом космосе.',
+                  groupsTitle: '',
+                  groupsDescription: '',
+                  groupTag: undefined,
+                  businessesTitle: '',
+                  businessesDescription: '',
                   karmaPlus: 25,
                   karmaMinus: 0,
                   distanceUnits: Math.round(dist3D),
@@ -15369,6 +18652,19 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     : 95,
                 targetMassTons: entMassTons,
                 targetMassLabel: entMassLabel,
+                isShip:
+                  ent.kind !== 'STATION' &&
+                  ent.kind !== 'CARGO' &&
+                  ent.kind !== 'SOS_POD' &&
+                  ent.kind !== 'SPACE_DEBRIS',
+                shipClassLabel:
+                  ent.kind === 'PIRATE'
+                    ? 'пират'
+                    : ent.kind === 'THARGOID'
+                    ? 'таргоид'
+                    : ent.kind === 'TRADER'
+                    ? 'торговец'
+                    : '',
                 profile: objProfile,
               });
             }
@@ -15841,7 +19137,8 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             let bestHoveredScore = Infinity;
             for (const cand of frameScreenTargets) {
               const d = Math.hypot(cand.canvasX - aimX, cand.canvasY - aimY);
-              if (d <= cand.hitRadius) {
+              const captureR = Math.max(cand.hitRadius, 32);
+              if (d <= captureR) {
                 const weightedScore = d - cand.priority * 0.25;
                 if (weightedScore < bestHoveredScore) {
                   bestHoveredScore = weightedScore;
@@ -15850,6 +19147,39 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               }
             }
             hoveredScreenTargetRef.current = bestHoveredTarget;
+
+            // Краткая сводка об объекте в курсоре для информационной строки внизу панели управления
+            const nextBriefHudText = bestHoveredTarget
+              ? formatBriefTargetHudInfo(bestHoveredTarget)
+              : '';
+            if (nextBriefHudText !== lastBriefHudTextRef.current) {
+              lastBriefHudTextRef.current = nextBriefHudText;
+              // Мгновенное обновление текста в нижней информационной строке кокпита (60 FPS без задержек)
+              const hudTextEl = document.getElementById('hud-bottom-info-text');
+              if (hudTextEl) {
+                if (nextBriefHudText) {
+                  hudTextEl.textContent = nextBriefHudText;
+                  hudTextEl.setAttribute('fill', '#00e5ff');
+                } else {
+                  hudTextEl.textContent = defaultHudTextRef.current;
+                  hudTextEl.setAttribute('fill', '#e2e8f0');
+                }
+              }
+            }
+
+            const nowMs = performance.now();
+            const curTargetId = bestHoveredTarget?.id || '';
+            if (
+              curTargetId !== lastTargetIdRef.current ||
+              (bestHoveredTarget && nowMs - lastTargetUiTimeRef.current > 100)
+            ) {
+              lastTargetIdRef.current = curTargetId;
+              lastTargetUiTimeRef.current = nowMs;
+              setHoveredTargetBriefUi(nextBriefHudText);
+            } else if (!bestHoveredTarget && lastTargetIdRef.current !== '') {
+              lastTargetIdRef.current = '';
+              setHoveredTargetBriefUi('');
+            }
 
             // Вспомогательная функция перевода canvas-координат объекта в пиксели контейнера для привязки карточки рядом с объектом
             const computeCardAnchorFromHit = (hit: ProjectedScreenTargetHit) => {
@@ -16575,11 +19905,81 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 ctx.arc(pBx, pStickY, 1.5, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Компактный маркер номера планеты
+                // Компактный маркер номера планеты или Юпитера
                 if (p.orbitOrder <= 4) {
                   ctx.fillStyle = '#ffffff';
                   ctx.font = 'bold 7px monospace';
                   ctx.fillText(`${p.orbitOrder}`, pBx + 5, pStickY + 2.5);
+                } else if (p.isJupiter) {
+                  ctx.fillStyle = '#f59e0b';
+                  ctx.font = 'bold 8px monospace';
+                  ctx.fillText('♃ VIII. ЮПИТЕР [45k]', pBx + 5, pStickY + 2.5);
+                  if (p.galileanMoons) {
+                    for (const gm of p.galileanMoons) {
+                      const cosM = Math.cos(gm.orbitAngle);
+                      const sinM = Math.sin(gm.orbitAngle);
+                      const mRadPx = Math.max(3.5, Math.min(18, (gm.def.orbitRadiusFromJupiter / radarScale) * radarRx * 0.9));
+                      const mBx = pBx + cosM * mRadPx;
+                      const mBy = pStickY + sinM * mRadPx * 0.45;
+                      ctx.fillStyle = gm.def.color;
+                      ctx.beginPath();
+                      ctx.arc(mBx, mBy, 1.5, 0, Math.PI * 2);
+                      ctx.fill();
+                    }
+                  }
+                } else if (p.isSaturn) {
+                  ctx.fillStyle = '#fbbf24';
+                  ctx.font = 'bold 8px monospace';
+                  ctx.fillText('🪐 IX. САТУРН [60k]', pBx + 5, pStickY + 2.5);
+                  if (p.saturnMoons) {
+                    for (const sm of p.saturnMoons) {
+                      const cosM = Math.cos(sm.orbitAngle);
+                      const sinM = Math.sin(sm.orbitAngle);
+                      const mRadPx = Math.max(3.0, Math.min(18, (sm.def.orbitRadiusFromSaturn / radarScale) * radarRx * 0.9));
+                      const mBx = pBx + cosM * mRadPx;
+                      const mBy = pStickY + sinM * mRadPx * 0.45;
+                      ctx.fillStyle = sm.def.color;
+                      ctx.beginPath();
+                      ctx.arc(mBx, mBy, 1.3, 0, Math.PI * 2);
+                      ctx.fill();
+                    }
+                  }
+                } else if (p.isUranus) {
+                  ctx.fillStyle = '#38bdf8';
+                  ctx.font = 'bold 8px monospace';
+                  ctx.fillText('🌀 X. УРАН [70k · 90°]', pBx + 5, pStickY + 2.5);
+                  if (p.uranusMoons) {
+                    for (const um of p.uranusMoons) {
+                      const cosM = Math.cos(um.orbitAngle);
+                      const sinM = Math.sin(um.orbitAngle);
+                      const mRadPx = Math.max(3.0, Math.min(18, (um.def.orbitRadiusFromUranus / radarScale) * radarRx * 0.9));
+                      // Орбиты спутников Урана перпендикулярны эклиптике (наклон 90°)
+                      const mBx = pBx + cosM * mRadPx * 0.35;
+                      const mBy = pStickY + sinM * mRadPx * 0.9;
+                      ctx.fillStyle = um.def.color;
+                      ctx.beginPath();
+                      ctx.arc(mBx, mBy, 1.3, 0, Math.PI * 2);
+                      ctx.fill();
+                    }
+                  }
+                } else if (p.isNeptune) {
+                  ctx.fillStyle = '#60a5fa';
+                  ctx.font = 'bold 8px monospace';
+                  ctx.fillText('🔱 XI. НЕПТУН [80k · 30°]', pBx + 5, pStickY + 2.5);
+                  if (p.neptuneMoons) {
+                    for (const nm of p.neptuneMoons) {
+                      const cosM = Math.cos(nm.orbitAngle);
+                      const sinM = Math.sin(nm.orbitAngle);
+                      const mRadPx = Math.max(3.0, Math.min(18, (nm.def.orbitRadiusFromNeptune / radarScale) * radarRx * 0.9));
+                      // Орбиты спутников Нептуна наклонены на 30°
+                      const mBx = pBx + cosM * mRadPx * 0.86;
+                      const mBy = pStickY + sinM * mRadPx * 0.55;
+                      ctx.fillStyle = nm.def.color;
+                      ctx.beginPath();
+                      ctx.arc(mBx, mBy, 1.3, 0, Math.PI * 2);
+                      ctx.fill();
+                    }
+                  }
                 }
               }
             }
@@ -17098,7 +20498,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
       {/* Информационная строка бортового компьютера (отображается только в полном режиме с блоками и панелью) */}
       {cockpitDisplayMode === 'FULL' && (
         <div className="px-3 py-1 bg-slate-950 border-b border-emerald-500/40 flex items-center justify-between text-[11px] text-yellow-300">
-          <div className="truncate font-bold">{flightMessage}</div>
+          <div className="truncate font-bold">
+            {hoveredTargetBriefUi ? (
+              <span className="text-cyan-300 font-extrabold">{hoveredTargetBriefUi}</span>
+            ) : (
+              flightMessage
+            )}
+          </div>
           <div className="flex items-center gap-3 shrink-0 text-cyan-300">
             <span>СИСТЕМА: {currentSystem.name}</span>
             <span>→ ЦЕЛЬ ПРЫЖКА: {targetSystem.name}</span>
@@ -17134,22 +20540,6 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
             onMouseDown={(e) => {
               if (screenMode !== 'FLIGHT') return;
               updateTurretReticleFromMouse(e);
-              // Если курсор наведён на объект GoBell на планете — клик ЛКМ открывает Форму запроса на контакт!
-              if (e.button === 0 && hoveredPlanetObjRef.current) {
-                e.preventDefault();
-                const targetObj = hoveredPlanetObjRef.current;
-                setPlanetContactTarget({
-                  obj: targetObj,
-                  planetName: targetObj.planetCleanName,
-                });
-                setPlanetContactNote(
-                  targetObj.kind === 'GROUP'
-                    ? `Приветствую группу «${targetObj.title}» (${targetObj.description})! Хочу установить планетарный контакт.`
-                    : `Здравствуйте, «${targetObj.authorName}»! Заинтересовало: ${targetObj.title}.`
-                );
-                playZxBeep('MISSION');
-                return;
-              }
               if (e.button === 0) {
                 e.preventDefault();
                 const activeSlot = flightStateRef.current.activeWeaponSlot;
@@ -17162,10 +20552,17 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 }
               } else if (e.button === 1) {
                 e.preventDefault();
-                handleTractorCapture();
+                handleWheelOrbitClick();
               } else if (e.button === 2) {
                 e.preventDefault();
                 handleFireSecondaryWeapon();
+              }
+            }}
+            onAuxClick={(e) => {
+              if (screenMode !== 'FLIGHT') return;
+              if (e.button === 1) {
+                e.preventDefault();
+                handleWheelOrbitClick();
               }
             }}
             onWheel={(e) => {
@@ -17196,6 +20593,7 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
               isUnderAttack={flightStateRef.current.enemyFireCooldown > 80}
               gravConverterTons={gravConverterTons}
               maxShipMassTons={totalShipMassTons}
+              hoveredTargetBrief={hoveredTargetBriefUi}
               onSimulateShieldHitTons={(tons) => applyShieldImpactTons(tons ?? 1.0, 'Тестовый удар в щит')}
               onToggleConverter={handleToggleShieldSpeedConverter}
               onToggleShipsOnly={handleToggleRadarShipsOnlyFilter}
@@ -17316,20 +20714,30 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     ? 'bg-slate-950/90 hover:bg-emerald-500 hover:text-black text-emerald-300 border-emerald-400'
                     : 'bg-slate-950/85 hover:border-amber-400 text-slate-400 hover:text-amber-300 border-slate-600'
                 }`}
-                title="Нажмите клавишу X, чтобы закрепиться на стационарной орбите планеты (доступно только на расстоянии менее 400 ед. от планеты) или повторно X — чтобы открепиться"
+                title="Нажмите КОЛЕСИКО МЫШИ (СКМ), чтобы плавно закрепиться на стационарной орбите (при расстоянии < 200 ед. до объекта) или повторно СКМ — чтобы открепиться и перейти в ручной режим"
               >
                 <span>
                   {stationaryOrbitInfo
-                    ? `🛰 НА СТАЦИОНАРНОЙ ОРБИТЕ: ${stationaryOrbitInfo.cleanName.toUpperCase()} · ОТКРЕПИТЬСЯ (X)`
+                    ? `🛰 НА ОРБИТЕ (10 ЕД.): ${stationaryOrbitInfo.cleanName.toUpperCase()} · ОТКРЕПИТЬСЯ [СКМ]`
                     : nearestPlanetOrbitUi?.canLock
-                    ? `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД. < 400) [X]`
-                    : `🛰 ОРБИТА (X): НУЖНО < 400 ЕД. ДО ПЛАНЕТЫ${
+                    ? `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД. < 200) [СКМ]`
+                    : `🛰 ВЫХОД НА ОРБИТУ [СКМ]: НУЖНО < 200 ЕД.${
                         nearestPlanetOrbitUi
-                          ? ` (ДО «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» ${nearestPlanetOrbitUi.distanceUnits} ЕД.)`
+                          ? ` (СЕЙЧАС ${nearestPlanetOrbitUi.distanceUnits} ЕД.)`
                           : ''
                       }`}
                 </span>
               </button>
+              {stationaryOrbitInfo && (
+                <button
+                  type="button"
+                  onClick={handleToggleObjectLanding}
+                  className="px-3 py-2 border-2 border-cyan-400 bg-cyan-950/90 hover:bg-cyan-400 hover:text-black text-cyan-200 font-extrabold text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] flex items-center gap-1.5 animate-pulse"
+                  title="Открыть посадочный комплекс (лендинг) объекта: верфь, торговая площадка, банк и атрибуты (клавиша ENTER)"
+                >
+                  <span>🚀 ЛЕНДИНГ [ENTER]</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleNavigateSystemView('DEATH_STAR')}
@@ -17361,6 +20769,46 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 title="Переключаться между 4 стандартными кораблями «Буран / Шаттл» в Поясе Астероидов (равномерно распределены, летят на ½ скорости, стреляют по астероидам и собирают металлы, без контактов, можно уничтожить и забрать их груз)"
               >
                 <span>🚀 4 БУРАНА В ПОЯСЕ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('KUIPER_BELT')}
+                className="px-3 py-2 border-2 border-indigo-400 bg-slate-900/90 hover:bg-indigo-400 hover:text-black hover:border-yellow-300 text-indigo-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="Циклический переход между 13 планетоидами и карликовыми планетами Пояса Койпера в зоне 90 000 — 100 000 ед. (Плутон, Эрида, Хаумеа, Макемаке, Гунгун, Квавар, Орк, Седна и др. — клавиша K)"
+              >
+                <span>🪐 ПОЯС КОЙПЕРА [K]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('JUPITER')}
+                className="px-3 py-2 border-2 border-amber-400 bg-slate-900/90 hover:bg-amber-400 hover:text-black hover:border-yellow-300 text-amber-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="VIII. Юпитер (R=45 000 ед.) и 4 стационарных спутника (R=2 400 - 9 500 ед.): Ио, Европа, Ганимед, Каллисто — клавиша J"
+              >
+                <span>⚡ ЮПИТЕР [45k · J]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('SATURN')}
+                className="px-3 py-2 border-2 border-yellow-400 bg-slate-900/90 hover:bg-yellow-400 hover:text-black hover:border-amber-300 text-yellow-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="IX. Сатурн с кольцами (R=60 000 ед.) и 7 стационарных спутников (R=2 000 - 8 000 ед.): Мимас, Энцелад, Тефия, Диона, Рея, Титан, Япет — Shift+J"
+              >
+                <span>🪐 САТУРН [60k · 7 СПУТНИКОВ]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('URANUS')}
+                className="px-3 py-2 border-2 border-cyan-400 bg-slate-900/90 hover:bg-cyan-400 hover:text-black hover:border-cyan-300 text-cyan-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="X. Уран с наклоном оси 90° (R=70 000 ед.) и 5 стационарных спутников (R=2 000 - 10 000 ед.): Миранда, Ариэль, Умбриэль, Титания, Оберон — клавиша U"
+              >
+                <span>🌀 УРАН [70k · 90° · U]</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNavigateSystemView('NEPTUNE')}
+                className="px-3 py-2 border-2 border-blue-400 bg-slate-900/90 hover:bg-blue-500 hover:text-white hover:border-blue-300 text-blue-200 font-extrabold text-xs transition-all shadow-lg flex items-center gap-1.5"
+                title="XI. Нептун с наклоном оси 30° (R=80 000 ед.) и 7 стационарных спутников (R=2 000 - 10 000 ед.): Наяда, Таласса, Деспина, Галатея, Ларисса, Протей, Тритон — клавиша N"
+              >
+                <span>🔱 НЕПТУН [80k · 30° · N]</span>
               </button>
               {autopilotTargetUi && (
                 <button
@@ -19069,14 +22517,14 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                       ? 'border-emerald-400 bg-emerald-500/20 hover:bg-emerald-400 hover:text-black text-emerald-300'
                       : 'border-slate-600 bg-slate-900/60 hover:border-amber-400 text-slate-400 hover:text-amber-300'
                   }`}
-                  title="Клавиша X — закрепиться на стационарной орбите планеты (только при расстоянии менее 400 ед. до планеты) / повторное нажатие X — открепиться"
+                  title="Нажмите КОЛЕСИКО МЫШИ (СКМ) для перехода на стационарную орбиту (дистанция < 200 ед.) или повторно для выхода в ручной режим"
                 >
                   <span>
                     {stationaryOrbitInfo
-                      ? `🔓 ОТКРЕПИТЬСЯ ОТ СТАЦИОНАРНОЙ ОРБИТЫ «${stationaryOrbitInfo.cleanName.toUpperCase()}» (X)`
+                      ? `🔓 ОТКРЕПИТЬСЯ ОТ ОРБИТЫ «${stationaryOrbitInfo.cleanName.toUpperCase()}» [СКМ]`
                       : nearestPlanetOrbitUi?.canLock
-                      ? `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД.) [X]`
-                      : `🛰 ЗАКРЕПИТЬСЯ НА ОРБИТЕ (X) · НУЖНО < 400 ЕД.${
+                      ? `🛰 ВЫХОД НА ОРБИТУ «${nearestPlanetOrbitUi.cleanName.toUpperCase()}» (${nearestPlanetOrbitUi.distanceUnits} ЕД.) [СКМ]`
+                      : `🛰 ВЫХОД НА ОРБИТУ [СКМ] · НУЖНО < 200 ЕД.${
                           nearestPlanetOrbitUi
                             ? ` (СЕЙЧАС ${nearestPlanetOrbitUi.distanceUnits} ЕД.)`
                             : ''
@@ -19681,6 +23129,46 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                     title="4 стандартных корабля «Буран / Шаттл» в Поясе Астероидов (равномерно распределены, V=½ скорости, обстрел астероидов и сбор металлов, без контактов, при уничтожении оставляют груз — клавиша -)"
                   >
                     🚀 -. 4 БУРАНА В ПОЯСЕ (КЛ. -)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('JUPITER')}
+                    className="col-span-2 py-1 px-1.5 border border-amber-400 bg-amber-950/70 text-amber-200 hover:bg-amber-400 hover:text-black font-extrabold text-left truncate"
+                    title="VIII. Юпитер (R=45 000 ед.) и 4 стационарных спутника (R=2400-9500 ед.): Ио, Европа, Ганимед, Каллисто — клавиша J"
+                  >
+                    ⚡ VIII. ЮПИТЕР [45k] + 4 ГАЛИЛЕЕВЫХ СПУТНИКА (ИО, ЕВРОПА, ГАНИМЕД, КАЛЛИСТО) [J]
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('SATURN')}
+                    className="col-span-2 py-1 px-1.5 border border-yellow-400 bg-yellow-950/70 text-yellow-200 hover:bg-yellow-400 hover:text-black font-extrabold text-left truncate"
+                    title="IX. Сатурн с 3D-кольцами (R=60 000 ед.) и 7 стационарных спутников (R=2000-8000 ед.): Мимас, Энцелад, Тефия, Диона, Рея, Титан, Япет — Shift+J"
+                  >
+                    🪐 IX. САТУРН [60k] + 3D-КОЛЬЦА И 7 СТАЦИОНАРНЫХ СПУТНИКОВ (МИМАС, ЭНЦЕЛАД, ТЕФИЯ, ДИОНА, РЕЯ, ТИТАН, ЯПЕТ)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('URANUS')}
+                    className="col-span-2 py-1 px-1.5 border border-cyan-400 bg-cyan-950/70 text-cyan-200 hover:bg-cyan-400 hover:text-black font-extrabold text-left truncate"
+                    title="X. Уран с наклоном оси 90° (R=70 000 ед.) и 5 стационарных спутников (R=2000-10000 ед.): Миранда, Ариэль, Умбриэль, Титания, Оберон — клавиша U"
+                  >
+                    🌀 X. УРАН [70k · НАКЛОН 90°] + 5 СТАЦИОНАРНЫХ СПУТНИКОВ (МИРАНДА, АРИЭЛЬ, УМБРИЭЛЬ, ТИТАНИЯ, ОБЕРОН) [U]
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('NEPTUNE')}
+                    className="col-span-2 py-1 px-1.5 border border-blue-400 bg-blue-950/70 text-blue-200 hover:bg-blue-400 hover:text-black font-extrabold text-left truncate"
+                    title="XI. Нептун с наклоном оси 30° (R=80 000 ед.) и 7 стационарных спутников (R=2000-10000 ед.): Наяда, Таласса, Деспина, Галатея, Ларисса, Протей, Тритон — клавиша N"
+                  >
+                    🔱 XI. НЕПТУН [80k · НАКЛОН 30°] + 7 СТАЦИОНАРНЫХ СПУТНИКОВ (НАЯДА, ТАЛАССА, ДЕСПИНА, ГАЛАТЕЯ, ЛАРИССА, ПРОТЕЙ, ТРИТОН) [N]
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateSystemView('KUIPER_BELT')}
+                    className="col-span-2 py-1 px-1.5 border border-indigo-400 bg-indigo-950/70 text-indigo-200 hover:bg-indigo-400 hover:text-black font-extrabold text-left truncate"
+                    title="Циклический переход между 13 объектами Пояса Койпера в зоне 90 000 — 100 000 ед. (Плутон, Эрида, Хаумеа, Макемаке, Гунгун, Квавар, Орк, Седна и др. — клавиша K)"
+                  >
+                    🪐 K. ПОЯС КОЙПЕРА 90K-100K (13 МИРОВ)
                   </button>
                 </div>
 
@@ -20534,13 +24022,13 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
                 <div>• <b className="text-cyan-300">Курсор мыши + Клавиша I</b> — Компактная табличка объекта в углу экрана (на время открытия таблички Огневая Рубка автоматически фиксируется, чтобы курсор не вращал рубку у края экрана)</div>
                 <div>• <b className="text-amber-300">Клавиша « , » (запятая рядом с 0)</b> — Открыть <b>Полную табличку</b> объекта со всеми разделами (Клан, Доход, Аукцион, Группы, Бизнесы, Контакт)</div>
                 <div>• <b className="text-rose-400">Клавиша « 0 » (цифра ноль)</b> — Закрыть табличку и разблокировать движение Огневой Рубки</div>
-                <div>• <b className="text-emerald-400">Клавиша X</b> — Закрепиться / Открепиться на стационарной орбите планеты</div>
+                <div>• <b className="text-emerald-400">Нажатие колёсика (СКМ)</b> — при дистанции &lt; 200 ед. до планеты, станции, планетоида, спутника плавный переход на стационарную орбиту (10 ед.); повторное нажатие — открепление и ручной режим</div>
+                <div>• <b className="text-cyan-300">Клавиша ENTER</b> — Лендинг объекта на орбите (Верфь, Торговая площадка, Банк, небесные атрибуты и Выход)</div>
                 <div>• <b className="text-yellow-300">Указатель мыши</b> — Прицел Огневой Башни (чистая геометрия без текстов)</div>
                 <div>• <b className="text-white">W / S (↑ / ↓)</b> — тангаж (вверх / вниз) · <b className="text-white">A / D (← / →)</b> — крен корабля</div>
                 <div>• <b className="text-yellow-300">Колёсико мыши (крутить)</b> — управление скоростью (0..100%)</div>
                 <div>• <b className="text-cyan-300">ЛКМ (Левая кнопка)</b> — Запрос на контакт по объекту / Лазер башни</div>
                 <div>• <b className="text-rose-400">ПКМ (Правая кнопка)</b> — Оружие №2 (Плазма башни в прицел мыши)</div>
-                <div>• <b className="text-emerald-400">Нажатие колёсика (СКМ)</b> — Луч захвата капсул в прицеле</div>
                 <div>• <b className="text-amber-300">Масса корабля</b> — тяжелее = меньше манёвр, но выше защита!</div>
               </div>
             </div>
@@ -20878,6 +24366,31 @@ export const GoBellEliteGame: React.FC<GoBellEliteGameProps> = ({
           setFlightMessage(
             `🚀 ФЛАГМАН ОБНОВЛЁН: «${customShip.name.toUpperCase()}» (МАССА: ${customStats.totalMassTons} Т · ТЯГА: ${customStats.totalThrustKn} КН · ТРЮМ: ${customStats.cargoCapacityTons} Т)`
           );
+        }}
+      />
+
+      {/* ЛЕНДИНГ КОСМИЧЕСКОГО ОБЪЕКТА (КЛАВИША ENTER НА ОРБИТЕ) */}
+      <ObjectLandingModal
+        isOpen={isObjectLandingOpen}
+        landingData={objectLandingData}
+        onClose={() => setIsObjectLandingOpen(false)}
+        onUnfixOrbitAndManual={() => {
+          handleToggleStationaryOrbit();
+          setIsObjectLandingOpen(false);
+        }}
+        onOpenShipyard={() => {
+          setIsObjectLandingOpen(false);
+          setIsShipyardBuilderOpen(true);
+        }}
+        onOpenMarket={() => {
+          setIsObjectLandingOpen(false);
+          setScreenMode('DOCKED');
+          setStationTab('MARKET');
+        }}
+        onOpenBank={() => {
+          setIsObjectLandingOpen(false);
+          setScreenMode('DOCKED');
+          setStationTab('BANK');
         }}
       />
     </div>

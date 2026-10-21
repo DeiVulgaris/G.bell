@@ -17,6 +17,7 @@ export interface CockpitHudMaskProps {
   isUnderAttack?: boolean;
   gravConverterTons?: number;
   maxShipMassTons?: number;
+  hoveredTargetBrief?: string;
   onSimulateShieldHitTons?: (tons?: number) => void;
   onToggleShipsOnly?: () => void;
   onToggleConverter?: () => void;
@@ -46,6 +47,7 @@ export const CockpitHudMask: React.FC<CockpitHudMaskProps> = ({
   isUnderAttack = false,
   gravConverterTons,
   maxShipMassTons = 60,
+  hoveredTargetBrief,
   onSimulateShieldHitTons,
 }) => {
   // Расчет параметров
@@ -109,6 +111,8 @@ export const CockpitHudMask: React.FC<CockpitHudMaskProps> = ({
 
   const singleInfoText = isCapCritical
     ? `⚠️ КРИТИЧЕСКИЙ ОТКАЗ: ЕМКОСТЬ ГРАВИ-КОНВЕРТОРА 0 Т! РАСПАД СВЯЗКИ — КОРАБЛЬ РАЗЛЕТЕЛСЯ НА БЛОКИ!`
+    : hoveredTargetBrief
+    ? hoveredTargetBrief
     : isUnderAttack
     ? `⚠️ ТРЕВОГА: КОРАБЛЬ АТАКОВАН! УДАРЫ ПО ЩИТУ · ГРАВИ-КОНВЕРТОР: ${effectiveConverterTons} Т / ${effectiveMaxMass} Т`
     : flightMessage
@@ -864,14 +868,15 @@ export const CockpitHudMask: React.FC<CockpitHudMaskProps> = ({
 
           {/* ЕДИНОЕ СООБЩЕНИЕ НА ВСЮ СТРОКУ БЕЗ РАЗДЕЛИТЕЛЕЙ */}
           <text
+            id="hud-bottom-info-text"
             x="430"
             y="18"
             textAnchor="middle"
-            fill={isUnderAttack ? '#ff1744' : '#e2e8f0'}
-            fontSize="9.5"
+            fill={hoveredTargetBrief ? '#00f0ff' : isUnderAttack ? '#ff1744' : '#e2e8f0'}
+            fontSize="10"
             fontFamily="monospace"
             fontWeight="bold"
-            letterSpacing="0.3"
+            letterSpacing="0.35"
           >
             {singleInfoText}
           </text>

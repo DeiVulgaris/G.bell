@@ -3487,24 +3487,24 @@ export function getDeathStarMetaForSlot(slotIndex: number): StandardDeathStarMet
 
   const tplList = DEATH_STAR_OFFICIAL_TEMPLATES[factionId];
   const baseOfficial = tplList[safeSlot % tplList.length].replace('{num}', numStr);
-  const officialName = `${baseOfficial} · ${shortStar}`;
-  const folkName = `${DEATH_STAR_FOLK_NAMES[safeSlot % DEATH_STAR_FOLK_NAMES.length]} (${shortStar})`;
-  const dualNameLabel = `Официально: «${officialName}», в народе: «${folkName}»`;
+  const officialName = `Производственный комплекс «${baseOfficial}» · ${shortStar}`;
+  const folkName = `Производитель (Титановая броня, Дюрасталь, Фотонные орудия, Плазменные реакторы, Гиперматерия)`;
+  const dualNameLabel = `Производитель: «${officialName}» (Титановая броня, Дюрасталь, Фотонные орудия, Плазменные реакторы, Гиперматерия)`;
 
   return {
-    code: `ДС-${numStr}`,
+    code: `ПР-${numStr}`,
     factionId,
     factionBadge: factionMeta.shortBadge,
     officialName,
     folkName,
     dualNameLabel,
-    hudName: `${officialName} (в народе: «${folkName}»)`,
-    superlaserSpec: `Орбитальный планетоид Диктатора в системе «${sysHeader.starName}» (${sysHeader.constellationNameRu}) · Северный кратер суперлазера и база 5 карательных дронов`,
+    hudName: `Производитель (Титановая броня, Дюрасталь, Фотонные орудия, Реакторы)`,
+    superlaserSpec: `Тяжёлый индустриальный комплекс «Производитель» в системе «${sysHeader.starName}» (${sysHeader.constellationNameRu}). Выпускаемая продукция: титановая броня, дюрасталь, фотонные орудия, плазменные реакторы, гиперматерия. Прямой отпуск по заводским ценам и переработка сырой руды со скидкой 40%.`,
   };
 }
 
 /**
- * Создаёт уникальные данные Космической Станции / Корабля-Тора «Бублик» и Звёздных Врат для звёздной системы (0..72)
+ * Создаёт уникальные данные Станции «Бублик» (Бизнес-центр) и Звёздных Врат для звёздной системы (0..72)
  */
 export function getSpaceStationMetaForSlot(slotIndex: number): StandardSpaceStationMeta {
   const safeSlot = ((slotIndex % STAR_SYSTEM_CATALOG_HEADERS.length) + STAR_SYSTEM_CATALOG_HEADERS.length) % STAR_SYSTEM_CATALOG_HEADERS.length;
@@ -3516,21 +3516,21 @@ export function getSpaceStationMetaForSlot(slotIndex: number): StandardSpaceStat
 
   const tplList = SPACE_STATION_OFFICIAL_TEMPLATES[factionId];
   const baseOfficial = tplList[safeSlot % tplList.length].replace('{num}', numStr);
-  const officialName = `${baseOfficial} (${shortStar})`;
-  const folkName = `${SPACE_STATION_FOLK_NAMES[safeSlot % SPACE_STATION_FOLK_NAMES.length]} · ${shortStar}`;
-  const dualNameLabel = `Официально: «${officialName}», в народе: «${folkName}»`;
+  const officialName = `Бизнес-центр «Бублик» (${baseOfficial} · ${shortStar})`;
+  const folkName = `Бизнес-центр (ТД «Антарес», Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера)`;
+  const dualNameLabel = `Бизнес-центр «Бублик» (ТД «Антарес», Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера)`;
 
   return {
-    code: `СТ-${numStr}`,
+    code: `БЦ-${numStr}`,
     factionId,
     factionBadge: factionMeta.shortBadge,
     officialName,
     folkName,
     dualNameLabel,
-    hudName: `${officialName} (в народе: «${folkName}»)`,
-    coriolisStationName: `Орбитальная Станция Кориолис «${officialName}»`,
+    hudName: `Бизнес-центр «Бублик» (ТД Антарес, Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера)`,
+    coriolisStationName: `Орбитальная Станция Кориолис · Банк`,
     stargateDesignation: `Портал Звёздных Врат ВР-${numStr} «${shortStar} · 9 Шевронов»`,
-    stationLore: `Центробежная космическая станция-тор (1G) и орбитальный док в системе «${sysHeader.starName}» (${sysHeader.constellationNameRu}). ${dualNameLabel}.`,
+    stationLore: `Орбитальный Бизнес-центр «Бублик» с центробежной силой тяжести 1G и 4 внутренними лучами-переходами в системе «${sysHeader.starName}» (${sysHeader.constellationNameRu}). Присутствующие бизнесы: ТД «Антарес», Астро-Логистика, Орбитал-Ритейл, Квант-Сервис, Био-Сфера.`,
   };
 }
 
